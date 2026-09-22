@@ -30,3 +30,15 @@ export async function requireStaff(next = "/admin") {
 
   return { user, role: profile.role };
 }
+
+/**
+ * Stricter gate for admin-only areas — categories, unlike listings, have no
+ * editor-level RLS policy ("staff manage categories" is_admin() only), so an
+ * editor reaching this page would fail at the database anyway. 404s them here
+ * instead of letting them hit a raw RLS error after filling out a form.
+ */
+export async function requireAdmin(next = "/admin") {
+  const { user, role } = await requireStaff(next);
+  if (role !== "admin") notFound();
+  return { user, role };
+}
