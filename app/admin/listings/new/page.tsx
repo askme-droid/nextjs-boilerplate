@@ -1,5 +1,5 @@
 import { getCategories } from "@/lib/listings/queries";
-import { ListingForm } from "../listing-form";
+import { NewListingClient } from "./new-listing-client";
 
 export default async function NewListingPage() {
   const categories = await getCategories();
@@ -7,7 +7,7 @@ export default async function NewListingPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight">New listing</h1>
-      <ListingForm categories={categories} submitLabel="Create listing" />
+      <NewListingClient categories={categories} />
     </div>
   );
 }
