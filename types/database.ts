@@ -5,15 +5,15 @@
  * (`GET /rest/v1/`) with the service-role key, not the official
  * `supabase gen types` CLI (that needs a Supabase access token or a direct
  * Postgres connection string, neither of which was provided). Column names,
- * types, nullability and defaults below are real. Two things this approach
+ * types, nullability and defaults below are real. One thing this approach
  * can't see, that the official generator would get exactly right:
  *   - `Enums`/status values: CHECK constraints (e.g. on `listings.status`,
  *     `profiles.role`) don't appear in PostgREST's schema, only native
  *     Postgres enum types would. Values noted in comments are only the ones
  *     confirmed elsewhere (RLS policies, a constraint someone pasted).
- *   - Whether `listings.search_vector` is a generated column. It's modeled
- *     as writable here; if `\d listings` in psql shows GENERATED ALWAYS,
- *     drop it from Insert/Update.
+ * (`listings.search_vector` was confirmed generated/trigger-maintained by
+ * inserting a test row without it and seeing it auto-populate; it's Row-only
+ * below, not in Insert/Update.)
  * Foreign key names follow Postgres's default `<table>_<column>_fkey`
  * convention (confirmed for `profiles_id_fkey`); the others are inferred.
  *
@@ -85,7 +85,12 @@ export type Database = {
           expires_at: string | null;
           created_at: string;
           updated_at: string;
-          /** Full-text search index. Likely maintained by a trigger or GENERATED ALWAYS; treat as read-only. */
+          /**
+           * Weighted tsvector (title weight A, description weight C), confirmed
+           * auto-populated on insert without being written explicitly — a
+           * generated/trigger-maintained column. Read-only: omitted from
+           * Insert/Update below.
+           */
           search_vector: string | null;
         };
         Insert: {
@@ -102,7 +107,6 @@ export type Database = {
           expires_at?: string | null;
           created_at?: string;
           updated_at?: string;
-          search_vector?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["listings"]["Insert"]>;
         Relationships: [

@@ -1,64 +1,107 @@
-import { createClient } from "@/lib/supabase/server";
+import { ListingCard } from "@/app/components/listing-card";
+import { ListingsPagination } from "@/app/components/listings-pagination";
+import { ListingsSearchForm } from "@/app/components/listings-search-form";
+import {
+  getCategories,
+  getListings,
+  type ListingCategory,
+  type ListingWithRelations,
+} from "@/lib/listings/queries";
 
-type CategoryCount =
-  | { ok: true; count: number }
-  | { ok: false; message: string };
+function firstValue(value: string | string[] | undefined): string {
+  return (Array.isArray(value) ? value[0] : value) ?? "";
+}
 
-async function getCategoryCount(): Promise<CategoryCount> {
+type PageData = {
+  q: string;
+  category: string;
+  categories: ListingCategory[];
+  listings: ListingWithRelations[];
+  page: number;
+  totalPages: number;
+};
+
+async function loadPageData(
+  params: Record<string, string | string[] | undefined>,
+): Promise<{ ok: true; data: PageData } | { ok: false; error: string }> {
+  const q = firstValue(params.q).trim();
+  const requestedCategory = firstValue(params.category).trim();
+  const requestedPage = Number.parseInt(firstValue(params.page), 10);
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+
   try {
-    const supabase = await createClient();
-    // Not `head: true`: a HEAD response has no body, so PostgREST errors would
-    // come back with an empty message. limit(0) still returns the exact count.
-    const { count, error } = await supabase
-      .from("categories")
-      .select("id", { count: "exact" })
-      .limit(0);
+    const categories = await getCategories();
 
-    if (error) {
-      const code = error.code ? `[${error.code}] ` : "";
-      return { ok: false, message: `${code}${error.message}` };
-    }
-    if (count === null) return { ok: false, message: "No count returned." };
-    return { ok: true, count };
-  } catch (e) {
+    // Validate the category slug against real categories rather than passing
+    // an arbitrary URL value into an inner-join filter: an unknown slug would
+    // otherwise read as "no listings" instead of the filter being ignored.
+    const category = categories.some((cat) => cat.slug === requestedCategory)
+      ? requestedCategory
+      : "";
+
+    const { listings, page: currentPage, totalPages } = await getListings({
+      q,
+      category,
+      page,
+    });
+
     return {
-      ok: false,
-      message: e instanceof Error ? e.message : "Unknown error.",
+      ok: true,
+      data: { q, category, categories, listings, page: currentPage, totalPages },
     };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error." };
   }
 }
 
-// Temporary connectivity check; replaced by the real home page later.
-export default async function Home() {
-  const result = await getCategoryCount();
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const result = await loadPageData(await searchParams);
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-      <h1 className="text-3xl font-semibold tracking-tight">
-        Supabase connection
-      </h1>
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-6">
+      <h1 className="text-3xl font-semibold tracking-tight">Listings</h1>
 
-      {result.ok ? (
-        <>
-          <p className="text-lg text-emerald-600 dark:text-emerald-400">
-            Connected. <code className="font-mono">categories</code> has{" "}
-            <strong>{result.count}</strong> {result.count === 1 ? "row" : "rows"}.
-          </p>
-          {result.count === 0 && (
-            <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
-              Zero rows: the table may be empty, or RLS may be hiding its rows
-              from the public (anon) role.
-            </p>
-          )}
-        </>
-      ) : (
-        <>
+      {!result.ok ? (
+        <div className="flex flex-col items-center gap-2 py-16 text-center">
           <p className="text-lg text-red-600 dark:text-red-400">
-            Could not read <code className="font-mono">categories</code>.
+            Could not load listings.
           </p>
           <p className="max-w-md font-mono text-sm text-zinc-600 dark:text-zinc-400">
-            {result.message}
+            {result.error}
           </p>
+        </div>
+      ) : (
+        <>
+          <ListingsSearchForm
+            q={result.data.q}
+            category={result.data.category}
+            categories={result.data.categories}
+          />
+
+          {result.data.listings.length === 0 ? (
+            <p className="py-16 text-center text-zinc-500 dark:text-zinc-400">
+              {result.data.q || result.data.category
+                ? "No listings match your search."
+                : "No listings have been published yet."}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {result.data.listings.map((listing) => (
+                <ListingCard key={listing.id} listing={listing} />
+              ))}
+            </div>
+          )}
+
+          <ListingsPagination
+            page={result.data.page}
+            totalPages={result.data.totalPages}
+            q={result.data.q}
+            category={result.data.category}
+          />
         </>
       )}
     </main>
