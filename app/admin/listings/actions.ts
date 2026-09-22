@@ -111,9 +111,64 @@ export async function saveListing(
     return { error: error.message, values };
   }
 
+  // Tag checkboxes only exist (and only send this marker) once the listing
+  // exists to attach them to — i.e. on the edit form, never on create. Without
+  // this marker there'd be no way to tell "no tags checked" (edit) apart from
+  // "no tags field at all" (create) from formData.getAll() alone.
+  if (formData.has("tagsIncluded")) {
+    const tagError = await applyTagChanges(
+      supabase,
+      data.id,
+      formData.getAll("tagIds").map(String),
+    );
+    if (tagError) {
+      return {
+        error: `Listing saved, but tags failed to save: ${tagError}`,
+        values: { ...values, slug },
+      };
+    }
+  }
+
   revalidatePath("/");
   revalidatePath(`/listings/${slug}`);
   redirect(`/admin/listings/${data.id}/edit?saved=1`);
+}
+
+/** Diffs and applies a listing's tag selection in one call — shared by the
+ *  single save action below (previously its own separate saveTags action). */
+async function applyTagChanges(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  listingId: string,
+  selectedTagIds: string[],
+): Promise<string | null> {
+  const selected = new Set(selectedTagIds);
+  const { data: current, error: currentError } = await supabase
+    .from("listing_experience_tags")
+    .select("tag_id")
+    .eq("listing_id", listingId);
+  if (currentError) return currentError.message;
+
+  const currentIds = new Set(current.map((row) => row.tag_id));
+  const toAdd = [...selected].filter((tagId) => !currentIds.has(tagId));
+  const toRemove = [...currentIds].filter((tagId) => !selected.has(tagId));
+
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("listing_experience_tags")
+      .delete()
+      .eq("listing_id", listingId)
+      .in("tag_id", toRemove);
+    if (error) return error.message;
+  }
+
+  if (toAdd.length > 0) {
+    const { error } = await supabase
+      .from("listing_experience_tags")
+      .insert(toAdd.map((tag_id) => ({ listing_id: listingId, tag_id })));
+    if (error) return error.message;
+  }
+
+  return null;
 }
 
 /** Looks up a listing's slug, for revalidating its public page after an edit. */
@@ -249,41 +304,3 @@ export async function moveImage(formData: FormData) {
   redirect(editUrl(listingId));
 }
 
-export async function saveTags(formData: FormData) {
-  await requireStaff();
-
-  const listingId = String(formData.get("listingId") ?? "");
-  const selected = new Set(formData.getAll("tagIds").map(String));
-
-  const supabase = await createClient();
-  const { data: current, error: currentError } = await supabase
-    .from("listing_experience_tags")
-    .select("tag_id")
-    .eq("listing_id", listingId);
-
-  if (currentError) redirect(editUrl(listingId, currentError.message));
-
-  const currentIds = new Set(current.map((row) => row.tag_id));
-  const toAdd = [...selected].filter((id) => !currentIds.has(id));
-  const toRemove = [...currentIds].filter((id) => !selected.has(id));
-
-  if (toRemove.length > 0) {
-    const { error } = await supabase
-      .from("listing_experience_tags")
-      .delete()
-      .eq("listing_id", listingId)
-      .in("tag_id", toRemove);
-    if (error) redirect(editUrl(listingId, error.message));
-  }
-
-  if (toAdd.length > 0) {
-    const { error } = await supabase
-      .from("listing_experience_tags")
-      .insert(toAdd.map((tag_id) => ({ listing_id: listingId, tag_id })));
-    if (error) redirect(editUrl(listingId, error.message));
-  }
-
-  const slug = await getListingSlug(supabase, listingId);
-  if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
-}

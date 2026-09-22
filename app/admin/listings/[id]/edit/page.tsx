@@ -6,7 +6,6 @@ import {
 import { getCategories } from "@/lib/listings/queries";
 import { ListingForm } from "../../listing-form";
 import { ImageManager } from "../image-manager";
-import { TagsForm } from "../tags-form";
 
 export default async function EditListingPage({
   params,
@@ -55,11 +54,11 @@ export default async function EditListingPage({
           status: listing.status,
           expires_at: listing.expires_at ?? "",
         }}
+        allTags={allTags}
+        selectedTagIds={listing.tagIds}
       />
 
       <ImageManager listingId={listing.id} images={listing.listing_images} />
-
-      <TagsForm listingId={listing.id} allTags={allTags} selectedIds={listing.tagIds} />
     </div>
   );
 }

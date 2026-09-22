@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
-import type { ListingCategory } from "@/lib/listings/queries";
+import type { ListingCategory, ListingTag } from "@/lib/listings/queries";
 import { saveListing, type ListingFormState, type ListingFormValues } from "./actions";
 
 const inputClass =
@@ -26,16 +26,27 @@ export function ListingForm({
   initialValues,
   categories,
   submitLabel,
+  allTags,
+  selectedTagIds,
 }: {
   /** Present when editing; omitted when creating. */
   listingId?: string;
   initialValues?: ListingFormValues;
   categories: ListingCategory[];
   submitLabel: string;
+  /**
+   * Tags can only attach to a listing that already exists, so this (and the
+   * checkboxes below) is only passed on the edit form, never on create.
+   * Passing it is also what tells saveListing to touch tags at all — see the
+   * `tagsIncluded` marker below.
+   */
+  allTags?: ListingTag[];
+  selectedTagIds?: string[];
 }) {
   const initialState: ListingFormState = { values: initialValues ?? emptyValues };
   const [state, formAction, pending] = useActionState(saveListing, initialState);
   const values = state.values;
+  const selected = new Set(selectedTagIds ?? []);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -144,6 +155,35 @@ export function ListingForm({
           className={inputClass}
         />
       </label>
+
+      {allTags && (
+        <div className="flex flex-col gap-2">
+          <input type="hidden" name="tagsIncluded" value="1" />
+          <span className={labelClass}>Experience tags</span>
+          {allTags.length === 0 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              No experience tags exist yet.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {allTags.map((tag) => (
+                <label
+                  key={tag.id}
+                  className="flex items-center gap-2 rounded-full border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
+                >
+                  <input
+                    type="checkbox"
+                    name="tagIds"
+                    value={tag.id}
+                    defaultChecked={selected.has(tag.id)}
+                  />
+                  {tag.name}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <button
         type="submit"
