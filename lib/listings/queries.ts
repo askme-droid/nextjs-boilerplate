@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database";
 
@@ -5,12 +6,22 @@ export const PAGE_SIZE = 12;
 
 export type ListingCategory = Pick<Tables<"categories">, "id" | "name" | "slug">;
 
+export type ListingImage = Pick<
+  Tables<"listing_images">,
+  "id" | "url" | "alt_text" | "is_featured" | "position"
+>;
+
 export type ListingWithRelations = Tables<"listings"> & {
   categories: ListingCategory | null;
-  listing_images: Pick<
-    Tables<"listing_images">,
-    "id" | "url" | "is_featured" | "position"
-  >[];
+  listing_images: Pick<ListingImage, "id" | "url" | "is_featured" | "position">[];
+};
+
+export type ListingTag = Pick<Tables<"experience_tags">, "id" | "name" | "slug">;
+
+export type ListingDetail = Tables<"listings"> & {
+  categories: ListingCategory | null;
+  listing_images: ListingImage[];
+  experience_tags: ListingTag[];
 };
 
 export type ListingsResult = {
@@ -148,3 +159,50 @@ export async function getListings(
 
   return { listings: data ?? [], totalCount, page, totalPages };
 }
+
+// The junction table embeds as one row per tag, each wrapping the tag under
+// its own key; getListingBySlug flattens that shape into `experience_tags`.
+type ListingRowRaw = Tables<"listings"> & {
+  categories: ListingCategory | null;
+  listing_images: ListingImage[];
+  listing_experience_tags: { experience_tags: ListingTag | null }[];
+};
+
+/**
+ * A single published listing by slug, with all its images and experience
+ * tags, or `null` if it doesn't exist or isn't published — RLS would hide an
+ * unpublished row from an anonymous request anyway, but the explicit status
+ * filter keeps that true regardless of who's asking (see getListings).
+ *
+ * Wrapped in React's `cache()` so the detail page's `generateMetadata` and
+ * its page component — both of which need this same row — share one query
+ * per request instead of fetching it twice.
+ */
+export const getListingBySlug = cache(async (
+  slug: string,
+): Promise<ListingDetail | null> => {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("listings")
+    .select(
+      `*, categories(id, name, slug),
+       listing_images(id, url, alt_text, is_featured, position),
+       listing_experience_tags(experience_tags(id, name, slug))`,
+    )
+    .eq("slug", slug)
+    .eq("status", "published")
+    .order("position", { referencedTable: "listing_images" })
+    .maybeSingle()
+    .returns<ListingRowRaw>();
+
+  if (error) throw new Error(`Could not load listing: ${error.message}`);
+  if (!data) return null;
+
+  const { listing_experience_tags, ...listing } = data;
+  const experience_tags = listing_experience_tags
+    .map((row) => row.experience_tags)
+    .filter((tag): tag is ListingTag => tag !== null);
+
+  return { ...listing, experience_tags };
+});
