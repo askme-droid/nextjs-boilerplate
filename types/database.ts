@@ -76,7 +76,13 @@ export type Database = {
           category_id: string | null;
           location: string | null;
           keywords: string[] | null;
-          /** Confirmed values: "draft" (default), "published" (public per RLS). Others may exist. */
+          /**
+           * CHECK constraint `listings_status_check`. Confirmed by probing
+           * (inserting each candidate, service-role, then deleting): "draft"
+           * (default), "published" (public per RLS), and "archived" are
+           * accepted; "expired", "pending", "pending_review", "unpublished",
+           * "rejected", "under_review" and "scheduled" are all rejected.
+           */
           status: string;
           featured_image_url: string | null;
           /** FK -> profiles.id. */

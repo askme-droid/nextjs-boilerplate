@@ -1,0 +1,65 @@
+import { notFound } from "next/navigation";
+import {
+  getAdminListingById,
+  getExperienceTags,
+} from "@/lib/listings/admin-queries";
+import { getCategories } from "@/lib/listings/queries";
+import { ListingForm } from "../../listing-form";
+import { ImageManager } from "../image-manager";
+import { TagsForm } from "../tags-form";
+
+export default async function EditListingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
+}) {
+  const { id } = await params;
+  const { saved, error } = await searchParams;
+
+  const [listing, categories, allTags] = await Promise.all([
+    getAdminListingById(id),
+    getCategories(),
+    getExperienceTags(),
+  ]);
+
+  if (!listing) notFound();
+
+  return (
+    <div className="flex flex-col gap-8">
+      <h1 className="text-2xl font-semibold tracking-tight">Edit listing</h1>
+
+      {saved && (
+        <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+          Saved.
+        </p>
+      )}
+      {error && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+          {error}
+        </p>
+      )}
+
+      <ListingForm
+        listingId={listing.id}
+        categories={categories}
+        submitLabel="Save changes"
+        initialValues={{
+          title: listing.title,
+          slug: listing.slug,
+          category_id: listing.category_id ?? "",
+          location: listing.location ?? "",
+          keywords: (listing.keywords ?? []).join(", "),
+          description: listing.description ?? "",
+          status: listing.status,
+          expires_at: listing.expires_at ?? "",
+        }}
+      />
+
+      <ImageManager listingId={listing.id} images={listing.listing_images} />
+
+      <TagsForm listingId={listing.id} allTags={allTags} selectedIds={listing.tagIds} />
+    </div>
+  );
+}
