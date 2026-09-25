@@ -1,8 +1,9 @@
 "use server";
 
+import { APIError } from "better-auth/api";
 import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth/auth";
 import { safeNextPath } from "@/lib/auth/safe-redirect";
-import { createClient } from "@/lib/supabase/server";
 
 export type LoginState = { error?: string; email?: string };
 
@@ -18,16 +19,23 @@ export async function login(
     return { error: "Enter your email and password.", email };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    // Same message for unknown email and wrong password: don't reveal which.
-    if (error.code === "invalid_credentials") {
-      return { error: "Invalid email or password.", email };
-    }
-    if (error.status === 429) {
-      return { error: "Too many attempts. Wait a minute and try again.", email };
+  try {
+    // nextCookies() (see lib/auth/auth.ts) is what makes this actually log
+    // the browser in — without it this call succeeds but sets no cookie.
+    await auth.api.signInEmail({ body: { email, password } });
+  } catch (e) {
+    if (e instanceof APIError) {
+      // Same message for unknown email and wrong password — Better-Auth
+      // already unifies these into one code, so there's nothing to merge.
+      if (e.body?.code === "INVALID_EMAIL_OR_PASSWORD") {
+        return { error: "Invalid email or password.", email };
+      }
+      if (e.body?.code === "EMAIL_NOT_VERIFIED") {
+        return { error: "Confirm your email before signing in.", email };
+      }
+      if (e.status === "TOO_MANY_REQUESTS" || e.statusCode === 429) {
+        return { error: "Too many attempts. Wait a minute and try again.", email };
+      }
     }
     return { error: "Could not sign in. Please try again.", email };
   }

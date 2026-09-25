@@ -1,14 +1,17 @@
 import Link from "next/link";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { getAdminListings } from "@/lib/listings/admin-queries";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
+  pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
   draft: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-  archived: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+  rejected: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
 };
 
 export default async function AdminListingsPage() {
-  const listings = await getAdminListings();
+  const { role } = await requireStaff();
+  const listings = await getAdminListings(role);
 
   return (
     <div className="flex flex-col gap-6">

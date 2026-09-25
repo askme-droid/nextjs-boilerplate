@@ -1,25 +1,41 @@
 import { cache } from "react";
-import { createClient } from "@/lib/supabase/server";
-import type { Tables } from "@/types/database";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 
 export const PAGE_SIZE = 12;
 
-export type ListingCategory = Pick<Tables<"categories">, "id" | "name" | "slug">;
+export type ListingCategory = { id: string; name: string; slug: string };
 
-export type ListingImage = Pick<
-  Tables<"listing_images">,
-  "id" | "url" | "alt_text" | "is_featured" | "position"
->;
+export type ListingImage = {
+  id: string;
+  url: string;
+  alt_text: string | null;
+  is_featured: boolean;
+  position: number;
+};
 
-export type ListingWithRelations = Tables<"listings"> & {
+export type ListingWithRelations = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  category_id: string | null;
+  location: string | null;
+  keywords: string[] | null;
+  status: string;
+  featured_image_url: string | null;
+  created_by: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
   categories: ListingCategory | null;
   listing_images: Pick<ListingImage, "id" | "url" | "is_featured" | "position">[];
 };
 
-export type ListingTag = Pick<Tables<"experience_tags">, "id" | "name" | "slug">;
+export type ListingTag = { id: string; name: string; slug: string };
 
-export type ListingDetail = Tables<"listings"> & {
-  categories: ListingCategory | null;
+export type ListingDetail = Omit<ListingWithRelations, "listing_images"> & {
   listing_images: ListingImage[];
   experience_tags: ListingTag[];
 };
@@ -42,137 +58,152 @@ export type ListingsFilter = {
 
 /** All categories, for the filter dropdown. Public data, small table. */
 export async function getCategories(): Promise<ListingCategory[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("categories")
-    .select("id, name, slug")
-    .order("name");
-
-  if (error) throw new Error(`Could not load categories: ${error.message}`);
-  return data;
+  return db
+    .select({ id: categories.id, name: categories.name, slug: categories.slug })
+    .from(categories)
+    .orderBy(asc(categories.name));
 }
 
 /**
  * Escapes a search term for safe use inside a Postgres LIKE/ILIKE pattern:
  * a literal backslash, `%` or `_` would otherwise act as a wildcard or
- * escape character. Callers still wrap the result in their own `%…%`.
+ * escape character.
  */
 function escapeLikeTerm(term: string): string {
   return term.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
-
 /**
- * Applies the search/category/status filters shared by the count and data
- * queries below. Returns a fresh, not-yet-executed query each call — a
- * PostgREST query builder can only be sent once, so callers that need both a
- * count and a page of data call this twice rather than reusing one instance.
+ * Shared status/search/category filter for the count and data queries below.
+ * Joining `categories` and filtering on its slug acts as an inner join in
+ * effect (a non-matching row's `categories` comes back null, which then
+ * fails the slug equality) — callers are expected to have already validated
+ * `category` against a real slug (see app/page.tsx), since an unknown slug
+ * would otherwise read as "no listings" rather than "filter ignored".
  */
-function buildFilteredQuery(
-  supabase: SupabaseServerClient,
-  filter: ListingsFilter,
-  selectColumns: string,
-  options: { count: "exact"; head?: boolean },
-) {
-  // Filtering an embedded resource (`categories.slug=eq.…`) only nulls out
-  // the nested object on a non-match; it doesn't exclude the row, which
-  // would silently break the count and pagination below. `!inner` turns the
-  // embed into a join condition, so a non-matching row is actually excluded.
-  // Callers are expected to have already validated `category` against a
-  // real slug (see app/page.tsx) — an unknown slug would otherwise inner-join
-  // to nothing and read as "no listings" rather than "filter ignored".
-  const categoriesEmbed = filter.category ? "categories!inner" : "categories";
-  const select = selectColumns.replace("categories(", `${categoriesEmbed}(`);
-
-  let query = supabase
-    .from("listings")
-    .select(select, options)
-    .eq("status", "published");
+function buildListingsWhere(filter: ListingsFilter): SQL {
+  const conditions: SQL[] = [eq(listings.status, "published")];
 
   const q = filter.q?.trim();
   if (q) {
-    // A comma or parenthesis would break PostgREST's `or=` filter grammar;
-    // stripping them keeps this a plain keyword search rather than risking
-    // a 400 on stray punctuation.
+    // A comma or parenthesis has no special meaning here (unlike the old
+    // PostgREST `or=` filter grammar), but stripped anyway to keep this a
+    // plain keyword search.
     const term = escapeLikeTerm(q.replace(/[,()]/g, " ").trim());
     if (term) {
-      query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
+      const pattern = `%${term}%`;
+      conditions.push(or(ilike(listings.title, pattern), ilike(listings.description, pattern))!);
     }
   }
 
   if (filter.category) {
-    query = query.eq("categories.slug", filter.category);
+    conditions.push(eq(categories.slug, filter.category));
   }
 
-  return query;
+  return and(...conditions)!;
 }
 
-const LISTINGS_SELECT =
-  "*, categories(id, name, slug), listing_images(id, url, is_featured, position)";
+type ImageRow = { listingId: string; id: string; url: string; is_featured: boolean; position: number };
+
+async function attachImages(
+  listingIds: string[],
+): Promise<Map<string, Pick<ListingImage, "id" | "url" | "is_featured" | "position">[]>> {
+  const byListing = new Map<string, Pick<ListingImage, "id" | "url" | "is_featured" | "position">[]>();
+  if (listingIds.length === 0) return byListing;
+
+  const rows: ImageRow[] = await db
+    .select({
+      listingId: listingImages.listingId,
+      id: listingImages.id,
+      url: listingImages.url,
+      is_featured: listingImages.isFeatured,
+      position: listingImages.position,
+    })
+    .from(listingImages)
+    .where(inArray(listingImages.listingId, listingIds))
+    .orderBy(asc(listingImages.position));
+
+  for (const { listingId, ...image } of rows) {
+    const list = byListing.get(listingId) ?? [];
+    list.push(image);
+    byListing.set(listingId, list);
+  }
+  return byListing;
+}
 
 /**
  * Published listings matching the given search/category/page, newest first.
- * RLS already restricts anonymous reads to `status = 'published'`; the
- * explicit filter here keeps that true regardless of who's asking.
  */
 export async function getListings(
   filter: ListingsFilter = {},
 ): Promise<ListingsResult> {
-  const supabase = await createClient();
   const requestedPage = Math.max(1, filter.page ?? 1);
+  const where = buildListingsWhere(filter);
 
-  const fetchPage = (page: number) => {
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-    return buildFilteredQuery(supabase, filter, LISTINGS_SELECT, { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(from, to)
-      .returns<ListingWithRelations[]>();
-  };
+  const [{ count: totalCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(where);
 
-  let { data, count, error } = await fetchPage(requestedPage);
-
-  // PGRST103: the requested offset is past the last row (e.g. a stale/
-  // tampered `?page=` after listings were unpublished). Rather than surface
-  // a raw range error, find the real last page and refetch that instead.
-  if (error?.code === "PGRST103") {
-    // Must still request the categories embed (even though only `id` is
-    // read) so `.eq("categories.slug", …)` above has a join to filter on.
-    const { count: realCount, error: countError } = await buildFilteredQuery(
-      supabase,
-      filter,
-      "id, categories(id)",
-      { count: "exact", head: true },
-    );
-    if (countError) throw new Error(`Could not load listings: ${countError.message}`);
-
-    const lastPage = Math.max(1, Math.ceil((realCount ?? 0) / PAGE_SIZE));
-    ({ data, count, error } = await fetchPage(lastPage));
-  }
-
-  if (error) throw new Error(`Could not load listings: ${error.message}`);
-
-  const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
+  const offset = (page - 1) * PAGE_SIZE;
 
-  return { listings: data ?? [], totalCount, page, totalPages };
+  const rows = await db
+    .select({
+      id: listings.id,
+      title: listings.title,
+      slug: listings.slug,
+      description: listings.description,
+      category_id: listings.categoryId,
+      location: listings.location,
+      keywords: listings.keywords,
+      status: listings.status,
+      featured_image_url: listings.featuredImageUrl,
+      created_by: listings.createdBy,
+      expires_at: listings.expiresAt,
+      created_at: listings.createdAt,
+      updated_at: listings.updatedAt,
+      category_row_id: categories.id,
+      category_name: categories.name,
+      category_slug: categories.slug,
+    })
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(where)
+    .orderBy(desc(listings.createdAt))
+    .limit(PAGE_SIZE)
+    .offset(offset);
+
+  const imagesByListing = await attachImages(rows.map((r) => r.id));
+
+  const result: ListingWithRelations[] = rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    slug: r.slug,
+    description: r.description,
+    category_id: r.category_id,
+    location: r.location,
+    keywords: r.keywords,
+    status: r.status,
+    featured_image_url: r.featured_image_url,
+    created_by: r.created_by,
+    expires_at: r.expires_at,
+    created_at: r.created_at.toISOString(),
+    updated_at: r.updated_at.toISOString(),
+    categories: r.category_row_id
+      ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
+      : null,
+    listing_images: imagesByListing.get(r.id) ?? [],
+  }));
+
+  return { listings: result, totalCount, page, totalPages };
 }
-
-// The junction table embeds as one row per tag, each wrapping the tag under
-// its own key; getListingBySlug flattens that shape into `experience_tags`.
-type ListingRowRaw = Tables<"listings"> & {
-  categories: ListingCategory | null;
-  listing_images: ListingImage[];
-  listing_experience_tags: { experience_tags: ListingTag | null }[];
-};
 
 /**
  * A single published listing by slug, with all its images and experience
- * tags, or `null` if it doesn't exist or isn't published — RLS would hide an
- * unpublished row from an anonymous request anyway, but the explicit status
- * filter keeps that true regardless of who's asking (see getListings).
+ * tags, or `null` if it doesn't exist or isn't published.
  *
  * Wrapped in React's `cache()` so the detail page's `generateMetadata` and
  * its page component — both of which need this same row — share one query
@@ -181,28 +212,70 @@ type ListingRowRaw = Tables<"listings"> & {
 export const getListingBySlug = cache(async (
   slug: string,
 ): Promise<ListingDetail | null> => {
-  const supabase = await createClient();
+  const rows = await db
+    .select({
+      id: listings.id,
+      title: listings.title,
+      slug: listings.slug,
+      description: listings.description,
+      category_id: listings.categoryId,
+      location: listings.location,
+      keywords: listings.keywords,
+      status: listings.status,
+      featured_image_url: listings.featuredImageUrl,
+      created_by: listings.createdBy,
+      expires_at: listings.expiresAt,
+      created_at: listings.createdAt,
+      updated_at: listings.updatedAt,
+      category_row_id: categories.id,
+      category_name: categories.name,
+      category_slug: categories.slug,
+    })
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(and(eq(listings.slug, slug), eq(listings.status, "published")))
+    .limit(1);
 
-  const { data, error } = await supabase
-    .from("listings")
-    .select(
-      `*, categories(id, name, slug),
-       listing_images(id, url, alt_text, is_featured, position),
-       listing_experience_tags(experience_tags(id, name, slug))`,
-    )
-    .eq("slug", slug)
-    .eq("status", "published")
-    .order("position", { referencedTable: "listing_images" })
-    .maybeSingle()
-    .returns<ListingRowRaw>();
+  const row = rows[0];
+  if (!row) return null;
 
-  if (error) throw new Error(`Could not load listing: ${error.message}`);
-  if (!data) return null;
+  const [images, tags] = await Promise.all([
+    db
+      .select({
+        id: listingImages.id,
+        url: listingImages.url,
+        alt_text: listingImages.altText,
+        is_featured: listingImages.isFeatured,
+        position: listingImages.position,
+      })
+      .from(listingImages)
+      .where(eq(listingImages.listingId, row.id))
+      .orderBy(asc(listingImages.position)),
+    db
+      .select({ id: experienceTags.id, name: experienceTags.name, slug: experienceTags.slug })
+      .from(listingExperienceTags)
+      .innerJoin(experienceTags, eq(listingExperienceTags.tagId, experienceTags.id))
+      .where(eq(listingExperienceTags.listingId, row.id)),
+  ]);
 
-  const { listing_experience_tags, ...listing } = data;
-  const experience_tags = listing_experience_tags
-    .map((row) => row.experience_tags)
-    .filter((tag): tag is ListingTag => tag !== null);
-
-  return { ...listing, experience_tags };
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    description: row.description,
+    category_id: row.category_id,
+    location: row.location,
+    keywords: row.keywords,
+    status: row.status,
+    featured_image_url: row.featured_image_url,
+    created_by: row.created_by,
+    expires_at: row.expires_at,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
+    categories: row.category_row_id
+      ? { id: row.category_row_id, name: row.category_name!, slug: row.category_slug! }
+      : null,
+    listing_images: images,
+    experience_tags: tags,
+  };
 });

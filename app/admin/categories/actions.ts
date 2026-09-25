@@ -2,15 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { categories } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/require-staff";
 import { slugify } from "@/lib/listings/slug";
-import { createClient } from "@/lib/supabase/server";
 
 // Same reasoning as app/admin/listings/actions.ts: each action re-checks
 // requireAdmin() itself, since a Server Action is its own reachable endpoint,
 // not just something the page's UI calls. Categories are admin-only (unlike
-// listings, which also allow editor) — this matches the "staff manage
-// categories" RLS policy, which only accepts is_admin().
+// listings, which also allow editor) — this is the sole enforcement now that
+// there's no RLS backstop underneath it.
 
 export type CategoryFormValues = {
   name: string;
@@ -27,6 +29,10 @@ export type CategoryFormState = {
 function readValues(formData: FormData): CategoryFormValues {
   const get = (name: string) => String(formData.get(name) ?? "").trim();
   return { name: get("name"), slug: get("slug"), description: get("description") };
+}
+
+function pgErrorCode(e: unknown): string | undefined {
+  return e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : undefined;
 }
 
 /** Creates a category (no `id` field in formData) or updates one (with `id`). */
@@ -53,19 +59,20 @@ export async function saveCategory(
 
   const row = { name: values.name, slug, description: values.description || null };
 
-  const supabase = await createClient();
-  const { error } = id
-    ? await supabase.from("categories").update(row).eq("id", id)
-    : await supabase.from("categories").insert(row);
-
-  if (error) {
-    if (error.code === "23505") {
+  try {
+    if (id) {
+      await db.update(categories).set(row).where(eq(categories.id, id));
+    } else {
+      await db.insert(categories).values(row);
+    }
+  } catch (e) {
+    if (pgErrorCode(e) === "23505") {
       return {
         fieldErrors: { ...fieldErrors, slug: "This slug is already in use." },
         values: { ...values, slug },
       };
     }
-    return { error: error.message, values };
+    return { error: e instanceof Error ? e.message : "Could not save category.", values };
   }
 
   // Category names/badges appear across the public grid (and every listing
@@ -80,15 +87,14 @@ export async function deleteCategory(formData: FormData) {
   await requireAdmin();
 
   const id = String(formData.get("id") ?? "");
-  const supabase = await createClient();
 
-  // No RESTRICT to worry about: listings_category_id_fkey is ON DELETE SET
-  // NULL (confirmed by probing the live schema), so this can't fail because
-  // listings still reference the category — it just un-categorizes them.
-  const { error } = await supabase.from("categories").delete().eq("id", id);
-
-  if (error) {
-    redirect(`/admin/categories?error=${encodeURIComponent(error.message)}`);
+  try {
+    // No RESTRICT to worry about: listings.category_id is ON DELETE SET NULL
+    // (see lib/db/schema/listings.ts), so this can't fail because listings
+    // still reference the category — it just un-categorizes them.
+    await db.delete(categories).where(eq(categories.id, id));
+  } catch (e) {
+    redirect(`/admin/categories?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not delete category.")}`);
   }
 
   revalidatePath("/");

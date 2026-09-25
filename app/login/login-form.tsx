@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { login, type LoginState } from "./actions";
 
 const inputClass =
@@ -38,6 +39,10 @@ export function LoginForm({ next }: { next: string }) {
           className={inputClass}
         />
       </label>
+
+      <Link href="/forgot-password" className="-mt-2 text-sm underline underline-offset-4">
+        Forgot password?
+      </Link>
 
       {state.error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">

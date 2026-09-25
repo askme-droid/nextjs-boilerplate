@@ -2,17 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { and, eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import { slugify } from "@/lib/listings/slug";
-import { createClient } from "@/lib/supabase/server";
 
 // Every action here re-checks requireStaff() itself rather than trusting the
 // /admin layout's gate: a Server Action is its own callable endpoint, reachable
 // directly (not just through the page that renders its form), so the page-level
-// check alone wouldn't stop a forged request. Postgres RLS ("staff manage
-// listings"/"…tags"/"…images") is the layer under that; this is the app-level
-// one, checked first so a rejection is a redirect/404, not a bare RLS error.
+// check alone wouldn't stop a forged request. This is the sole enforcement now
+// that there's no RLS backstop underneath it.
 
 export type ListingFormValues = {
   title: string;
@@ -43,6 +44,13 @@ function readValues(formData: FormData): ListingFormValues {
     status: get("status"),
     expires_at: get("expires_at"),
   };
+}
+
+// postgres.js throws a PostgresError whose `code` is the Postgres SQLSTATE —
+// 23505 (unique_violation) / 23503 (foreign_key_violation) — surfaced as-is,
+// not wrapped, so this narrow check is enough to distinguish them.
+function pgErrorCode(e: unknown): string | undefined {
+  return e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : undefined;
 }
 
 /** Creates a listing (no `id` field in formData) or updates one (with `id`). */
@@ -82,33 +90,35 @@ export async function saveListing(
   const row = {
     title: values.title,
     slug,
-    category_id: values.category_id,
+    categoryId: values.category_id,
     location: values.location || null,
     keywords,
     description: values.description || null,
-    status,
-    expires_at: values.expires_at || null,
+    status: status as (typeof LISTING_STATUSES)[number],
+    expiresAt: values.expires_at || null,
   };
 
-  const supabase = await createClient();
-  const { data, error } = id
-    ? await supabase.from("listings").update(row).eq("id", id).select("id").single()
-    : await supabase.from("listings").insert(row).select("id").single();
-
-  if (error) {
-    if (error.code === "23505") {
+  let listingId: string;
+  try {
+    const [saved] = id
+      ? await db.update(listings).set(row).where(eq(listings.id, id)).returning({ id: listings.id })
+      : await db.insert(listings).values(row).returning({ id: listings.id });
+    listingId = saved.id;
+  } catch (e) {
+    const code = pgErrorCode(e);
+    if (code === "23505") {
       return {
         fieldErrors: { ...fieldErrors, slug: "This slug is already in use." },
         values: { ...values, slug },
       };
     }
-    if (error.code === "23503") {
+    if (code === "23503") {
       return {
         fieldErrors: { ...fieldErrors, category_id: "Invalid category selected." },
         values,
       };
     }
-    return { error: error.message, values };
+    return { error: e instanceof Error ? e.message : "Could not save listing.", values };
   }
 
   // Tag checkboxes only exist (and only send this marker) once the listing
@@ -116,11 +126,7 @@ export async function saveListing(
   // this marker there'd be no way to tell "no tags checked" (edit) apart from
   // "no tags field at all" (create) from formData.getAll() alone.
   if (formData.has("tagsIncluded")) {
-    const tagError = await applyTagChanges(
-      supabase,
-      data.id,
-      formData.getAll("tagIds").map(String),
-    );
+    const tagError = await applyTagChanges(listingId, formData.getAll("tagIds").map(String));
     if (tagError) {
       return {
         error: `Listing saved, but tags failed to save: ${tagError}`,
@@ -131,57 +137,58 @@ export async function saveListing(
 
   revalidatePath("/");
   revalidatePath(`/listings/${slug}`);
-  redirect(`/admin/listings/${data.id}/edit?saved=1`);
+  redirect(`/admin/listings/${listingId}/edit?saved=1`);
 }
 
 /** Diffs and applies a listing's tag selection in one call — shared by the
- *  single save action below (previously its own separate saveTags action). */
+ *  single save action above (previously its own separate saveTags action). */
 async function applyTagChanges(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   listingId: string,
   selectedTagIds: string[],
 ): Promise<string | null> {
   const selected = new Set(selectedTagIds);
-  const { data: current, error: currentError } = await supabase
-    .from("listing_experience_tags")
-    .select("tag_id")
-    .eq("listing_id", listingId);
-  if (currentError) return currentError.message;
 
-  const currentIds = new Set(current.map((row) => row.tag_id));
-  const toAdd = [...selected].filter((tagId) => !currentIds.has(tagId));
-  const toRemove = [...currentIds].filter((tagId) => !selected.has(tagId));
+  try {
+    const current = await db
+      .select({ tagId: listingExperienceTags.tagId })
+      .from(listingExperienceTags)
+      .where(eq(listingExperienceTags.listingId, listingId));
 
-  if (toRemove.length > 0) {
-    const { error } = await supabase
-      .from("listing_experience_tags")
-      .delete()
-      .eq("listing_id", listingId)
-      .in("tag_id", toRemove);
-    if (error) return error.message;
+    const currentIds = new Set(current.map((row) => row.tagId));
+    const toAdd = [...selected].filter((tagId) => !currentIds.has(tagId));
+    const toRemove = [...currentIds].filter((tagId) => !selected.has(tagId));
+
+    if (toRemove.length > 0) {
+      await db
+        .delete(listingExperienceTags)
+        .where(
+          and(
+            eq(listingExperienceTags.listingId, listingId),
+            inArray(listingExperienceTags.tagId, toRemove),
+          ),
+        );
+    }
+
+    if (toAdd.length > 0) {
+      await db
+        .insert(listingExperienceTags)
+        .values(toAdd.map((tagId) => ({ listingId, tagId })));
+    }
+
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : "Could not save tags.";
   }
-
-  if (toAdd.length > 0) {
-    const { error } = await supabase
-      .from("listing_experience_tags")
-      .insert(toAdd.map((tag_id) => ({ listing_id: listingId, tag_id })));
-    if (error) return error.message;
-  }
-
-  return null;
 }
 
 /** Looks up a listing's slug, for revalidating its public page after an edit. */
-async function getListingSlug(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  listingId: string,
-): Promise<string | null> {
-  const { data } = await supabase
-    .from("listings")
-    .select("slug")
-    .eq("id", listingId)
-    .maybeSingle();
-  return data?.slug ?? null;
+async function getListingSlug(listingId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ slug: listings.slug })
+    .from(listings)
+    .where(eq(listings.id, listingId))
+    .limit(1);
+  return row?.slug ?? null;
 }
 
 function editUrl(listingId: string, error?: string) {
@@ -200,27 +207,23 @@ export async function addImage(formData: FormData) {
   if (!listingId) redirect(editUrl(listingId, "Missing listing."));
   if (!url) redirect(editUrl(listingId, "Image URL is required."));
 
-  const supabase = await createClient();
-  const { count, error: countError } = await supabase
-    .from("listing_images")
-    .select("id", { count: "exact", head: true })
-    .eq("listing_id", listingId);
+  try {
+    const existingCount = await db.$count(listingImages, eq(listingImages.listingId, listingId));
 
-  if (countError) redirect(editUrl(listingId, countError.message));
+    await db.insert(listingImages).values({
+      listingId,
+      url,
+      altText: altText || null,
+      position: existingCount,
+      // Auto-feature the first image a listing gets, so it isn't imageless on
+      // the grid/detail hero until someone remembers to flag one.
+      isFeatured: existingCount === 0,
+    });
+  } catch (e) {
+    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not add image."));
+  }
 
-  const { error } = await supabase.from("listing_images").insert({
-    listing_id: listingId,
-    url,
-    alt_text: altText || null,
-    position: count ?? 0,
-    // Auto-feature the first image a listing gets, so it isn't imageless on
-    // the grid/detail hero until someone remembers to flag one.
-    is_featured: (count ?? 0) === 0,
-  });
-
-  if (error) redirect(editUrl(listingId, error.message));
-
-  const slug = await getListingSlug(supabase, listingId);
+  const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
   redirect(editUrl(listingId));
@@ -232,11 +235,13 @@ export async function deleteImage(formData: FormData) {
   const listingId = String(formData.get("listingId") ?? "");
   const imageId = String(formData.get("imageId") ?? "");
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("listing_images").delete().eq("id", imageId);
-  if (error) redirect(editUrl(listingId, error.message));
+  try {
+    await db.delete(listingImages).where(eq(listingImages.id, imageId));
+  } catch (e) {
+    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not delete image."));
+  }
 
-  const slug = await getListingSlug(supabase, listingId);
+  const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
   redirect(editUrl(listingId));
@@ -248,20 +253,14 @@ export async function setFeaturedImage(formData: FormData) {
   const listingId = String(formData.get("listingId") ?? "");
   const imageId = String(formData.get("imageId") ?? "");
 
-  const supabase = await createClient();
-  const { error: clearError } = await supabase
-    .from("listing_images")
-    .update({ is_featured: false })
-    .eq("listing_id", listingId);
-  if (clearError) redirect(editUrl(listingId, clearError.message));
+  try {
+    await db.update(listingImages).set({ isFeatured: false }).where(eq(listingImages.listingId, listingId));
+    await db.update(listingImages).set({ isFeatured: true }).where(eq(listingImages.id, imageId));
+  } catch (e) {
+    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not set featured image."));
+  }
 
-  const { error } = await supabase
-    .from("listing_images")
-    .update({ is_featured: true })
-    .eq("id", imageId);
-  if (error) redirect(editUrl(listingId, error.message));
-
-  const slug = await getListingSlug(supabase, listingId);
+  const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
   redirect(editUrl(listingId));
@@ -274,14 +273,11 @@ export async function moveImage(formData: FormData) {
   const imageId = String(formData.get("imageId") ?? "");
   const direction = String(formData.get("direction") ?? "");
 
-  const supabase = await createClient();
-  const { data: images, error: listError } = await supabase
-    .from("listing_images")
-    .select("id, position")
-    .eq("listing_id", listingId)
-    .order("position");
-
-  if (listError) redirect(editUrl(listingId, listError.message));
+  const images = await db
+    .select({ id: listingImages.id, position: listingImages.position })
+    .from(listingImages)
+    .where(eq(listingImages.listingId, listingId))
+    .orderBy(listingImages.position);
 
   const index = images.findIndex((image) => image.id === imageId);
   const swapWith = direction === "up" ? index - 1 : index + 1;
@@ -293,14 +289,14 @@ export async function moveImage(formData: FormData) {
   const a = images[index];
   const b = images[swapWith];
 
-  const [{ error: errorA }, { error: errorB }] = await Promise.all([
-    supabase.from("listing_images").update({ position: b.position }).eq("id", a.id),
-    supabase.from("listing_images").update({ position: a.position }).eq("id", b.id),
-  ]);
-  if (errorA || errorB) redirect(editUrl(listingId, (errorA ?? errorB)?.message));
+  try {
+    await db.update(listingImages).set({ position: b.position }).where(eq(listingImages.id, a.id));
+    await db.update(listingImages).set({ position: a.position }).where(eq(listingImages.id, b.id));
+  } catch (e) {
+    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not reorder images."));
+  }
 
-  const slug = await getListingSlug(supabase, listingId);
+  const slug = await getListingSlug(listingId);
   if (slug) revalidatePath(`/listings/${slug}`);
   redirect(editUrl(listingId));
 }
-

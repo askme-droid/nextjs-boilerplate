@@ -1,5 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
-import type { Tables } from "@/types/database";
+import { count, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { categories, listings } from "@/lib/db/schema";
 
 // getCategories() already lived in lib/listings/queries.ts before this
 // module existed, and plenty of code imports it from there — re-exported
@@ -7,34 +8,39 @@ import type { Tables } from "@/types/database";
 // without a broad, riskier rename of existing import sites.
 export { getCategories, type ListingCategory } from "@/lib/listings/queries";
 
-export type CategoryRow = Tables<"categories">;
+export type CategoryRow = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  created_at: string;
+};
 
 /** One category by id (any category — there's no draft/published concept here). */
 export async function getCategoryById(id: string): Promise<CategoryRow | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const rows = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
+  const row = rows[0];
+  if (!row) return null;
 
-  if (error) throw new Error(`Could not load category: ${error.message}`);
-  return data;
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    created_at: row.createdAt.toISOString(),
+  };
 }
 
 /**
  * How many listings currently reference a category — shown as a warning
  * before deleting one. Deleting sets those listings' category_id to null
- * (ON DELETE SET NULL on listings_category_id_fkey, confirmed by probing the
- * live schema); it doesn't block the delete or touch the listings otherwise.
+ * (ON DELETE SET NULL — see lib/db/schema/listings.ts); it doesn't block the
+ * delete or touch the listings otherwise.
  */
 export async function getListingCountForCategory(categoryId: string): Promise<number> {
-  const supabase = await createClient();
-  const { count, error } = await supabase
-    .from("listings")
-    .select("id", { count: "exact", head: true })
-    .eq("category_id", categoryId);
-
-  if (error) throw new Error(`Could not count listings: ${error.message}`);
-  return count ?? 0;
+  const [row] = await db
+    .select({ value: count() })
+    .from(listings)
+    .where(eq(listings.categoryId, categoryId));
+  return row?.value ?? 0;
 }

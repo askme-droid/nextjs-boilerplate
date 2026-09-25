@@ -1,35 +1,87 @@
-import { createClient } from "@/lib/supabase/server";
-import type { Tables } from "@/types/database";
+import { asc, desc, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
+import { isStaff } from "@/lib/auth/roles";
 import type { ListingCategory, ListingImage, ListingTag } from "./queries";
 
 /**
  * Reads in this file are staff-only and intentionally don't filter by
  * `status` the way the public queries in queries.ts do — an admin needs to
- * see drafts and archived listings too. They use the signed-in staff user's
- * own session (not the service-role key), so Postgres RLS's "staff manage
- * listings" policy is what actually enforces that only admin/editor can read
- * these; requireStaff() in the page/layout is the second, app-level check.
+ * see drafts and rejected listings too. Railway's plain Postgres has no RLS,
+ * so the `role` parameter each function takes is the sole enforcement: it
+ * throws if the caller isn't admin/editor, rather than trusting every call
+ * site to have already checked `requireStaff()`.
  */
 
-export type AdminListingRow = Tables<"listings"> & {
+export type AdminListingRow = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  category_id: string | null;
+  location: string | null;
+  keywords: string[] | null;
+  status: string;
+  featured_image_url: string | null;
+  created_by: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
   categories: ListingCategory | null;
 };
 
-/** Every listing regardless of status, most recently updated first. */
-export async function getAdminListings(): Promise<AdminListingRow[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("listings")
-    .select("*, categories(id, name, slug)")
-    .order("updated_at", { ascending: false })
-    .returns<AdminListingRow[]>();
-
-  if (error) throw new Error(`Could not load listings: ${error.message}`);
-  return data;
+function requireStaffRole(role: string | null | undefined) {
+  if (!isStaff(role)) throw new Error("Not authorized.");
 }
 
-export type AdminListingDetail = Tables<"listings"> & {
-  categories: ListingCategory | null;
+/** Every listing regardless of status, most recently updated first. */
+export async function getAdminListings(role: string | null | undefined): Promise<AdminListingRow[]> {
+  requireStaffRole(role);
+
+  const rows = await db
+    .select({
+      id: listings.id,
+      title: listings.title,
+      slug: listings.slug,
+      description: listings.description,
+      category_id: listings.categoryId,
+      location: listings.location,
+      keywords: listings.keywords,
+      status: listings.status,
+      featured_image_url: listings.featuredImageUrl,
+      created_by: listings.createdBy,
+      expires_at: listings.expiresAt,
+      created_at: listings.createdAt,
+      updated_at: listings.updatedAt,
+      category_row_id: categories.id,
+      category_name: categories.name,
+      category_slug: categories.slug,
+    })
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .orderBy(desc(listings.updatedAt));
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    slug: r.slug,
+    description: r.description,
+    category_id: r.category_id,
+    location: r.location,
+    keywords: r.keywords,
+    status: r.status,
+    featured_image_url: r.featured_image_url,
+    created_by: r.created_by,
+    expires_at: r.expires_at,
+    created_at: r.created_at.toISOString(),
+    updated_at: r.updated_at.toISOString(),
+    categories: r.category_row_id
+      ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
+      : null,
+  }));
+}
+
+export type AdminListingDetail = AdminListingRow & {
   listing_images: ListingImage[];
   tagIds: string[];
 };
@@ -37,41 +89,81 @@ export type AdminListingDetail = Tables<"listings"> & {
 /** One listing by id (any status), with its images and linked tag ids. */
 export async function getAdminListingById(
   id: string,
+  role: string | null | undefined,
 ): Promise<AdminListingDetail | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("listings")
-    .select(
-      `*, categories(id, name, slug),
-       listing_images(id, url, alt_text, is_featured, position),
-       listing_experience_tags(tag_id)`,
-    )
-    .eq("id", id)
-    .order("position", { referencedTable: "listing_images" })
-    .maybeSingle()
-    .returns<
-      Tables<"listings"> & {
-        categories: ListingCategory | null;
-        listing_images: ListingImage[];
-        listing_experience_tags: { tag_id: string }[];
-      }
-    >();
+  requireStaffRole(role);
 
-  if (error) throw new Error(`Could not load listing: ${error.message}`);
-  if (!data) return null;
+  const rows = await db
+    .select({
+      id: listings.id,
+      title: listings.title,
+      slug: listings.slug,
+      description: listings.description,
+      category_id: listings.categoryId,
+      location: listings.location,
+      keywords: listings.keywords,
+      status: listings.status,
+      featured_image_url: listings.featuredImageUrl,
+      created_by: listings.createdBy,
+      expires_at: listings.expiresAt,
+      created_at: listings.createdAt,
+      updated_at: listings.updatedAt,
+      category_row_id: categories.id,
+      category_name: categories.name,
+      category_slug: categories.slug,
+    })
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(eq(listings.id, id))
+    .limit(1);
 
-  const { listing_experience_tags, ...listing } = data;
-  return { ...listing, tagIds: listing_experience_tags.map((row) => row.tag_id) };
+  const row = rows[0];
+  if (!row) return null;
+
+  const [images, tagRows] = await Promise.all([
+    db
+      .select({
+        id: listingImages.id,
+        url: listingImages.url,
+        alt_text: listingImages.altText,
+        is_featured: listingImages.isFeatured,
+        position: listingImages.position,
+      })
+      .from(listingImages)
+      .where(eq(listingImages.listingId, id))
+      .orderBy(asc(listingImages.position)),
+    db
+      .select({ tagId: listingExperienceTags.tagId })
+      .from(listingExperienceTags)
+      .where(eq(listingExperienceTags.listingId, id)),
+  ]);
+
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    description: row.description,
+    category_id: row.category_id,
+    location: row.location,
+    keywords: row.keywords,
+    status: row.status,
+    featured_image_url: row.featured_image_url,
+    created_by: row.created_by,
+    expires_at: row.expires_at,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
+    categories: row.category_row_id
+      ? { id: row.category_row_id, name: row.category_name!, slug: row.category_slug! }
+      : null,
+    listing_images: images,
+    tagIds: tagRows.map((r) => r.tagId),
+  };
 }
 
 /** All experience tags, for the edit form's tag checkboxes. */
 export async function getExperienceTags(): Promise<ListingTag[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("experience_tags")
-    .select("id, name, slug")
-    .order("name");
-
-  if (error) throw new Error(`Could not load experience tags: ${error.message}`);
-  return data;
+  return db
+    .select({ id: experienceTags.id, name: experienceTags.name, slug: experienceTags.slug })
+    .from(experienceTags)
+    .orderBy(asc(experienceTags.name));
 }

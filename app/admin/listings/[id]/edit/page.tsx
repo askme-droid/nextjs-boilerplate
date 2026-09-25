@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { requireStaff } from "@/lib/auth/require-staff";
 import {
   getAdminListingById,
   getExperienceTags,
@@ -16,9 +17,10 @@ export default async function EditListingPage({
 }) {
   const { id } = await params;
   const { saved, error } = await searchParams;
+  const { role } = await requireStaff();
 
   const [listing, categories, allTags] = await Promise.all([
-    getAdminListingById(id),
+    getAdminListingById(id, role),
     getCategories(),
     getExperienceTags(),
   ]);
