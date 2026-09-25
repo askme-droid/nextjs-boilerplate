@@ -4,6 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { Resend } from "resend";
 import { db } from "@/lib/db/client";
+import { renderAuthEmail } from "./email-template";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -15,11 +16,19 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true, // mirrors the Supabase project's current default
     sendResetPassword: async ({ user, url }) => {
+      const { html, text } = renderAuthEmail({
+        heading: "Reset your password",
+        message: "We received a request to reset your password. Click the button below to choose a new one.",
+        buttonLabel: "Reset password",
+        buttonUrl: url,
+        footnote: "If you didn't request this, you can safely ignore this email.",
+      });
       const { error } = await resend.emails.send({
         from: process.env.EMAIL_FROM!,
         to: user.email,
         subject: "Reset your password",
-        html: `<p>Click the link below to reset your password:</p><p><a href="${url}">${url}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+        html,
+        text,
       });
       if (error) {
         throw new Error(`Failed to send password reset email: ${error.message}`);
@@ -34,11 +43,19 @@ export const auth = betterAuth({
     // is a stronger pattern than what the Supabase-based version did (which
     // told the person at the keyboard "this email is already registered").
     onExistingUserSignUp: async ({ user }) => {
+      const { html, text } = renderAuthEmail({
+        heading: "Someone tried to sign up with your email",
+        message: "Someone just tried to create an account using this email address, which is already registered. If this was you, sign in instead using the button below.",
+        buttonLabel: "Sign in",
+        buttonUrl: `${process.env.BETTER_AUTH_URL}/login`,
+        footnote: "If this wasn't you, no action is needed — your account is safe.",
+      });
       const { error } = await resend.emails.send({
         from: process.env.EMAIL_FROM!,
         to: user.email,
         subject: "Someone tried to sign up with your email",
-        html: `<p>Someone just tried to create an account using this email address, which is already registered.</p><p>If this was you, <a href="${process.env.BETTER_AUTH_URL}/login">sign in here</a> instead. If it wasn't you, no action is needed — your account is safe.</p>`,
+        html,
+        text,
       });
       if (error) {
         throw new Error(`Failed to send existing-user notice: ${error.message}`);
@@ -48,11 +65,19 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     sendVerificationEmail: async ({ user, url }) => {
+      const { html, text } = renderAuthEmail({
+        heading: "Confirm your email",
+        message: "Click the button below to confirm your email and finish creating your account.",
+        buttonLabel: "Confirm email",
+        buttonUrl: url,
+        footnote: "If you didn't request this, you can safely ignore this email.",
+      });
       const { error } = await resend.emails.send({
         from: process.env.EMAIL_FROM!,
         to: user.email,
         subject: "Confirm your email",
-        html: `<p>Click the link below to confirm your email and finish creating your account:</p><p><a href="${url}">${url}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+        html,
+        text,
       });
       if (error) {
         throw new Error(`Failed to send verification email: ${error.message}`);
