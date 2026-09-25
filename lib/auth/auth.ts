@@ -2,15 +2,18 @@ import "server-only";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { Resend } from "resend";
 import { db } from "@/lib/db/client";
 
-// TEMPORARY: prints the link instead of emailing it, so sign-up/verification/
-// password-reset can be tested end-to-end before Resend is wired in. Replace
-// both bodies with a real Resend send once RESEND_API_KEY/EMAIL_FROM exist —
-// tracked in the Railway/Drizzle/Better-Auth migration plan, Phase 2.
+// TEMPORARY: prints the link instead of emailing it. sendResetPassword below
+// has been switched to a real Resend send; sendVerificationEmail and
+// onExistingUserSignUp still use this stub and should be migrated the same
+// way once verified.
 async function devLogEmail(kind: string, to: string, url: string) {
   console.log(`[auth email stub] ${kind} for ${to}:\n  ${url}`);
 }
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg" }),
@@ -20,7 +23,15 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true, // mirrors the Supabase project's current default
     sendResetPassword: async ({ user, url }) => {
-      await devLogEmail("Password reset", user.email, url);
+      const { error } = await resend.emails.send({
+        from: process.env.EMAIL_FROM!,
+        to: user.email,
+        subject: "Reset your password",
+        html: `<p>Click the link below to reset your password:</p><p><a href="${url}">${url}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+      });
+      if (error) {
+        throw new Error(`Failed to send password reset email: ${error.message}`);
+      }
     },
     // Fires when someone signs up with an email that's already registered
     // (only while requireEmailVerification is true, which it is here) —
