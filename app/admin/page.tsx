@@ -20,6 +20,11 @@ export default async function AdminPage() {
           Manage categories
         </Link>
       )}
+      {role === "admin" && (
+        <Link href="/admin/experience-tags" className={linkClass}>
+          Manage experiences
+        </Link>
+      )}
     </main>
   );
 }
