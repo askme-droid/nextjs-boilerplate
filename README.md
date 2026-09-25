@@ -26,16 +26,39 @@ Auth emails (password reset, email verification, existing-user notices) are
 sent through Resend (`lib/auth/auth.ts`), using `EMAIL_FROM` as the sender and
 `BETTER_AUTH_URL` as the base for every link they contain.
 
-In production, both of these need to point at the real domain, not
-`localhost`:
+In production these point at the real domain, not `localhost`:
 
-- `EMAIL_FROM` must be an address on a domain verified in Resend — e.g.
-  `noreply@mail.fd.sg` (a dedicated sending subdomain), not Resend's sandbox
-  `onboarding@resend.dev`, which can only deliver to the Resend account
-  owner's own address.
-- `BETTER_AUTH_URL` must be `https://fd.sg` (or whatever the live domain is),
-  so links inside those emails resolve to the real site instead of
+- `EMAIL_FROM` is `FD.SG Directory <hello@directory.fd.sg>` — `directory.fd.sg`
+  is a dedicated sending subdomain, verified in Resend (DKIM + SPF; DMARC is
+  set on the root `fd.sg` and covers it via DMARC's organizational-domain
+  fallback). This is deliberately a different hostname from the live site.
+- `BETTER_AUTH_URL` is `https://directories.fd.sg` — the live site's own
+  domain, so links inside those emails resolve there instead of
   `localhost:3000`.
+
+Locally, `.env.local` keeps both pointed at `localhost`/Resend's sandbox
+sender — it isn't meant to mirror production.
+
+## Deployment
+
+Hosted on Vercel, project `nextjs-boilerplate` under the **FDSG** team
+(`vercel.com/fdsg5/nextjs-boilerplate`), connected via Vercel's GitHub
+integration to `askme-droid/nextjs-boilerplate`. Every push to `main`
+auto-deploys — nothing is deployed through the Vercel CLI.
+
+- **Live domain**: https://directories.fd.sg
+- **Production environment variables** (`DATABASE_URL`, `BETTER_AUTH_SECRET`,
+  `BETTER_AUTH_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `ANTHROPIC_API_KEY`) are
+  set directly in the Vercel dashboard (Project → Settings → Environment
+  Variables), not sourced from this repo's `.env.local`.
+- **Commit-author gotcha**: Vercel refuses to build a deploy if the pushing
+  commit's author email doesn't match a Login Connection on the
+  `askme-droid` GitHub account (a 400 on the Git integration, not a build
+  failure — it never reaches the build step). This repo's local
+  `user.email` is set to that account's GitHub noreply address
+  (`331851185+askme-droid@users.noreply.github.com`) specifically to satisfy
+  this. Don't change it without confirming Vercel's Login Connections for
+  that account first, or deploys will silently stop triggering again.
 
 ## Learn More
 
@@ -45,9 +68,3 @@ To learn more about Next.js, take a look at the following resources:
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
