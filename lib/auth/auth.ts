@@ -5,9 +5,9 @@ import { nextCookies } from "better-auth/next-js";
 import { Resend } from "resend";
 import { db } from "@/lib/db/client";
 
-// TEMPORARY: prints the link instead of emailing it. sendResetPassword below
-// has been switched to a real Resend send; sendVerificationEmail and
-// onExistingUserSignUp still use this stub and should be migrated the same
+// TEMPORARY: prints the link instead of emailing it. sendResetPassword and
+// sendVerificationEmail below have been switched to a real Resend send;
+// onExistingUserSignUp still uses this stub and should be migrated the same
 // way once verified.
 async function devLogEmail(kind: string, to: string, url: string) {
   console.log(`[auth email stub] ${kind} for ${to}:\n  ${url}`);
@@ -52,7 +52,15 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     sendVerificationEmail: async ({ user, url }) => {
-      await devLogEmail("Verification email", user.email, url);
+      const { error } = await resend.emails.send({
+        from: process.env.EMAIL_FROM!,
+        to: user.email,
+        subject: "Confirm your email",
+        html: `<p>Click the link below to confirm your email and finish creating your account:</p><p><a href="${url}">${url}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+      });
+      if (error) {
+        throw new Error(`Failed to send verification email: ${error.message}`);
+      }
     },
   },
   user: {
