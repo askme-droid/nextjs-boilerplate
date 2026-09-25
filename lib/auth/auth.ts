@@ -5,14 +5,6 @@ import { nextCookies } from "better-auth/next-js";
 import { Resend } from "resend";
 import { db } from "@/lib/db/client";
 
-// TEMPORARY: prints the link instead of emailing it. sendResetPassword and
-// sendVerificationEmail below have been switched to a real Resend send;
-// onExistingUserSignUp still uses this stub and should be migrated the same
-// way once verified.
-async function devLogEmail(kind: string, to: string, url: string) {
-  console.log(`[auth email stub] ${kind} for ${to}:\n  ${url}`);
-}
-
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const auth = betterAuth({
@@ -42,11 +34,15 @@ export const auth = betterAuth({
     // is a stronger pattern than what the Supabase-based version did (which
     // told the person at the keyboard "this email is already registered").
     onExistingUserSignUp: async ({ user }) => {
-      await devLogEmail(
-        "Notice: someone tried to sign up with your email (already registered)",
-        user.email,
-        `${process.env.BETTER_AUTH_URL}/login`,
-      );
+      const { error } = await resend.emails.send({
+        from: process.env.EMAIL_FROM!,
+        to: user.email,
+        subject: "Someone tried to sign up with your email",
+        html: `<p>Someone just tried to create an account using this email address, which is already registered.</p><p>If this was you, <a href="${process.env.BETTER_AUTH_URL}/login">sign in here</a> instead. If it wasn't you, no action is needed — your account is safe.</p>`,
+      });
+      if (error) {
+        throw new Error(`Failed to send existing-user notice: ${error.message}`);
+      }
     },
   },
   emailVerification: {
