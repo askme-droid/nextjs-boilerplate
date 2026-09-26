@@ -2,13 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { put } from "@vercel/blob";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { listings } from "@/lib/db/schema";
+import { listingImages, listings } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/require-user";
 import { LISTING_STATUSES, USER_SUBMITTABLE_STATUSES } from "@/lib/listings/constants";
 import { getMyListingById } from "@/lib/listings/user-queries";
 import { slugify } from "@/lib/listings/slug";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
 // requireUser() here too, not just relied on via the page: a Server Action is
 // its own reachable endpoint. This — plus the explicit ownership check below
@@ -146,4 +150,182 @@ export async function deleteMyListing(formData: FormData) {
 
   revalidatePath("/my-listings");
   redirect("/my-listings?deleted=1");
+}
+
+function editImagesUrl(listingId: string, error?: string) {
+  return error
+    ? `/my-listings/${listingId}/edit?error=${encodeURIComponent(error)}`
+    : `/my-listings/${listingId}/edit`;
+}
+
+/** Revalidates the listing's own public page too, in case it's already
+ *  published — a no-op if it isn't found (nothing to revalidate). */
+async function revalidateMyListing(listingId: string, userId: string) {
+  const existing = await getMyListingById(listingId, userId);
+  revalidatePath("/");
+  if (existing) revalidatePath(`/listings/${existing.slug}`);
+}
+
+export async function addMyListingImage(formData: FormData) {
+  const { user } = await requireUser();
+
+  const listingId = String(formData.get("listingId") ?? "");
+  const url = String(formData.get("url") ?? "").trim();
+  const altText = String(formData.get("altText") ?? "").trim();
+
+  const existing = await getMyListingById(listingId, user.id);
+  if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
+  if (!url) redirect(editImagesUrl(listingId, "Image URL is required."));
+
+  try {
+    const existingCount = await db.$count(listingImages, eq(listingImages.listingId, listingId));
+    await db.insert(listingImages).values({
+      listingId,
+      url,
+      altText: altText || null,
+      position: existingCount,
+      isFeatured: existingCount === 0,
+    });
+  } catch (e) {
+    redirect(editImagesUrl(listingId, e instanceof Error ? e.message : "Could not add image."));
+  }
+
+  await revalidateMyListing(listingId, user.id);
+  redirect(editImagesUrl(listingId));
+}
+
+export async function uploadMyListingImages(formData: FormData) {
+  const { user } = await requireUser();
+
+  const listingId = String(formData.get("listingId") ?? "");
+  const existing = await getMyListingById(listingId, user.id);
+  if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
+
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) redirect(editImagesUrl(listingId, "Choose at least one image to upload."));
+
+  const invalidType = files.find((f) => !ALLOWED_IMAGE_TYPES.has(f.type));
+  if (invalidType) redirect(editImagesUrl(listingId, `${invalidType.name}: must be PNG, JPEG, WebP, or GIF.`));
+
+  const tooLarge = files.find((f) => f.size > MAX_IMAGE_BYTES);
+  if (tooLarge) redirect(editImagesUrl(listingId, `${tooLarge.name}: must be under 5MB.`));
+
+  try {
+    let position = await db.$count(listingImages, eq(listingImages.listingId, listingId));
+    for (const file of files) {
+      const blob = await put(`listings/${listingId}/${file.name}`, file, {
+        access: "public",
+        addRandomSuffix: true,
+      });
+      await db.insert(listingImages).values({
+        listingId,
+        url: blob.url,
+        altText: null,
+        position,
+        isFeatured: position === 0,
+      });
+      position += 1;
+    }
+  } catch (e) {
+    redirect(editImagesUrl(listingId, e instanceof Error ? e.message : "Could not upload images."));
+  }
+
+  await revalidateMyListing(listingId, user.id);
+  redirect(editImagesUrl(listingId));
+}
+
+export async function deleteMyListingImage(formData: FormData) {
+  const { user } = await requireUser();
+
+  const listingId = String(formData.get("listingId") ?? "");
+  const imageId = String(formData.get("imageId") ?? "");
+
+  const existing = await getMyListingById(listingId, user.id);
+  if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
+
+  try {
+    await db.delete(listingImages).where(eq(listingImages.id, imageId));
+  } catch (e) {
+    redirect(editImagesUrl(listingId, e instanceof Error ? e.message : "Could not delete image."));
+  }
+
+  await revalidateMyListing(listingId, user.id);
+  redirect(editImagesUrl(listingId));
+}
+
+export async function setMyListingFeaturedImage(formData: FormData) {
+  const { user } = await requireUser();
+
+  const listingId = String(formData.get("listingId") ?? "");
+  const imageId = String(formData.get("imageId") ?? "");
+
+  const existing = await getMyListingById(listingId, user.id);
+  if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
+
+  try {
+    await db.update(listingImages).set({ isFeatured: false }).where(eq(listingImages.listingId, listingId));
+    await db.update(listingImages).set({ isFeatured: true }).where(eq(listingImages.id, imageId));
+  } catch (e) {
+    redirect(editImagesUrl(listingId, e instanceof Error ? e.message : "Could not set featured image."));
+  }
+
+  await revalidateMyListing(listingId, user.id);
+  redirect(editImagesUrl(listingId));
+}
+
+export async function moveMyListingImage(formData: FormData) {
+  const { user } = await requireUser();
+
+  const listingId = String(formData.get("listingId") ?? "");
+  const imageId = String(formData.get("imageId") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+
+  const existing = await getMyListingById(listingId, user.id);
+  if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
+
+  const images = await db
+    .select({ id: listingImages.id, position: listingImages.position })
+    .from(listingImages)
+    .where(eq(listingImages.listingId, listingId))
+    .orderBy(listingImages.position);
+
+  const index = images.findIndex((image) => image.id === imageId);
+  const swapWith = direction === "up" ? index - 1 : index + 1;
+
+  if (index === -1 || swapWith < 0 || swapWith >= images.length) {
+    redirect(editImagesUrl(listingId));
+  }
+
+  const a = images[index];
+  const b = images[swapWith];
+
+  try {
+    await db.update(listingImages).set({ position: b.position }).where(eq(listingImages.id, a.id));
+    await db.update(listingImages).set({ position: a.position }).where(eq(listingImages.id, b.id));
+  } catch (e) {
+    redirect(editImagesUrl(listingId, e instanceof Error ? e.message : "Could not reorder images."));
+  }
+
+  await revalidateMyListing(listingId, user.id);
+  redirect(editImagesUrl(listingId));
+}
+
+export async function updateMyListingImageAltText(formData: FormData) {
+  const { user } = await requireUser();
+
+  const listingId = String(formData.get("listingId") ?? "");
+  const imageId = String(formData.get("imageId") ?? "");
+  const altText = String(formData.get("altText") ?? "").trim();
+
+  const existing = await getMyListingById(listingId, user.id);
+  if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
+
+  try {
+    await db.update(listingImages).set({ altText: altText || null }).where(eq(listingImages.id, imageId));
+  } catch (e) {
+    redirect(editImagesUrl(listingId, e instanceof Error ? e.message : "Could not update alt text."));
+  }
+
+  await revalidateMyListing(listingId, user.id);
+  redirect(editImagesUrl(listingId));
 }

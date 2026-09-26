@@ -1,6 +1,6 @@
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { categories, listings } from "@/lib/db/schema";
+import { categories, listingImages, listings } from "@/lib/db/schema";
 import type { ListingCategory } from "./queries";
 
 /**
@@ -118,4 +118,37 @@ export async function getMyListingById(
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
+}
+
+export type MyListingImage = {
+  id: string;
+  url: string;
+  alt_text: string | null;
+  is_featured: boolean;
+  position: number;
+};
+
+/**
+ * Images for one of the signed-in user's own listings, in position order —
+ * empty (not an error) if the listing doesn't exist or isn't theirs, so a
+ * forged listingId just reads as "no images" rather than leaking another
+ * user's photos.
+ */
+export async function getMyListingImages(listingId: string, userId: string): Promise<MyListingImage[]> {
+  const rows = await db
+    .select({
+      id: listingImages.id,
+      url: listingImages.url,
+      alt_text: listingImages.altText,
+      is_featured: listingImages.isFeatured,
+      position: listingImages.position,
+      ownerId: listings.createdBy,
+    })
+    .from(listingImages)
+    .innerJoin(listings, eq(listings.id, listingImages.listingId))
+    .where(eq(listingImages.listingId, listingId))
+    .orderBy(asc(listingImages.position));
+
+  if (rows.length === 0 || rows[0].ownerId !== userId) return [];
+  return rows.map(({ id, url, alt_text, is_featured, position }) => ({ id, url, alt_text, is_featured, position }));
 }
