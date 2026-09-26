@@ -1,23 +1,36 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { ListingCategory } from "@/lib/listings/queries";
+import type { ListingCategory, ListingTag } from "@/lib/listings/queries";
 import type { ListingFormValues } from "../actions";
 import { ListingForm } from "../listing-form";
-import { generateListing, type GenerateState } from "./generate-actions";
+import { generateListing, type GenerateState } from "../generate-actions";
 
 const fieldClass =
   "rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
 
-export function NewListingClient({ categories }: { categories: ListingCategory[] }) {
+export function EditListingClient({
+  listingId,
+  initialValues,
+  categories,
+  allTags,
+  selectedTagIds,
+}: {
+  listingId: string;
+  initialValues: ListingFormValues;
+  categories: ListingCategory[];
+  allTags: ListingTag[];
+  selectedTagIds: string[];
+}) {
   const [state, formAction, pending] = useActionState<GenerateState, FormData>(
     generateListing,
     {},
   );
 
   // ListingForm's inputs are uncontrolled (defaultValue), so updating
-  // `initialValues` after mount doesn't change what's on screen — remounting
-  // it (via `key`) is what actually applies a new generated draft.
+  // `values` after mount doesn't change what's on screen — remounting it
+  // (via `key`) is what actually applies a newly generated draft over
+  // whatever the listing's own saved values were.
   //
   // Derived during render (not an effect): React's documented pattern for
   // "adjust state when a prop/value changes" is to compare against the last
@@ -70,17 +83,20 @@ export function NewListingClient({ categories }: { categories: ListingCategory[]
           </button>
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Fills in the form below for you to review — nothing is saved until
-            you click &quot;Create listing&quot;.
+            Fills in the form below for you to review — nothing changes until
+            you click &quot;Save changes&quot;.
           </p>
         </form>
       </section>
 
       <ListingForm
         key={draft?.key ?? 0}
+        listingId={listingId}
         categories={categories}
-        submitLabel="Create listing"
-        initialValues={draft?.values}
+        submitLabel="Save changes"
+        initialValues={draft?.values ?? initialValues}
+        allTags={allTags}
+        selectedTagIds={selectedTagIds}
       />
     </div>
   );

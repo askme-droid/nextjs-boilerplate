@@ -5,7 +5,7 @@ import {
   getExperienceTags,
 } from "@/lib/listings/admin-queries";
 import { getCategories } from "@/lib/listings/queries";
-import { ListingForm } from "../../listing-form";
+import { EditListingClient } from "../edit-listing-client";
 import { ImageManager } from "../image-manager";
 
 export default async function EditListingPage({
@@ -42,10 +42,9 @@ export default async function EditListingPage({
         </p>
       )}
 
-      <ListingForm
+      <EditListingClient
         listingId={listing.id}
         categories={categories}
-        submitLabel="Save changes"
         initialValues={{
           title: listing.title,
           slug: listing.slug,

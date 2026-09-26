@@ -144,6 +144,26 @@ export async function saveListing(
   redirect(`/admin/listings/${listingId}/edit?saved=1`);
 }
 
+/**
+ * Creates an empty draft and sends staff straight to its edit page, so image
+ * upload (which needs a real listing id) and the AI-generation helper are
+ * both available immediately instead of only after a first manual save.
+ * Only ever reached via a real form submission (the "New listing" button),
+ * never a plain link — a prefetched/GET request must never have this side
+ * effect.
+ */
+export async function createListing() {
+  await requireStaff();
+
+  const slug = `untitled-${crypto.randomUUID().slice(0, 8)}`;
+  const [created] = await db
+    .insert(listings)
+    .values({ title: "Untitled listing", slug, status: "draft" })
+    .returning({ id: listings.id });
+
+  redirect(`/admin/listings/${created.id}/edit`);
+}
+
 /** Diffs and applies a listing's tag selection in one call — shared by the
  *  single save action above (previously its own separate saveTags action). */
 async function applyTagChanges(

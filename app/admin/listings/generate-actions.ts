@@ -3,7 +3,7 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import { generateListingDraft } from "@/lib/ai/generate-listing";
 import { getCategories } from "@/lib/listings/queries";
-import type { ListingFormValues } from "../actions";
+import type { ListingFormValues } from "./actions";
 
 export type GenerateState = {
   error?: string;

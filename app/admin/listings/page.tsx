@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { getAdminListings } from "@/lib/listings/admin-queries";
+import { createListing } from "./actions";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
@@ -17,20 +18,24 @@ export default async function AdminListingsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
-        <Link
-          href="/admin/listings/new"
-          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
-        >
-          New listing
-        </Link>
+        <form action={createListing}>
+          <button
+            type="submit"
+            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
+          >
+            New listing
+          </button>
+        </form>
       </div>
 
       {listings.length === 0 ? (
         <p className="text-zinc-500 dark:text-zinc-400">
           No listings yet.{" "}
-          <Link href="/admin/listings/new" className="underline underline-offset-4">
-            Create the first one
-          </Link>
+          <form action={createListing} className="inline">
+            <button type="submit" className="underline underline-offset-4">
+              Create the first one
+            </button>
+          </form>
           .
         </p>
       ) : (
