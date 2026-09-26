@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/require-user";
 import { getMyListings } from "@/lib/listings/user-queries";
-import { deleteMyListing } from "./actions";
+import { createMyListing, deleteMyListing } from "./actions";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
@@ -23,12 +23,14 @@ export default async function MyListingsPage({
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">My listings</h1>
-        <Link
-          href="/my-listings/new"
-          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
-        >
-          New listing
-        </Link>
+        <form action={createMyListing}>
+          <button
+            type="submit"
+            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
+          >
+            New listing
+          </button>
+        </form>
       </div>
 
       {saved && (
@@ -50,9 +52,11 @@ export default async function MyListingsPage({
       {listings.length === 0 ? (
         <p className="text-zinc-500 dark:text-zinc-400">
           You haven&apos;t created any listings yet.{" "}
-          <Link href="/my-listings/new" className="underline underline-offset-4">
-            Create your first one
-          </Link>
+          <form action={createMyListing} className="inline">
+            <button type="submit" className="underline underline-offset-4">
+              Create your first one
+            </button>
+          </form>
           .
         </p>
       ) : (

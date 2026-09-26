@@ -135,6 +135,30 @@ export async function saveMyListing(
   redirect("/my-listings?saved=1");
 }
 
+/**
+ * Creates an empty draft and sends the user straight to its edit page, so
+ * image upload (which needs a real listing id to attach to) is available
+ * immediately instead of only after a first manual save. Only ever reached
+ * via a real form submission (see the "New listing" button), never a plain
+ * link — a prefetched/GET request must never have this side effect.
+ */
+export async function createMyListing() {
+  const { user } = await requireUser();
+
+  const slug = `untitled-${crypto.randomUUID().slice(0, 8)}`;
+  const [created] = await db
+    .insert(listings)
+    .values({
+      title: "Untitled listing",
+      slug,
+      status: "draft",
+      createdBy: user.id,
+    })
+    .returning({ id: listings.id });
+
+  redirect(`/my-listings/${created.id}/edit`);
+}
+
 export async function deleteMyListing(formData: FormData) {
   const { user } = await requireUser();
 
