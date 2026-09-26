@@ -52,9 +52,9 @@ export default async function EditMyListingPage({
           description: listing.description ?? "",
           expires_at: listing.expires_at ?? "",
         }}
-      />
-
-      <MyImageManager listingId={listing.id} images={images} />
+      >
+        <MyImageManager listingId={listing.id} images={images} />
+      </MyListingForm>
     </main>
   );
 }

@@ -24,6 +24,7 @@ export function MyListingForm({
   initialValues,
   categories,
   currentStatus,
+  children,
 }: {
   /** Present when editing; omitted when creating. */
   listingId?: string;
@@ -32,14 +33,20 @@ export function MyListingForm({
   /** Shown read-only when editing — status only ever changes via an intent
    *  button (draft/pending) or an admin's decision, never a direct field. */
   currentStatus?: string;
+  /** Rendered between the fields and the submit buttons — the image
+   *  manager, on the edit page. It's a separate <form> (can't nest inside
+   *  this one), so it's slotted in here and the buttons below reference
+   *  this form by id instead of living inside it. */
+  children?: React.ReactNode;
 }) {
   const initialState: MyListingFormState = { values: initialValues ?? emptyValues };
   const [state, formAction, pending] = useActionState(saveMyListing, initialState);
   const values = state.values;
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      {listingId && <input type="hidden" name="id" value={listingId} />}
+    <>
+      <form id="my-listing-form" action={formAction} className="flex flex-col gap-4">
+        {listingId && <input type="hidden" name="id" value={listingId} />}
 
       {currentStatus && (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -137,10 +144,14 @@ export function MyListingForm({
           className={inputClass}
         />
       </label>
+      </form>
+
+      {children}
 
       <div className="flex gap-3">
         <button
           type="submit"
+          form="my-listing-form"
           name="intent"
           value="draft"
           disabled={pending}
@@ -150,6 +161,7 @@ export function MyListingForm({
         </button>
         <button
           type="submit"
+          form="my-listing-form"
           name="intent"
           value="pending"
           disabled={pending}
@@ -162,6 +174,6 @@ export function MyListingForm({
         Drafts are private to you. Submitting sends it to an admin for approval
         before it appears on the site.
       </p>
-    </form>
+    </>
   );
 }
