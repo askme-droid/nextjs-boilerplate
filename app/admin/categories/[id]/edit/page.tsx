@@ -38,27 +38,27 @@ export default async function EditCategoryPage({
           slug: category.slug,
           description: category.description ?? "",
         }}
-      />
-
-      <section className="flex flex-col gap-2 rounded-lg border border-red-200 p-4 dark:border-red-900/50">
-        <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete category</h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {listingCount === 0
-            ? "No listings use this category."
-            : `${listingCount} listing${listingCount === 1 ? "" : "s"} currently ${
-                listingCount === 1 ? "uses" : "use"
-              } this category — deleting it will leave ${listingCount === 1 ? "that listing" : "them"} uncategorized, not delete ${listingCount === 1 ? "it" : "them"}.`}
-        </p>
-        <form action={deleteCategory}>
-          <input type="hidden" name="id" value={category.id} />
-          <button
-            type="submit"
-            className="w-fit rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
-          >
-            Delete category
-          </button>
-        </form>
-      </section>
+      >
+        <section className="flex flex-col gap-2 rounded-lg border border-red-200 p-4 dark:border-red-900/50">
+          <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete category</h2>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {listingCount === 0
+              ? "No listings use this category."
+              : `${listingCount} listing${listingCount === 1 ? "" : "s"} currently ${
+                  listingCount === 1 ? "uses" : "use"
+                } this category — deleting it will leave ${listingCount === 1 ? "that listing" : "them"} uncategorized, not delete ${listingCount === 1 ? "it" : "them"}.`}
+          </p>
+          <form action={deleteCategory}>
+            <input type="hidden" name="id" value={category.id} />
+            <button
+              type="submit"
+              className="w-fit rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              Delete category
+            </button>
+          </form>
+        </section>
+      </CategoryForm>
     </div>
   );
 }

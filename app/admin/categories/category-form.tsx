@@ -18,19 +18,26 @@ export function CategoryForm({
   categoryId,
   initialValues,
   submitLabel,
+  children,
 }: {
   /** Present when editing; omitted when creating. */
   categoryId?: string;
   initialValues?: CategoryFormValues;
   submitLabel: string;
+  /** Rendered between the fields and the submit button — the delete section,
+   *  on the edit page. Kept as a separate element (not nested inside this
+   *  form) so the page controls where it sits while the button below still
+   *  references this form by id. */
+  children?: React.ReactNode;
 }) {
   const initialState: CategoryFormState = { values: initialValues ?? emptyValues };
   const [state, formAction, pending] = useActionState(saveCategory, initialState);
   const values = state.values;
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      {categoryId && <input type="hidden" name="id" value={categoryId} />}
+    <>
+      <form id="category-form" action={formAction} className="flex flex-col gap-4">
+        {categoryId && <input type="hidden" name="id" value={categoryId} />}
 
       {state.error && (
         <p role="alert" className={errorClass}>
@@ -74,14 +81,18 @@ export function CategoryForm({
           className={inputClass}
         />
       </label>
+      </form>
+
+      {children}
 
       <button
         type="submit"
+        form="category-form"
         disabled={pending}
         className="w-fit rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
       >
         {pending ? "Saving…" : submitLabel}
       </button>
-    </form>
+    </>
   );
 }
