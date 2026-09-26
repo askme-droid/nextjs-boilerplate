@@ -315,6 +315,24 @@ export async function setFeaturedImage(formData: FormData) {
   redirect(editUrl(listingId));
 }
 
+export async function updateImageAltText(formData: FormData) {
+  await requireStaff();
+
+  const listingId = String(formData.get("listingId") ?? "");
+  const imageId = String(formData.get("imageId") ?? "");
+  const altText = String(formData.get("altText") ?? "").trim();
+
+  try {
+    await db.update(listingImages).set({ altText: altText || null }).where(eq(listingImages.id, imageId));
+  } catch (e) {
+    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not update alt text."));
+  }
+
+  const slug = await getListingSlug(listingId);
+  if (slug) revalidatePath(`/listings/${slug}`);
+  redirect(editUrl(listingId));
+}
+
 export async function moveImage(formData: FormData) {
   await requireStaff();
 
