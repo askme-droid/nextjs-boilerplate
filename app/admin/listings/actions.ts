@@ -2,12 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { put } from "@vercel/blob";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import { slugify } from "@/lib/listings/slug";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
 // Every action here re-checks requireStaff() itself rather than trusting the
 // /admin layout's gate: a Server Action is its own callable endpoint, reachable
@@ -221,6 +225,51 @@ export async function addImage(formData: FormData) {
     });
   } catch (e) {
     redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not add image."));
+  }
+
+  const slug = await getListingSlug(listingId);
+  revalidatePath("/");
+  if (slug) revalidatePath(`/listings/${slug}`);
+  redirect(editUrl(listingId));
+}
+
+/** Uploads one or more image files to Vercel Blob storage and attaches them
+ *  to the listing, in the order they were selected. */
+export async function uploadImages(formData: FormData) {
+  await requireStaff();
+
+  const listingId = String(formData.get("listingId") ?? "");
+  if (!listingId) redirect(editUrl(listingId, "Missing listing."));
+
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) redirect(editUrl(listingId, "Choose at least one image to upload."));
+
+  const invalidType = files.find((f) => !ALLOWED_IMAGE_TYPES.has(f.type));
+  if (invalidType) redirect(editUrl(listingId, `${invalidType.name}: must be PNG, JPEG, WebP, or GIF.`));
+
+  const tooLarge = files.find((f) => f.size > MAX_IMAGE_BYTES);
+  if (tooLarge) redirect(editUrl(listingId, `${tooLarge.name}: must be under 5MB.`));
+
+  try {
+    let position = await db.$count(listingImages, eq(listingImages.listingId, listingId));
+    for (const file of files) {
+      const blob = await put(`listings/${listingId}/${file.name}`, file, {
+        access: "public",
+        addRandomSuffix: true,
+      });
+      await db.insert(listingImages).values({
+        listingId,
+        url: blob.url,
+        altText: null,
+        position,
+        // Auto-feature the first image a listing gets, so it isn't imageless
+        // on the grid/detail hero until someone remembers to flag one.
+        isFeatured: position === 0,
+      });
+      position += 1;
+    }
+  } catch (e) {
+    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not upload images."));
   }
 
   const slug = await getListingSlug(listingId);

@@ -48,9 +48,10 @@ auto-deploys — nothing is deployed through the Vercel CLI.
 
 - **Live domain**: https://directories.fd.sg
 - **Production environment variables** (`DATABASE_URL`, `BETTER_AUTH_SECRET`,
-  `BETTER_AUTH_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `ANTHROPIC_API_KEY`) are
-  set directly in the Vercel dashboard (Project → Settings → Environment
-  Variables), not sourced from this repo's `.env.local`.
+  `BETTER_AUTH_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `ANTHROPIC_API_KEY`,
+  `BLOB_READ_WRITE_TOKEN`) are set directly in the Vercel dashboard
+  (Project → Settings → Environment Variables), not sourced from this repo's
+  `.env.local`.
 - **Commit-author gotcha**: Vercel refuses to build a deploy if the pushing
   commit's author email doesn't match a Login Connection on the
   `askme-droid` GitHub account (a 400 on the Git integration, not a build

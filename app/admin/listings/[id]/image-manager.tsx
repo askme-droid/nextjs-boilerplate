@@ -1,5 +1,5 @@
 import type { ListingImage } from "@/lib/listings/queries";
-import { addImage, deleteImage, moveImage, setFeaturedImage } from "../actions";
+import { addImage, deleteImage, moveImage, setFeaturedImage, uploadImages } from "../actions";
 
 const inputClass =
   "rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -92,10 +92,34 @@ export function ImageManager({
         </ul>
       )}
 
+      <form action={uploadImages} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <input type="hidden" name="listingId" value={listingId} />
+        <label className="flex-1 text-sm font-medium">
+          Upload images
+          <input
+            type="file"
+            name="files"
+            multiple
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            required
+            className={`${inputClass} mt-1 w-full`}
+          />
+          <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+            PNG, JPEG, WebP, or GIF. Up to 5MB each — select multiple at once.
+          </span>
+        </label>
+        <button
+          type="submit"
+          className="rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90"
+        >
+          Upload
+        </button>
+      </form>
+
       <form action={addImage} className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <input type="hidden" name="listingId" value={listingId} />
         <label className="flex-1 text-sm font-medium">
-          Image URL
+          Or add by image URL
           <input type="url" name="url" required className={`${inputClass} mt-1 w-full`} />
         </label>
         <label className="flex-1 text-sm font-medium">
@@ -104,9 +128,9 @@ export function ImageManager({
         </label>
         <button
           type="submit"
-          className="rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90"
+          className="rounded-md border border-zinc-300 px-4 py-2 font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
         >
-          Add image
+          Add
         </button>
       </form>
     </section>
