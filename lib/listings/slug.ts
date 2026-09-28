@@ -14,3 +14,12 @@ export function slugify(input: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
 }
+
+/**
+ * The throwaway slug given to an auto-created draft ("untitled-1a2b3c4d").
+ * While a slug is still this placeholder, saving derives a real one from the
+ * title instead of keeping it, so people don't end up with untitled- URLs.
+ */
+export function isPlaceholderSlug(slug: string): boolean {
+  return /^untitled-[0-9a-f]{8}$/.test(slug);
+}

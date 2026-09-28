@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { socialLabel } from "@/lib/listings/contact-fields";
 import { getListingBySlug } from "@/lib/listings/queries";
 
 type Params = Promise<{ slug: string }>;
@@ -118,6 +119,48 @@ export default async function ListingDetailPage({
           <p className="whitespace-pre-line leading-relaxed text-zinc-700 dark:text-zinc-300">
             {listing.description}
           </p>
+        )}
+
+        {(listing.company_name ||
+          listing.company_uen ||
+          listing.social_links.length > 0 ||
+          listing.cta_url) && (
+          <section className="mt-2 flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            {listing.company_name && (
+              <p className="font-medium">{listing.company_name}</p>
+            )}
+            {listing.company_uen && (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                UEN <span className="font-mono">{listing.company_uen}</span>
+              </p>
+            )}
+            {listing.social_links.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {listing.social_links.map((url) => (
+                  <li key={url}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      className="inline-block rounded-full border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    >
+                      {socialLabel(url)}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {listing.cta_url && (
+              <a
+                href={listing.cta_url}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="w-fit rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90"
+              >
+                {listing.cta_label || "Learn more"}
+              </a>
+            )}
+          </section>
         )}
 
         {listing.expires_at && (

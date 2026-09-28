@@ -40,6 +40,11 @@ export const listings = pgTable("listings", {
   description: text("description"),
   categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }), // ON DELETE SET NULL confirmed by live testing
   location: text("location"),
+  companyName: text("company_name"),
+  companyUen: text("company_uen"),
+  socialLinks: text("social_links").array(),
+  ctaLabel: text("cta_label"),
+  ctaUrl: text("cta_url"),
   keywords: text("keywords").array(),
   status: text("status", { enum: LISTING_STATUSES }).notNull().default("draft"),
   featuredImageUrl: text("featured_image_url"),

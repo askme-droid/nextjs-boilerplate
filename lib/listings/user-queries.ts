@@ -80,6 +80,11 @@ export type MyListing = {
   description: string | null;
   category_id: string | null;
   location: string | null;
+  company_name: string | null;
+  company_uen: string | null;
+  social_links: string[];
+  cta_label: string | null;
+  cta_url: string | null;
   keywords: string[] | null;
   status: string;
   featured_image_url: string | null;
@@ -110,6 +115,11 @@ export async function getMyListingById(
     description: row.description,
     category_id: row.categoryId,
     location: row.location,
+    company_name: row.companyName,
+    company_uen: row.companyUen,
+    social_links: row.socialLinks ?? [],
+    cta_label: row.ctaLabel,
+    cta_url: row.ctaUrl,
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featuredImageUrl,

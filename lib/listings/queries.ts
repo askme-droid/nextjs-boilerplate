@@ -38,6 +38,11 @@ export type ListingTag = { id: string; name: string; slug: string };
 export type ListingDetail = Omit<ListingWithRelations, "listing_images"> & {
   listing_images: ListingImage[];
   experience_tags: ListingTag[];
+  company_name: string | null;
+  company_uen: string | null;
+  social_links: string[];
+  cta_label: string | null;
+  cta_url: string | null;
 };
 
 export type ListingsResult = {
@@ -220,6 +225,11 @@ export const getListingBySlug = cache(async (
       description: listings.description,
       category_id: listings.categoryId,
       location: listings.location,
+      company_name: listings.companyName,
+      company_uen: listings.companyUen,
+      social_links: listings.socialLinks,
+      cta_label: listings.ctaLabel,
+      cta_url: listings.ctaUrl,
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
@@ -265,6 +275,11 @@ export const getListingBySlug = cache(async (
     description: row.description,
     category_id: row.category_id,
     location: row.location,
+    company_name: row.company_name,
+    company_uen: row.company_uen,
+    social_links: row.social_links ?? [],
+    cta_label: row.cta_label,
+    cta_url: row.cta_url,
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,

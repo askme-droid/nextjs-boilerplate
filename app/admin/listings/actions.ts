@@ -7,8 +7,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { parseContactFields } from "@/lib/listings/contact-fields";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
-import { slugify } from "@/lib/listings/slug";
+import { isPlaceholderSlug, slugify } from "@/lib/listings/slug";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -24,6 +25,11 @@ export type ListingFormValues = {
   slug: string;
   category_id: string;
   location: string;
+  company_name: string;
+  company_uen: string;
+  social_links: string;
+  cta_label: string;
+  cta_url: string;
   keywords: string;
   description: string;
   status: string;
@@ -43,6 +49,11 @@ function readValues(formData: FormData): ListingFormValues {
     slug: get("slug"),
     category_id: get("category_id"),
     location: get("location"),
+    company_name: get("company_name"),
+    company_uen: get("company_uen"),
+    social_links: get("social_links"),
+    cta_label: get("cta_label"),
+    cta_url: get("cta_url"),
     keywords: get("keywords"),
     description: get("description"),
     status: get("status"),
@@ -76,11 +87,14 @@ export async function saveListing(
     fieldErrors.status = "Choose a valid status.";
   }
 
-  const slug = slugify(values.slug || values.title);
+  const slug = slugify((isPlaceholderSlug(values.slug) ? "" : values.slug) || values.title);
   if (!slug) {
     fieldErrors.slug =
       "Could not generate a slug from this title — enter one manually.";
   }
+
+  const contact = parseContactFields(values);
+  Object.assign(fieldErrors, contact.errors);
 
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors, values };
@@ -96,6 +110,11 @@ export async function saveListing(
     slug,
     categoryId: values.category_id,
     location: values.location || null,
+    companyName: contact.parsed.companyName,
+    companyUen: contact.parsed.companyUen,
+    socialLinks: contact.parsed.socialLinks,
+    ctaLabel: contact.parsed.ctaLabel,
+    ctaUrl: contact.parsed.ctaUrl,
     keywords,
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],

@@ -14,6 +14,11 @@ const emptyValues: MyListingFormValues = {
   slug: "",
   category_id: "",
   location: "",
+  company_name: "",
+  company_uen: "",
+  social_links: "",
+  cta_label: "",
+  cta_url: "",
   keywords: "",
   description: "",
   expires_at: "",
@@ -113,6 +118,70 @@ export function MyListingForm({
           className={inputClass}
         />
       </label>
+
+      <label className={labelClass}>
+        Company name
+        <input
+          type="text"
+          name="company_name"
+          defaultValue={values.company_name}
+          className={inputClass}
+        />
+      </label>
+
+      <label className={labelClass}>
+        Company UEN
+        <input
+          type="text"
+          name="company_uen"
+          placeholder="e.g. 201912345K"
+          defaultValue={values.company_uen}
+          className={inputClass}
+        />
+        {state.fieldErrors?.company_uen && (
+          <p className={errorClass}>{state.fieldErrors.company_uen}</p>
+        )}
+      </label>
+
+      <label className={labelClass}>
+        Social links
+        <textarea
+          name="social_links"
+          rows={3}
+          placeholder={"One link per line\nhttps://www.facebook.com/yourpage\nhttps://www.instagram.com/yourpage"}
+          defaultValue={values.social_links}
+          className={inputClass}
+        />
+        {state.fieldErrors?.social_links && (
+          <p className={errorClass}>{state.fieldErrors.social_links}</p>
+        )}
+      </label>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+        <label className={`${labelClass} sm:w-56`}>
+          Button label (CTA)
+          <input
+            type="text"
+            name="cta_label"
+            placeholder="Learn more"
+            defaultValue={values.cta_label}
+            className={inputClass}
+          />
+        </label>
+        <label className={`${labelClass} flex-1`}>
+          Button link (CTA)
+          <input
+            type="text"
+            name="cta_url"
+            placeholder="https://"
+            defaultValue={values.cta_url}
+            className={inputClass}
+          />
+          {state.fieldErrors?.cta_url && (
+            <p className={errorClass}>{state.fieldErrors.cta_url}</p>
+          )}
+        </label>
+      </div>
 
       <label className={labelClass}>
         Description

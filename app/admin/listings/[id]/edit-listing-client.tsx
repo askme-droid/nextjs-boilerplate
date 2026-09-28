@@ -98,7 +98,20 @@ export function EditListingClient({
         listingId={listingId}
         categories={categories}
         submitLabel="Save changes"
-        initialValues={draft?.values ?? initialValues}
+        initialValues={
+          draft
+            ? {
+                ...draft.values,
+                // The generator never fills these, so keep what's saved
+                // instead of letting a blank draft wipe them from the form.
+                company_name: initialValues.company_name,
+                company_uen: initialValues.company_uen,
+                social_links: initialValues.social_links,
+                cta_label: initialValues.cta_label,
+                cta_url: initialValues.cta_url,
+              }
+            : initialValues
+        }
         allTags={allTags}
         selectedTagIds={selectedTagIds}
       >

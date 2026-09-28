@@ -104,6 +104,12 @@ export async function generateListingDraft({
     slug: "", // regenerated from the title on save, same as manual entry
     category_id: parsed.category_id ?? "",
     location: parsed.location ?? "",
+    // Business-identity fields are never guessed by the model.
+    company_name: "",
+    company_uen: "",
+    social_links: "",
+    cta_label: "",
+    cta_url: "",
     keywords: parsed.keywords.join(", "),
     description: parsed.description,
     status: "draft",

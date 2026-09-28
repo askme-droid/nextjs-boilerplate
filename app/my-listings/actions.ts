@@ -8,8 +8,9 @@ import { db } from "@/lib/db/client";
 import { listingImages, listings } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/require-user";
 import { LISTING_STATUSES, USER_SUBMITTABLE_STATUSES } from "@/lib/listings/constants";
+import { parseContactFields } from "@/lib/listings/contact-fields";
 import { getMyListingById } from "@/lib/listings/user-queries";
-import { slugify } from "@/lib/listings/slug";
+import { isPlaceholderSlug, slugify } from "@/lib/listings/slug";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -23,6 +24,11 @@ export type MyListingFormValues = {
   slug: string;
   category_id: string;
   location: string;
+  company_name: string;
+  company_uen: string;
+  social_links: string;
+  cta_label: string;
+  cta_url: string;
   keywords: string;
   description: string;
   expires_at: string;
@@ -41,6 +47,11 @@ function readValues(formData: FormData): MyListingFormValues {
     slug: get("slug"),
     category_id: get("category_id"),
     location: get("location"),
+    company_name: get("company_name"),
+    company_uen: get("company_uen"),
+    social_links: get("social_links"),
+    cta_label: get("cta_label"),
+    cta_url: get("cta_url"),
     keywords: get("keywords"),
     description: get("description"),
     expires_at: get("expires_at"),
@@ -66,10 +77,13 @@ export async function saveMyListing(
   if (!values.title) fieldErrors.title = "Title is required.";
   if (!values.category_id) fieldErrors.category_id = "Choose a category.";
 
-  const slug = slugify(values.slug || values.title);
+  const slug = slugify((isPlaceholderSlug(values.slug) ? "" : values.slug) || values.title);
   if (!slug) {
     fieldErrors.slug = "Could not generate a slug from this title — enter one manually.";
   }
+
+  const contact = parseContactFields(values);
+  Object.assign(fieldErrors, contact.errors);
 
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors, values };
@@ -105,6 +119,11 @@ export async function saveMyListing(
     slug,
     categoryId: values.category_id,
     location: values.location || null,
+    companyName: contact.parsed.companyName,
+    companyUen: contact.parsed.companyUen,
+    socialLinks: contact.parsed.socialLinks,
+    ctaLabel: contact.parsed.ctaLabel,
+    ctaUrl: contact.parsed.ctaUrl,
     keywords,
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
