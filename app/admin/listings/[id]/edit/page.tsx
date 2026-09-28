@@ -57,9 +57,9 @@ export default async function EditListingPage({
         }}
         allTags={allTags}
         selectedTagIds={listing.tagIds}
-      />
-
-      <ImageManager listingId={listing.id} images={listing.listing_images} />
+      >
+        <ImageManager listingId={listing.id} images={listing.listing_images} />
+      </EditListingClient>
     </div>
   );
 }

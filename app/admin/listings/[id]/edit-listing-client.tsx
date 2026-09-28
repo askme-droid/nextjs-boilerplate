@@ -15,12 +15,16 @@ export function EditListingClient({
   categories,
   allTags,
   selectedTagIds,
+  children,
 }: {
   listingId: string;
   initialValues: ListingFormValues;
   categories: ListingCategory[];
   allTags: ListingTag[];
   selectedTagIds: string[];
+  /** The image manager, slotted between the form's fields and its Save
+   *  button (see ListingForm). */
+  children?: React.ReactNode;
 }) {
   const [state, formAction, pending] = useActionState<GenerateState, FormData>(
     generateListing,
@@ -97,7 +101,9 @@ export function EditListingClient({
         initialValues={draft?.values ?? initialValues}
         allTags={allTags}
         selectedTagIds={selectedTagIds}
-      />
+      >
+        {children}
+      </ListingForm>
     </div>
   );
 }

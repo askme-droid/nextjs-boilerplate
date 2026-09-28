@@ -28,6 +28,7 @@ export function ListingForm({
   submitLabel,
   allTags,
   selectedTagIds,
+  children,
 }: {
   /** Present when editing; omitted when creating. */
   listingId?: string;
@@ -42,6 +43,11 @@ export function ListingForm({
    */
   allTags?: ListingTag[];
   selectedTagIds?: string[];
+  /** Rendered between the fields and the submit button — the image
+   *  manager, on the edit page. It's its own set of <form>s and can't nest
+   *  inside this one, so it's slotted in here and the button below
+   *  references this form by id instead of living inside it. */
+  children?: React.ReactNode;
 }) {
   const initialState: ListingFormState = { values: initialValues ?? emptyValues };
   const [state, formAction, pending] = useActionState(saveListing, initialState);
@@ -49,7 +55,8 @@ export function ListingForm({
   const selected = new Set(selectedTagIds ?? []);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <>
+    <form id="listing-form" action={formAction} className="flex flex-col gap-4">
       {listingId && <input type="hidden" name="id" value={listingId} />}
 
       {state.error && (
@@ -184,14 +191,18 @@ export function ListingForm({
           )}
         </div>
       )}
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-fit rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
-      >
-        {pending ? "Saving…" : submitLabel}
-      </button>
     </form>
+
+    {children}
+
+    <button
+      type="submit"
+      form="listing-form"
+      disabled={pending}
+      className="w-fit rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+    >
+      {pending ? "Saving…" : submitLabel}
+    </button>
+    </>
   );
 }
