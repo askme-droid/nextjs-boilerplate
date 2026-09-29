@@ -62,48 +62,61 @@ export default async function Home({
   const result = await loadPageData(await searchParams);
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Listings</h1>
-
-      {!result.ok ? (
-        <div className="flex flex-col items-center gap-2 py-16 text-center">
-          <p className="text-lg text-red-600 dark:text-red-400">
-            Could not load listings.
-          </p>
-          <p className="max-w-md font-mono text-sm text-zinc-600 dark:text-zinc-400">
-            {result.error}
+    <main className="flex flex-1 flex-col">
+      <div className="bg-gradient-to-r from-teal-600 to-teal-500 px-6 pb-16 pt-10 text-white sm:pb-20 sm:pt-14">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Find great deals near you
+          </h1>
+          <p className="text-teal-50">
+            Browse promos, flyers, and listings from local businesses.
           </p>
         </div>
-      ) : (
-        <>
-          <ListingsSearchForm
-            q={result.data.q}
-            category={result.data.category}
-            categories={result.data.categories}
-          />
+      </div>
 
-          {result.data.listings.length === 0 ? (
-            <p className="py-16 text-center text-zinc-500 dark:text-zinc-400">
-              {result.data.q || result.data.category
-                ? "No listings match your search."
-                : "No listings have been published yet."}
+      <div className="mx-auto -mt-10 flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-6 sm:-mt-12">
+        {!result.ok ? (
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-lg text-red-600 dark:text-red-400">
+              Could not load listings.
             </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {result.data.listings.map((listing) => (
-                <ListingCard key={listing.id} listing={listing} />
-              ))}
+            <p className="max-w-md font-mono text-sm text-zinc-600 dark:text-zinc-400">
+              {result.error}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
+              <ListingsSearchForm
+                q={result.data.q}
+                category={result.data.category}
+                categories={result.data.categories}
+              />
             </div>
-          )}
 
-          <ListingsPagination
-            page={result.data.page}
-            totalPages={result.data.totalPages}
-            q={result.data.q}
-            category={result.data.category}
-          />
-        </>
-      )}
+            {result.data.listings.length === 0 ? (
+              <p className="py-16 text-center text-zinc-500 dark:text-zinc-400">
+                {result.data.q || result.data.category
+                  ? "No listings match your search."
+                  : "No listings have been published yet."}
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {result.data.listings.map((listing) => (
+                  <ListingCard key={listing.id} listing={listing} />
+                ))}
+              </div>
+            )}
+
+            <ListingsPagination
+              page={result.data.page}
+              totalPages={result.data.totalPages}
+              q={result.data.q}
+              category={result.data.category}
+            />
+          </>
+        )}
+      </div>
     </main>
   );
 }
