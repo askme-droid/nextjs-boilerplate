@@ -10,8 +10,13 @@ const statusClass: Record<string, string> = {
   rejected: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
 };
 
-export default async function AdminListingsPage() {
+export default async function AdminListingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string; error?: string }>;
+}) {
   const { role } = await requireStaff();
+  const { deleted, error } = await searchParams;
   const listings = await getAdminListings(role);
 
   return (
@@ -27,6 +32,17 @@ export default async function AdminListingsPage() {
           </button>
         </form>
       </div>
+
+      {deleted && (
+        <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+          Listing deleted.
+        </p>
+      )}
+      {error && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+          {error}
+        </p>
+      )}
 
       {listings.length === 0 ? (
         <p className="text-zinc-500 dark:text-zinc-400">

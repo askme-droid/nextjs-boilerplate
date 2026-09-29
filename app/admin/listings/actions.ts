@@ -234,6 +234,30 @@ async function getListingSlug(listingId: string): Promise<string | null> {
   return row?.slug ?? null;
 }
 
+export async function deleteListing(formData: FormData) {
+  await requireStaff();
+
+  const id = String(formData.get("id") ?? "");
+
+  // Looked up before deleting (not after — there'd be nothing left to find)
+  // so a published listing's public page gets revalidated too.
+  const slug = await getListingSlug(id);
+
+  try {
+    // No RESTRICT to worry about: listing_images.listing_id and
+    // listing_experience_tags.listing_id are both ON DELETE CASCADE (see
+    // lib/db/schema/listings.ts), so this also removes the listing's own
+    // images and tag links — it doesn't touch any other listing.
+    await db.delete(listings).where(eq(listings.id, id));
+  } catch (e) {
+    redirect(editUrl(id, e instanceof Error ? e.message : "Could not delete listing."));
+  }
+
+  revalidatePath("/");
+  if (slug) revalidatePath(`/listings/${slug}`);
+  redirect("/admin/listings?deleted=1");
+}
+
 function editUrl(listingId: string, error?: string) {
   return error
     ? `/admin/listings/${listingId}/edit?error=${encodeURIComponent(error)}`

@@ -7,6 +7,7 @@ import {
 import { getCategories } from "@/lib/listings/queries";
 import { EditListingClient } from "../edit-listing-client";
 import { ImageManager } from "../image-manager";
+import { deleteListing } from "../../actions";
 
 export default async function EditListingPage({
   params,
@@ -64,6 +65,24 @@ export default async function EditListingPage({
         selectedTagIds={listing.tagIds}
       >
         <ImageManager listingId={listing.id} images={listing.listing_images} />
+
+        <section className="flex flex-col gap-2 rounded-lg border border-red-200 p-4 dark:border-red-900/50">
+          <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete listing</h2>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {listing.status === "published"
+              ? "This listing is live — deleting it removes it from the site immediately, along with its images and tags. This cannot be undone."
+              : "Deleting removes this listing, its images, and its tags. This cannot be undone."}
+          </p>
+          <form action={deleteListing}>
+            <input type="hidden" name="id" value={listing.id} />
+            <button
+              type="submit"
+              className="w-fit rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              Delete listing
+            </button>
+          </form>
+        </section>
       </EditListingClient>
     </div>
   );
