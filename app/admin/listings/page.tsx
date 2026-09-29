@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { getAdminListings } from "@/lib/listings/admin-queries";
-import { createListing } from "./actions";
+import { createListing, deleteListing, publishListing } from "./actions";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
@@ -13,10 +13,10 @@ const statusClass: Record<string, string> = {
 export default async function AdminListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ deleted?: string; error?: string }>;
+  searchParams: Promise<{ published?: string; deleted?: string; error?: string }>;
 }) {
   const { role } = await requireStaff();
-  const { deleted, error } = await searchParams;
+  const { published, deleted, error } = await searchParams;
   const listings = await getAdminListings(role);
 
   return (
@@ -33,6 +33,11 @@ export default async function AdminListingsPage({
         </form>
       </div>
 
+      {published && (
+        <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+          Listing published.
+        </p>
+      )}
       {deleted && (
         <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
           Listing deleted.
@@ -70,13 +75,42 @@ export default async function AdminListingsPage({
                   {listing.location ? ` · ${listing.location}` : ""}
                 </p>
               </div>
-              <span
-                className={`flex-none rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  statusClass[listing.status] ?? statusClass.draft
-                }`}
-              >
-                {listing.status}
-              </span>
+              <div className="flex flex-none items-center gap-3">
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    statusClass[listing.status] ?? statusClass.draft
+                  }`}
+                >
+                  {listing.status}
+                </span>
+                <Link
+                  href={`/admin/listings/${listing.id}/edit`}
+                  className="text-sm font-medium hover:underline"
+                >
+                  Edit
+                </Link>
+                {listing.status !== "published" && (
+                  <form action={publishListing}>
+                    <input type="hidden" name="id" value={listing.id} />
+                    <input type="hidden" name="returnTo" value="list" />
+                    <button
+                      type="submit"
+                      className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+                    >
+                      Publish
+                    </button>
+                  </form>
+                )}
+                <form action={deleteListing}>
+                  <input type="hidden" name="id" value={listing.id} />
+                  <button
+                    type="submit"
+                    className="text-sm text-red-600 hover:underline dark:text-red-400"
+                  >
+                    Delete
+                  </button>
+                </form>
+              </div>
             </li>
           ))}
         </ul>

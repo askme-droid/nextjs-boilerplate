@@ -253,7 +253,15 @@ export async function publishListing(formData: FormData) {
   const slug = await getListingSlug(id);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(`/admin/listings/${id}/edit?saved=1`);
+
+  // The edit form's Publish button wants to land back on the edit page (so
+  // "Saved." shows there); the list page's inline Publish button wants to
+  // stay on the list instead of jumping into an edit view nobody asked for.
+  redirect(
+    formData.get("returnTo") === "list"
+      ? "/admin/listings?published=1"
+      : `/admin/listings/${id}/edit?saved=1`,
+  );
 }
 
 export async function deleteListing(formData: FormData) {
