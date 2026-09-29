@@ -62,7 +62,7 @@ export default async function AdminListingsPage({
       ) : (
         <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
           {listings.map((listing) => (
-            <li key={listing.id} className="flex items-center justify-between gap-4 py-3">
+            <li key={listing.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
               <div className="min-w-0">
                 <Link
                   href={`/admin/listings/${listing.id}/edit`}
@@ -75,7 +75,7 @@ export default async function AdminListingsPage({
                   {listing.location ? ` · ${listing.location}` : ""}
                 </p>
               </div>
-              <div className="flex flex-none items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span
                   className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     statusClass[listing.status] ?? statusClass.draft
