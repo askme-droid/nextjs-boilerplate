@@ -28,7 +28,7 @@ export function HeroSlider({ slides }: { slides: HeroSlide[] }) {
   if (slides.length === 0) return null;
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full">
       <div className="relative aspect-[852/333] w-full overflow-hidden rounded-xl shadow-lg">
         {slides.map((slide, i) => (
           <Image
@@ -37,7 +37,7 @@ export function HeroSlider({ slides }: { slides: HeroSlide[] }) {
             alt={slide.alt}
             fill
             priority={i === 0}
-            sizes="(min-width: 1024px) 28rem, 90vw"
+            sizes="(min-width: 1024px) 48rem, 90vw"
             className={`object-cover transition-opacity duration-700 ${
               i === index ? "opacity-100" : "opacity-0"
             }`}

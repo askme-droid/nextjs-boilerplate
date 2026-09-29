@@ -73,8 +73,8 @@ export default async function Home({
   return (
     <main className="flex flex-1 flex-col">
       <div className="bg-brand-teal px-6 pb-16 pt-10 text-white sm:pb-20 sm:pt-14">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-8 lg:flex-row lg:justify-between">
-          <div className="flex flex-col gap-2">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-8 lg:flex-row">
+          <div className="flex flex-col gap-2 lg:w-1/3">
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
               Find great deals near you
             </h1>
@@ -83,7 +83,9 @@ export default async function Home({
             </p>
           </div>
 
-          <HeroSlider slides={HERO_SLIDES} />
+          <div className="w-full lg:w-2/3">
+            <HeroSlider slides={HERO_SLIDES} />
+          </div>
         </div>
       </div>
 
