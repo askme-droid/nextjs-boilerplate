@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ListingCategory } from "@/lib/listings/queries";
 
 const fieldClass =
-  "rounded-md border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+  "rounded-md border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900 outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
 
 export function ListingsSearchForm({
   q,
@@ -47,7 +47,7 @@ export function ListingsSearchForm({
 
         <button
           type="submit"
-          className="rounded-md bg-orange-500 px-4 py-2 font-medium text-white transition-colors hover:bg-orange-600"
+          className="rounded-md bg-brand-orange px-4 py-2 font-medium text-white transition-[filter] hover:brightness-95"
         >
           Search
         </button>
@@ -56,7 +56,7 @@ export function ListingsSearchForm({
       {hasFilters && (
         <Link
           href="/"
-          className="text-sm text-teal-700 underline-offset-4 hover:underline dark:text-teal-400"
+          className="text-sm text-brand-teal underline-offset-4 hover:underline"
         >
           Clear
         </Link>

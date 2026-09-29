@@ -10,7 +10,7 @@ function pageHref(params: { q: string; category: string }, page: number) {
 }
 
 const linkClass =
-  "rounded-md border border-teal-200 px-3 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-50 dark:border-teal-900 dark:text-teal-400 dark:hover:bg-teal-900/30";
+  "rounded-md border border-brand-teal/30 px-3 py-1.5 text-sm font-medium text-brand-teal hover:bg-brand-teal/10 dark:border-brand-teal/40";
 const disabledClass =
   "rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-400 dark:border-zinc-800 dark:text-zinc-600";
 

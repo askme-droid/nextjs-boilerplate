@@ -63,12 +63,12 @@ export default async function Home({
 
   return (
     <main className="flex flex-1 flex-col">
-      <div className="bg-gradient-to-r from-teal-600 to-teal-500 px-6 pb-16 pt-10 text-white sm:pb-20 sm:pt-14">
+      <div className="bg-brand-teal px-6 pb-16 pt-10 text-white sm:pb-20 sm:pt-14">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             Find great deals near you
           </h1>
-          <p className="text-teal-50">
+          <p className="text-white/90">
             Browse promos, flyers, and listings from local businesses.
           </p>
         </div>
