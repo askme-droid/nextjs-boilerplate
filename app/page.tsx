@@ -1,3 +1,4 @@
+import { HeroSlider, type HeroSlide } from "@/app/components/hero-slider";
 import { ListingCard } from "@/app/components/listing-card";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
@@ -7,6 +8,14 @@ import {
   type ListingCategory,
   type ListingWithRelations,
 } from "@/lib/listings/queries";
+
+// Promo banners for the homepage hero slider — swap these out (or wire up
+// an admin-managed source later) whenever the current promotions change.
+const HERO_SLIDES: HeroSlide[] = [
+  { src: "/hero/slide-1.jpg", alt: "VisViva Hair Studio opening promotion — 50% off" },
+  { src: "/hero/slide-2.jpg", alt: "Megachure — smart, innovative & sustainability" },
+  { src: "/hero/slide-3.jpg", alt: "National Day promotions — free express manicure and $5 off gel services" },
+];
 
 function firstValue(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? "";
@@ -64,13 +73,17 @@ export default async function Home({
   return (
     <main className="flex flex-1 flex-col">
       <div className="bg-brand-teal px-6 pb-16 pt-10 text-white sm:pb-20 sm:pt-14">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Find great deals near you
-          </h1>
-          <p className="text-white/90">
-            Browse promos, flyers, and listings from local businesses.
-          </p>
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-8 lg:flex-row lg:justify-between">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              Find great deals near you
+            </h1>
+            <p className="text-white/90">
+              Browse promos, flyers, and listings from local businesses.
+            </p>
+          </div>
+
+          <HeroSlider slides={HERO_SLIDES} />
         </div>
       </div>
 
