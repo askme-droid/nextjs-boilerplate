@@ -57,6 +57,12 @@ export type ListingsFilter = {
   q?: string;
   /** Category slug, as it appears in the URL. */
   category?: string;
+  /** Free-text match against a listing's location — there's no location
+   *  taxonomy, just a free-text field per listing, so this is a substring
+   *  search rather than an exact/dropdown match. */
+  location?: string;
+  /** Experience tag slug, as it appears in the URL. */
+  experience?: string;
   /** 1-based page number. */
   page?: number;
 };
@@ -103,6 +109,27 @@ function buildListingsWhere(filter: ListingsFilter): SQL {
 
   if (filter.category) {
     conditions.push(eq(categories.slug, filter.category));
+  }
+
+  const location = filter.location?.trim();
+  if (location) {
+    conditions.push(ilike(listings.location, `%${escapeLikeTerm(location)}%`));
+  }
+
+  if (filter.experience) {
+    // A subquery rather than a join: this function only returns a WHERE
+    // clause, not a FROM/JOIN change, so the count query and the data query
+    // below don't both need to know about the experience-tags join too.
+    conditions.push(
+      inArray(
+        listings.id,
+        db
+          .select({ id: listingExperienceTags.listingId })
+          .from(listingExperienceTags)
+          .innerJoin(experienceTags, eq(listingExperienceTags.tagId, experienceTags.id))
+          .where(eq(experienceTags.slug, filter.experience)),
+      ),
+    );
   }
 
   return and(...conditions)!;

@@ -1,9 +1,13 @@
 import Link from "next/link";
 
-function pageHref(params: { q: string; category: string }, page: number) {
+type FilterParams = { q: string; category: string; location: string; experience: string };
+
+function pageHref(params: FilterParams, page: number) {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
   if (params.category) search.set("category", params.category);
+  if (params.location) search.set("location", params.location);
+  if (params.experience) search.set("experience", params.experience);
   if (page > 1) search.set("page", String(page));
   const qs = search.toString();
   return qs ? `/?${qs}` : "/";
@@ -19,13 +23,15 @@ export function ListingsPagination({
   totalPages,
   q,
   category,
-}: {
+  location,
+  experience,
+}: FilterParams & {
   page: number;
   totalPages: number;
-  q: string;
-  category: string;
 }) {
   if (totalPages <= 1) return null;
+
+  const params = { q, category, location, experience };
 
   return (
     <nav
@@ -33,7 +39,7 @@ export function ListingsPagination({
       className="flex items-center justify-center gap-3"
     >
       {page > 1 ? (
-        <Link href={pageHref({ q, category }, page - 1)} className={linkClass}>
+        <Link href={pageHref(params, page - 1)} className={linkClass}>
           Previous
         </Link>
       ) : (
@@ -45,7 +51,7 @@ export function ListingsPagination({
       </span>
 
       {page < totalPages ? (
-        <Link href={pageHref({ q, category }, page + 1)} className={linkClass}>
+        <Link href={pageHref(params, page + 1)} className={linkClass}>
           Next
         </Link>
       ) : (

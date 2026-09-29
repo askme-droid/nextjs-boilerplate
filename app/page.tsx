@@ -2,6 +2,7 @@ import { HeroSlider, type HeroSlide } from "@/app/components/hero-slider";
 import { ListingCard } from "@/app/components/listing-card";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
+import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/queries";
 import {
   getCategories,
   getListings,
@@ -24,7 +25,10 @@ function firstValue(value: string | string[] | undefined): string {
 type PageData = {
   q: string;
   category: string;
+  location: string;
+  experience: string;
   categories: ListingCategory[];
+  experiences: ListingTag[];
   listings: ListingWithRelations[];
   page: number;
   totalPages: number;
@@ -35,28 +39,48 @@ async function loadPageData(
 ): Promise<{ ok: true; data: PageData } | { ok: false; error: string }> {
   const q = firstValue(params.q).trim();
   const requestedCategory = firstValue(params.category).trim();
+  const location = firstValue(params.location).trim();
+  const requestedExperience = firstValue(params.experience).trim();
   const requestedPage = Number.parseInt(firstValue(params.page), 10);
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
   try {
-    const categories = await getCategories();
+    const [categories, experiences] = await Promise.all([
+      getCategories(),
+      getExperienceTags(),
+    ]);
 
-    // Validate the category slug against real categories rather than passing
-    // an arbitrary URL value into an inner-join filter: an unknown slug would
+    // Validate both slugs against real rows rather than passing an arbitrary
+    // URL value into an inner-join/subquery filter: an unknown slug would
     // otherwise read as "no listings" instead of the filter being ignored.
     const category = categories.some((cat) => cat.slug === requestedCategory)
       ? requestedCategory
+      : "";
+    const experience = experiences.some((tag) => tag.slug === requestedExperience)
+      ? requestedExperience
       : "";
 
     const { listings, page: currentPage, totalPages } = await getListings({
       q,
       category,
+      location,
+      experience,
       page,
     });
 
     return {
       ok: true,
-      data: { q, category, categories, listings, page: currentPage, totalPages },
+      data: {
+        q,
+        category,
+        location,
+        experience,
+        categories,
+        experiences,
+        listings,
+        page: currentPage,
+        totalPages,
+      },
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Unknown error." };
@@ -105,13 +129,19 @@ export default async function Home({
               <ListingsSearchForm
                 q={result.data.q}
                 category={result.data.category}
+                location={result.data.location}
+                experience={result.data.experience}
                 categories={result.data.categories}
+                experiences={result.data.experiences}
               />
             </div>
 
             {result.data.listings.length === 0 ? (
               <p className="py-16 text-center text-zinc-500 dark:text-zinc-400">
-                {result.data.q || result.data.category
+                {result.data.q ||
+                result.data.category ||
+                result.data.location ||
+                result.data.experience
                   ? "No listings match your search."
                   : "No listings have been published yet."}
               </p>
@@ -128,6 +158,8 @@ export default async function Home({
               totalPages={result.data.totalPages}
               q={result.data.q}
               category={result.data.category}
+              location={result.data.location}
+              experience={result.data.experience}
             />
           </>
         )}
