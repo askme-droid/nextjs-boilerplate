@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import type { ListingCategory, ListingTag } from "@/lib/listings/queries";
-import { saveListing, type ListingFormState, type ListingFormValues } from "./actions";
+import { publishListing, saveListing, type ListingFormState, type ListingFormValues } from "./actions";
 
 const inputClass =
   "mt-1 block w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -264,14 +264,34 @@ export function ListingForm({
 
     {children}
 
-    <button
-      type="submit"
-      form="listing-form"
-      disabled={pending}
-      className="w-fit rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
-    >
-      {pending ? "Saving…" : submitLabel}
-    </button>
+    <div className="flex flex-wrap gap-3">
+      <button
+        type="submit"
+        form="listing-form"
+        disabled={pending}
+        className="w-fit rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+      >
+        {pending ? "Saving…" : submitLabel}
+      </button>
+
+      {/* Quick one-click approve — bypasses the dropdown + full save below,
+          for the common case of just approving a pending/draft listing.
+          formAction overrides the form's own action for this button only,
+          so it hits publishListing instead of saveListing; only shown once
+          the listing exists (create has no id yet) and isn't already
+          published. */}
+      {listingId && values.status !== "published" && (
+        <button
+          type="submit"
+          form="listing-form"
+          formAction={publishListing}
+          disabled={pending}
+          className="w-fit rounded-md bg-emerald-600 px-4 py-2 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60 dark:bg-emerald-700"
+        >
+          Publish
+        </button>
+      )}
+    </div>
     </>
   );
 }

@@ -234,6 +234,28 @@ async function getListingSlug(listingId: string): Promise<string | null> {
   return row?.slug ?? null;
 }
 
+/** One-click status change, separate from the main save flow — for
+ *  approving a pending/draft listing without opening the status dropdown
+ *  and re-submitting the whole form. Only touches `status`, nothing else
+ *  the form has unsaved. */
+export async function publishListing(formData: FormData) {
+  await requireStaff();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect("/admin/listings");
+
+  try {
+    await db.update(listings).set({ status: "published" }).where(eq(listings.id, id));
+  } catch (e) {
+    redirect(editUrl(id, e instanceof Error ? e.message : "Could not publish listing."));
+  }
+
+  const slug = await getListingSlug(id);
+  revalidatePath("/");
+  if (slug) revalidatePath(`/listings/${slug}`);
+  redirect(`/admin/listings/${id}/edit?saved=1`);
+}
+
 export async function deleteListing(formData: FormData) {
   await requireStaff();
 
