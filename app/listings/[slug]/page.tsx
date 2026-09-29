@@ -58,6 +58,14 @@ export default async function ListingDetailPage({
         ← Back to listings
       </Link>
 
+      <div className="flex flex-col gap-1">
+        <h1 className="text-3xl font-semibold tracking-tight">{listing.title}</h1>
+
+        {listing.location && (
+          <p className="text-zinc-500 dark:text-zinc-400">{listing.location}</p>
+        )}
+      </div>
+
       {orderedImages.length > 0 ? (
         <div className="flex flex-col gap-3">
           {orderedImages.map((image, index) => (
@@ -96,12 +104,6 @@ export default async function ListingDetailPage({
           </Link>
         )}
 
-        <h1 className="text-3xl font-semibold tracking-tight">{listing.title}</h1>
-
-        {listing.location && (
-          <p className="text-zinc-500 dark:text-zinc-400">{listing.location}</p>
-        )}
-
         {listing.experience_tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {listing.experience_tags.map((tag) => (
@@ -121,10 +123,20 @@ export default async function ListingDetailPage({
           </p>
         )}
 
+        {listing.cta_url && (
+          <a
+            href={listing.cta_url}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            className="w-fit rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90"
+          >
+            {listing.cta_label || "Learn more"}
+          </a>
+        )}
+
         {(listing.company_name ||
           listing.company_uen ||
-          listing.social_links.length > 0 ||
-          listing.cta_url) && (
+          listing.social_links.length > 0) && (
           <section className="mt-2 flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             {listing.company_name && (
               <p className="font-medium">{listing.company_name}</p>
@@ -149,16 +161,6 @@ export default async function ListingDetailPage({
                   </li>
                 ))}
               </ul>
-            )}
-            {listing.cta_url && (
-              <a
-                href={listing.cta_url}
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                className="w-fit rounded-md bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-90"
-              >
-                {listing.cta_label || "Learn more"}
-              </a>
             )}
           </section>
         )}
