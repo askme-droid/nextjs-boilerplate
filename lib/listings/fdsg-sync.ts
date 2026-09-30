@@ -101,10 +101,19 @@ async function scrapeListing(url: string): Promise<ScrapedListing | null> {
   const beforeListingId = afterMeta.split(/Listing ID:/)[0].trim();
   const description = beforeListingId.length > 40 ? beforeListingId : null;
 
+  // fd.sg lazy-loads every image — <img src> is a placeholder data: URI
+  // until it scrolls into view, so the real URL is in data-src. Not an
+  // issue on digital.fd.sg (no lazy-loading there), which is why this was
+  // missed until switching the sync target.
   const rawImgs = $("img")
-    .map((_, el) => $(el).attr("src"))
+    .map((_, el) => $(el).attr("data-src") || $(el).attr("src"))
     .get()
-    .filter((src): src is string => !!src && src.includes("/wp-content/uploads/") && !src.includes("FDSG.png"));
+    .filter(
+      (src): src is string =>
+        !!src &&
+        src.includes("/wp-content/uploads/") &&
+        !/fdsg-logo|social-media|\/ultimatemember\//i.test(src),
+    );
 
   return { title, sourceUrl: url, category, description, imgs: dedupeImages([...new Set(rawImgs)]) };
 }
