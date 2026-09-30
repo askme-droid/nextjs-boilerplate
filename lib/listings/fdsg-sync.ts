@@ -86,7 +86,11 @@ async function scrapeListing(url: string): Promise<ScrapedListing | null> {
 
   const html = await res.text();
   const $ = cheerio.load(html);
-  const title = $("h1").first().text().trim();
+  // Not just the first <h1>: the theme also renders an empty
+  // <h1 class="entry-title"> before the real one — ACADP's own listing
+  // title is always .acadp-no-margin, and picking the literal first <h1>
+  // silently grabbed the empty one on every fd.sg page tested.
+  const title = $("h1.acadp-no-margin").first().text().trim();
   if (!title) return null;
 
   const bodyText = $("body").text();
