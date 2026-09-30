@@ -25,6 +25,10 @@ export type ListingWithRelations = {
   keywords: string[] | null;
   status: string;
   featured_image_url: string | null;
+  // Set only for listings syndicated from elsewhere (e.g. fd.sg) — the card
+  // and the detail route both send visitors there instead of showing a
+  // local copy. Null for every listing that's ours.
+  external_url: string | null;
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
@@ -193,6 +197,7 @@ export async function getListings(
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
+      external_url: listings.externalUrl,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -220,6 +225,7 @@ export async function getListings(
     keywords: r.keywords,
     status: r.status,
     featured_image_url: r.featured_image_url,
+    external_url: r.external_url,
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
@@ -260,6 +266,7 @@ export const getListingBySlug = cache(async (
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
+      external_url: listings.externalUrl,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -310,6 +317,7 @@ export const getListingBySlug = cache(async (
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,
+    external_url: row.external_url,
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),

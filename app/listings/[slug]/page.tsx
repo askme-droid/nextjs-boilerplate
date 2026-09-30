@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { socialLabel } from "@/lib/listings/contact-fields";
 import { getListingBySlug } from "@/lib/listings/queries";
 
@@ -40,6 +40,11 @@ export default async function ListingDetailPage({
   const listing = await getListingBySlug(slug);
 
   if (!listing) notFound();
+
+  // Syndicated listing (e.g. from fd.sg) — the card already links straight
+  // there, but this covers anyone hitting the local URL directly (a bookmark,
+  // a shared link, a search engine result).
+  if (listing.external_url) redirect(listing.external_url);
 
   // Featured image first (matches the grid card's choice via
   // pickListingImage), then the rest in position order — every image

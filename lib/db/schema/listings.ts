@@ -48,6 +48,11 @@ export const listings = pgTable("listings", {
   keywords: text("keywords").array(),
   status: text("status", { enum: LISTING_STATUSES }).notNull().default("draft"),
   featuredImageUrl: text("featured_image_url"),
+  // Set only for listings syndicated from elsewhere (e.g. fd.sg) that we show
+  // in search/browse here but whose actual content stays at the source —
+  // the card and the detail route both send visitors there instead of
+  // rendering our own copy. Null for every listing that's ours.
+  externalUrl: text("external_url"),
   // Was uuid FK -> profiles.id under Supabase; Better-Auth's user.id is text,
   // so this column's type changed too (see migration plan). ON DELETE
   // behavior is an assumption (SET NULL — a user's historical listings
