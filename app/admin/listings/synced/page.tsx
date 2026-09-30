@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { getSyndicatedListings } from "@/lib/listings/admin-queries";
 import { deleteListing, publishListing } from "../actions";
+import { refreshSyncedListings } from "../sync-actions";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
@@ -21,10 +22,10 @@ const statusClass: Record<string, string> = {
 export default async function SyncedListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ published?: string; deleted?: string; error?: string }>;
+  searchParams: Promise<{ published?: string; deleted?: string; refreshed?: string; error?: string }>;
 }) {
   const { role } = await requireStaff();
-  const { published, deleted, error } = await searchParams;
+  const { published, deleted, refreshed, error } = await searchParams;
   const listings = await getSyndicatedListings(role);
 
   return (
@@ -37,14 +38,29 @@ export default async function SyncedListingsPage({
             to the original source.
           </p>
         </div>
-        <Link
-          href="/admin/listings"
-          className="text-sm font-medium underline-offset-4 hover:underline"
-        >
-          ← Listings
-        </Link>
+        <div className="flex items-center gap-3">
+          <form action={refreshSyncedListings}>
+            <button
+              type="submit"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              Refresh from fd.sg
+            </button>
+          </form>
+          <Link
+            href="/admin/listings"
+            className="text-sm font-medium underline-offset-4 hover:underline"
+          >
+            ← Listings
+          </Link>
+        </div>
       </div>
 
+      {refreshed && (
+        <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+          {refreshed}
+        </p>
+      )}
       {published && (
         <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
           Listing published.
