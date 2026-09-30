@@ -93,13 +93,39 @@ async function scrapeListing(url: string): Promise<ScrapedListing | null> {
   const title = $("h1.acadp-no-margin").first().text().trim();
   if (!title) return null;
 
-  const bodyText = $("body").text();
-  const catMatch = bodyText.match(/\n\s*([A-Za-z & ]+?)\s*\/\s*Posted/);
-  const category = catMatch ? catMatch[1].trim() : null;
+  // The theme wraps every lazy-loaded <img> in a <noscript> fallback, and
+  // cheerio parses <noscript> content as a raw text node rather than markup
+  // — so left in place, $("body").text() returns literal `<img src="...">`
+  // source for every image on the page. Strip it (and <script>) before
+  // reading any text out of the page.
+  $("script, noscript, style").remove();
 
-  const afterMeta = bodyText.split(/Posted[^\n]*\n/)[1] ?? "";
-  const beforeListingId = afterMeta.split(/Listing ID:/)[0].trim();
-  const description = beforeListingId.length > 40 ? beforeListingId : null;
+  // Scope to the actual post body instead of the whole page: the full body
+  // text also carries the sidebar search widget's location dropdown (100+
+  // options), which "Posted...Listing ID:" splitting can't tell apart from
+  // real content once <noscript> stops masking it.
+  const contentText = ($(".entry-content").first().text() || $("body").text()).trim();
+
+  // Some listings show a "Popular Featured" badge inline before the actual
+  // category, separated by a run of spaces rather than a line break — take
+  // only the segment closest to "/ Posted" so the badge doesn't get pulled
+  // in as part of the category name.
+  const metaLineMatch = contentText.match(/\n[^\n]*\/\s*Posted[^\n]*/);
+  let category: string | null = null;
+  if (metaLineMatch) {
+    const beforeSlash = metaLineMatch[0].split("/")[0];
+    const parts = beforeSlash.split(/\s{2,}/).filter(Boolean);
+    category = (parts[parts.length - 1] || "").trim() || null;
+  }
+
+  // ACADP always renders "Check all listings by this user / Add to
+  // favourites / Report abuse" right after the real content (or immediately
+  // after the meta line when a listing is flyer-image-only with no body
+  // text) — cut there so those action labels never end up in the description.
+  const withoutActions = contentText.split(/Check all listings by this user/)[0];
+  const afterMeta = withoutActions.split(/Posted[^\n]*\n/)[1] ?? "";
+  const cleaned = afterMeta.replace(/\n{2,}/g, "\n").replace(/[ \t]+/g, " ").trim();
+  const description = cleaned.length > 40 ? cleaned.slice(0, 600) : null;
 
   // fd.sg lazy-loads every image — <img src> is a placeholder data: URI
   // until it scrolls into view, so the real URL is in data-src. Not an
