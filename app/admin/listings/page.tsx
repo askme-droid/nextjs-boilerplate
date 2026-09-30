@@ -23,14 +23,22 @@ export default async function AdminListingsPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
-        <form action={createListing}>
-          <button
-            type="submit"
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/listings/synced"
+            className="text-sm font-medium underline-offset-4 hover:underline"
           >
-            New listing
-          </button>
-        </form>
+            Synced listings →
+          </Link>
+          <form action={createListing}>
+            <button
+              type="submit"
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
+            >
+              New listing
+            </button>
+          </form>
+        </div>
       </div>
 
       {published && (

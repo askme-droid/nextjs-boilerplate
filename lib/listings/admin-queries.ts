@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { isStaff } from "@/lib/auth/roles";
@@ -23,6 +23,7 @@ export type AdminListingRow = {
   keywords: string[] | null;
   status: string;
   featured_image_url: string | null;
+  external_url: string | null;
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
@@ -34,10 +35,9 @@ function requireStaffRole(role: string | null | undefined) {
   if (!isStaff(role)) throw new Error("Not authorized.");
 }
 
-/** Every listing regardless of status, most recently updated first. */
-export async function getAdminListings(role: string | null | undefined): Promise<AdminListingRow[]> {
-  requireStaffRole(role);
-
+/** Shared select/map for both admin listing lists below — only the WHERE
+ *  (locally-owned vs. syndicated) differs between them. */
+async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType<typeof isNotNull>): Promise<AdminListingRow[]> {
   const rows = await db
     .select({
       id: listings.id,
@@ -49,6 +49,7 @@ export async function getAdminListings(role: string | null | undefined): Promise
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
+      external_url: listings.externalUrl,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -59,6 +60,7 @@ export async function getAdminListings(role: string | null | undefined): Promise
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(extra)
     .orderBy(desc(listings.updatedAt));
 
   return rows.map((r) => ({
@@ -71,6 +73,7 @@ export async function getAdminListings(role: string | null | undefined): Promise
     keywords: r.keywords,
     status: r.status,
     featured_image_url: r.featured_image_url,
+    external_url: r.external_url,
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
@@ -79,6 +82,24 @@ export async function getAdminListings(role: string | null | undefined): Promise
       ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
       : null,
   }));
+}
+
+/** Every locally-owned listing (not synced from elsewhere) regardless of
+ *  status, most recently updated first. Syndicated listings (fd.sg etc.)
+ *  live on their own page — see getSyndicatedListings — since editing them
+ *  here only changes how their card looks, not their actual content. */
+export async function getAdminListings(role: string | null | undefined): Promise<AdminListingRow[]> {
+  requireStaffRole(role);
+  return selectAdminListings(isNull(listings.externalUrl));
+}
+
+/** Every listing synced from an external source (fd.sg etc.) — shown here
+ *  instead of the main list so staff don't mistake them for locally-owned
+ *  content. Their card and detail route both send visitors to external_url,
+ *  never a local page. */
+export async function getSyndicatedListings(role: string | null | undefined): Promise<AdminListingRow[]> {
+  requireStaffRole(role);
+  return selectAdminListings(isNotNull(listings.externalUrl));
 }
 
 export type AdminListingDetail = AdminListingRow & {
@@ -114,6 +135,7 @@ export async function getAdminListingById(
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
+      external_url: listings.externalUrl,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -163,6 +185,7 @@ export async function getAdminListingById(
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,
+    external_url: row.external_url,
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),

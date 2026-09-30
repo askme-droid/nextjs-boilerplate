@@ -255,12 +255,15 @@ export async function publishListing(formData: FormData) {
   if (slug) revalidatePath(`/listings/${slug}`);
 
   // The edit form's Publish button wants to land back on the edit page (so
-  // "Saved." shows there); the list page's inline Publish button wants to
-  // stay on the list instead of jumping into an edit view nobody asked for.
+  // "Saved." shows there); each list page's inline Publish button wants to
+  // stay on that list instead of jumping into an edit view nobody asked for.
+  const returnTo = formData.get("returnTo");
   redirect(
-    formData.get("returnTo") === "list"
+    returnTo === "list"
       ? "/admin/listings?published=1"
-      : `/admin/listings/${id}/edit?saved=1`,
+      : returnTo === "synced"
+        ? "/admin/listings/synced?published=1"
+        : `/admin/listings/${id}/edit?saved=1`,
   );
 }
 
@@ -285,7 +288,11 @@ export async function deleteListing(formData: FormData) {
 
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect("/admin/listings?deleted=1");
+  redirect(
+    formData.get("returnTo") === "synced"
+      ? "/admin/listings/synced?deleted=1"
+      : "/admin/listings?deleted=1",
+  );
 }
 
 function editUrl(listingId: string, error?: string) {

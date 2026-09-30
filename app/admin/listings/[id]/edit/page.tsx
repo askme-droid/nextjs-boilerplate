@@ -43,6 +43,16 @@ export default async function EditListingPage({
         </p>
       )}
 
+      {listing.external_url && (
+        <p className="rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
+          Synced from{" "}
+          <a href={listing.external_url} target="_blank" rel="noopener noreferrer nofollow" className="underline">
+            {listing.external_url}
+          </a>
+          . Changes below only affect how this listing's card looks in search — the actual content stays at the source.
+        </p>
+      )}
+
       <EditListingClient
         listingId={listing.id}
         categories={categories}
