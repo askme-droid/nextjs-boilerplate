@@ -5,20 +5,28 @@ import { categories, listingImages, listings } from "@/lib/db/schema";
 import { slugify } from "./slug";
 
 /**
- * On-demand sync from fd.sg's public listing archive (digital.fd.sg's own
- * ACADP-plugin directory — see the Railway/Drizzle migration history for
- * background). There's no API for their listings (checked: only categories/
- * locations taxonomies are exposed), so this scrapes their public pages —
- * the same approach used for the original one-off import, now made
- * re-runnable via an admin button instead of a throwaway script.
+ * On-demand sync from the real www.fd.sg's public listing archive (its own
+ * ACADP-plugin directory — the homepage itself, paginated). There's no API
+ * for their listings (checked: only categories/locations taxonomies are
+ * exposed), so this scrapes their public pages.
+ *
+ * IMPORTANT: this originally (wrongly) pointed at digital.fd.sg, a separate
+ * staging/demo site with mostly different content — of the 22 listings that
+ * first import pulled in, only 3 titles actually existed on the real fd.sg.
+ * Those 19 were deleted and the 3 real matches corrected to their real
+ * fd.sg URL; this module now points at the real site so every future sync
+ * pulls from the actual source instead.
  *
  * Only ever ADDS new listings (matched by external_url, never re-scraped or
  * updated once imported) — safe to click repeatedly, never creates
  * duplicates or touches a listing after it's been imported once.
  */
 
-const ARCHIVE_BASE = "https://www.digital.fd.sg/fdsg-digital-flyer-deals-e-vouchers/";
-const MAX_ARCHIVE_PAGES = 10; // safety cap against an infinite loop, not a real expected limit
+// The real fd.sg's own listing archive is its homepage, paginated
+// (/page/2/, /page/3/, ...) — not a separate landing page the way
+// digital.fd.sg had one.
+const ARCHIVE_BASE = "https://www.fd.sg/";
+const MAX_ARCHIVE_PAGES = 20; // safety cap against an infinite loop, not a real expected limit
 
 export type SyncResult = { added: number; skipped: number; total: number };
 
