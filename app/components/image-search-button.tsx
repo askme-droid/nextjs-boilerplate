@@ -67,6 +67,10 @@ export function ImageSearchButton() {
         return;
       }
       router.push(`/?imageMatch=${(data.ids as string[]).join(",")}`);
+      // router.push doesn't unmount this component (same layout persists
+      // across the navigation, and still doesn't on "Clear" back to "/") —
+      // without this, the button is stuck showing the spinner forever.
+      setState({ status: "idle", error: null });
     } catch {
       setState({ status: "idle", error: "Could not search by image. Try again." });
     } finally {
