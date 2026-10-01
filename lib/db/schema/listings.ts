@@ -7,6 +7,7 @@ import {
   text,
   timestamp,
   uuid,
+  vector,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
@@ -80,6 +81,11 @@ export const listingImages = pgTable("listing_images", {
   altText: text("alt_text"),
   position: integer("position").notNull().default(0),
   isFeatured: boolean("is_featured").notNull().default(false),
+  // CLIP ViT-B/32 image embedding (see lib/listings/embeddings.ts), used for
+  // "search by image" nearest-neighbor lookups via pgvector's cosine
+  // distance. Null until backfilled/generated — every read path has to
+  // tolerate that, not just newly-added images.
+  embedding: vector("embedding", { dimensions: 512 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

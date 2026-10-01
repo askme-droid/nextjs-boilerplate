@@ -240,6 +240,67 @@ export async function getListings(
 }
 
 /**
+ * Published listings for a fixed, already-ranked set of ids — "search by
+ * image" results (see app/api/search-by-image/route.ts), which come back
+ * from the vector-similarity query in best-match-first order that a normal
+ * `WHERE id IN (...)` can't preserve. Re-sorted in JS instead of a SQL
+ * ordinal trick since the id list is always small (a few dozen at most).
+ */
+export async function getListingsByIds(ids: string[]): Promise<ListingWithRelations[]> {
+  if (ids.length === 0) return [];
+
+  const rows = await db
+    .select({
+      id: listings.id,
+      title: listings.title,
+      slug: listings.slug,
+      description: listings.description,
+      category_id: listings.categoryId,
+      location: listings.location,
+      keywords: listings.keywords,
+      status: listings.status,
+      featured_image_url: listings.featuredImageUrl,
+      external_url: listings.externalUrl,
+      created_by: listings.createdBy,
+      expires_at: listings.expiresAt,
+      created_at: listings.createdAt,
+      updated_at: listings.updatedAt,
+      category_row_id: categories.id,
+      category_name: categories.name,
+      category_slug: categories.slug,
+    })
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(and(inArray(listings.id, ids), eq(listings.status, "published")));
+
+  const imagesByListing = await attachImages(rows.map((r) => r.id));
+  const rank = new Map(ids.map((id, i) => [id, i]));
+
+  return rows
+    .map((r) => ({
+      id: r.id,
+      title: r.title,
+      slug: r.slug,
+      description: r.description,
+      category_id: r.category_id,
+      location: r.location,
+      keywords: r.keywords,
+      status: r.status,
+      featured_image_url: r.featured_image_url,
+      external_url: r.external_url,
+      created_by: r.created_by,
+      expires_at: r.expires_at,
+      created_at: r.created_at.toISOString(),
+      updated_at: r.updated_at.toISOString(),
+      categories: r.category_row_id
+        ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
+        : null,
+      listing_images: imagesByListing.get(r.id) ?? [],
+    }))
+    .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+}
+
+/**
  * A single published listing by slug, with all its images and experience
  * tags, or `null` if it doesn't exist or isn't published.
  *

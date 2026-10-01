@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "20mb",
     },
   },
+  // These ship native/binary assets (onnxruntime-node's .node bindings,
+  // sharp's prebuilt libvips) that webpack can't bundle — see
+  // lib/listings/embeddings.ts. Left external, Next requires them from
+  // node_modules at runtime instead of trying to pack them in.
+  serverExternalPackages: ["@xenova/transformers", "sharp", "onnxruntime-node"],
 };
 
 export default nextConfig;

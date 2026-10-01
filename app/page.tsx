@@ -6,6 +6,7 @@ import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/querie
 import {
   getCategories,
   getListings,
+  getListingsByIds,
   type ListingCategory,
   type ListingWithRelations,
 } from "@/lib/listings/queries";
@@ -27,6 +28,7 @@ type PageData = {
   category: string;
   location: string;
   experience: string;
+  isImageSearch: boolean;
   categories: ListingCategory[];
   experiences: ListingTag[];
   listings: ListingWithRelations[];
@@ -37,10 +39,6 @@ type PageData = {
 async function loadPageData(
   params: Record<string, string | string[] | undefined>,
 ): Promise<{ ok: true; data: PageData } | { ok: false; error: string }> {
-  const q = firstValue(params.q).trim();
-  const requestedCategory = firstValue(params.category).trim();
-  const location = firstValue(params.location).trim();
-  const requestedExperience = firstValue(params.experience).trim();
   const requestedPage = Number.parseInt(firstValue(params.page), 10);
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
@@ -49,6 +47,36 @@ async function loadPageData(
       getCategories(),
       getExperienceTags(),
     ]);
+
+    // "Search by image" (see app/components/image-search-button.tsx) is its
+    // own mode, not another filter to combine: the ranked id list it hands
+    // back only makes sense shown on its own, in that order, so it overrides
+    // q/category/location/experience/page rather than narrowing them further.
+    const imageMatch = firstValue(params.imageMatch).trim();
+    if (imageMatch) {
+      const ids = imageMatch.split(",").filter(Boolean);
+      const listings = await getListingsByIds(ids);
+      return {
+        ok: true,
+        data: {
+          q: "",
+          category: "",
+          location: "",
+          experience: "",
+          isImageSearch: true,
+          categories,
+          experiences,
+          listings,
+          page: 1,
+          totalPages: 1,
+        },
+      };
+    }
+
+    const q = firstValue(params.q).trim();
+    const requestedCategory = firstValue(params.category).trim();
+    const location = firstValue(params.location).trim();
+    const requestedExperience = firstValue(params.experience).trim();
 
     // Validate both slugs against real rows rather than passing an arbitrary
     // URL value into an inner-join/subquery filter: an unknown slug would
@@ -75,6 +103,7 @@ async function loadPageData(
         category,
         location,
         experience,
+        isImageSearch: false,
         categories,
         experiences,
         listings,
@@ -131,19 +160,28 @@ export default async function Home({
                 category={result.data.category}
                 location={result.data.location}
                 experience={result.data.experience}
+                hasImageMatch={result.data.isImageSearch}
                 categories={result.data.categories}
                 experiences={result.data.experiences}
               />
             </div>
 
+            {result.data.isImageSearch && result.data.listings.length > 0 && (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Showing listings with visually similar images, best match first.
+              </p>
+            )}
+
             {result.data.listings.length === 0 ? (
               <p className="py-16 text-center text-zinc-500 dark:text-zinc-400">
-                {result.data.q ||
-                result.data.category ||
-                result.data.location ||
-                result.data.experience
-                  ? "No listings match your search."
-                  : "No listings have been published yet."}
+                {result.data.isImageSearch
+                  ? "No visually similar listings found."
+                  : result.data.q ||
+                      result.data.category ||
+                      result.data.location ||
+                      result.data.experience
+                    ? "No listings match your search."
+                    : "No listings have been published yet."}
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -153,14 +191,16 @@ export default async function Home({
               </div>
             )}
 
-            <ListingsPagination
-              page={result.data.page}
-              totalPages={result.data.totalPages}
-              q={result.data.q}
-              category={result.data.category}
-              location={result.data.location}
-              experience={result.data.experience}
-            />
+            {!result.data.isImageSearch && (
+              <ListingsPagination
+                page={result.data.page}
+                totalPages={result.data.totalPages}
+                q={result.data.q}
+                category={result.data.category}
+                location={result.data.location}
+                experience={result.data.experience}
+              />
+            )}
           </>
         )}
       </div>

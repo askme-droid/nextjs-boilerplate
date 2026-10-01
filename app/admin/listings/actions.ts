@@ -9,6 +9,7 @@ import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema"
 import { requireStaff } from "@/lib/auth/require-staff";
 import { parseContactFields } from "@/lib/listings/contact-fields";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
+import { embedImage, embedImageUrl } from "@/lib/listings/embeddings";
 import { isPlaceholderSlug, slugify } from "@/lib/listings/slug";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -313,6 +314,9 @@ export async function addImage(formData: FormData) {
 
   try {
     const existingCount = await db.$count(listingImages, eq(listingImages.listingId, listingId));
+    // Best-effort — a failed embedding just leaves this image out of
+    // "search by image" results, never worth failing the add over.
+    const embedding = await embedImageUrl(url);
 
     await db.insert(listingImages).values({
       listingId,
@@ -322,6 +326,7 @@ export async function addImage(formData: FormData) {
       // Auto-feature the first image a listing gets, so it isn't imageless on
       // the grid/detail hero until someone remembers to flag one.
       isFeatured: existingCount === 0,
+      embedding,
     });
   } catch (e) {
     redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not add image."));
@@ -353,10 +358,16 @@ export async function uploadImages(formData: FormData) {
   try {
     let position = await db.$count(listingImages, eq(listingImages.listingId, listingId));
     for (const file of files) {
-      const blob = await put(`listings/${listingId}/${file.name}`, file, {
-        access: "public",
-        addRandomSuffix: true,
-      });
+      // Embedded from the uploaded bytes directly (not re-fetched from the
+      // blob URL afterwards) — best-effort, same as every other embedding
+      // call site.
+      const [blob, embedding] = await Promise.all([
+        put(`listings/${listingId}/${file.name}`, file, {
+          access: "public",
+          addRandomSuffix: true,
+        }),
+        embedImage(Buffer.from(await file.arrayBuffer())),
+      ]);
       await db.insert(listingImages).values({
         listingId,
         url: blob.url,
@@ -365,6 +376,7 @@ export async function uploadImages(formData: FormData) {
         // Auto-feature the first image a listing gets, so it isn't imageless
         // on the grid/detail hero until someone remembers to flag one.
         isFeatured: position === 0,
+        embedding,
       });
       position += 1;
     }

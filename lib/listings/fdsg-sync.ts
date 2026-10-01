@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, listingImages, listings } from "@/lib/db/schema";
+import { embedImageUrl } from "./embeddings";
 import { slugify } from "./slug";
 
 /**
@@ -213,11 +214,16 @@ export async function syncFdsgListings(): Promise<SyncResult> {
       .returning({ id: listings.id });
 
     for (let i = 0; i < scraped.imgs.length; i++) {
+      // Best-effort: a failed embedding (model cold start, a corrupt/odd
+      // image) just leaves this image out of "search by image" results —
+      // never worth failing the whole sync over.
+      const embedding = await embedImageUrl(scraped.imgs[i]);
       await db.insert(listingImages).values({
         listingId: row.id,
         url: scraped.imgs[i],
         position: i,
         isFeatured: i === 0,
+        embedding,
       });
     }
     added += 1;
