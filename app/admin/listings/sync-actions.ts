@@ -12,10 +12,12 @@ export async function refreshSyncedListings() {
 
   let errorMessage: string | null = null;
   let added = 0;
+  let remaining = 0;
 
   try {
     const result = await syncFdsgListings();
     added = result.added;
+    remaining = result.remaining;
   } catch (e) {
     // Computed outside the try below on purpose: redirect() throws
     // internally, and calling it inside this catch would just be caught
@@ -30,6 +32,12 @@ export async function refreshSyncedListings() {
   revalidatePath("/");
   revalidatePath("/admin/listings/synced");
 
-  const message = added > 0 ? `Added ${added} new listing${added === 1 ? "" : "s"}.` : "No new listings found.";
+  const addedMessage =
+    added > 0 ? `Added ${added} new listing${added === 1 ? "" : "s"}.` : "No new listings found.";
+  // Hit the per-run cap (see MAX_NEW_PER_RUN in fdsg-sync.ts) — tell staff
+  // there's more so they know to click again rather than assume this was
+  // everything.
+  const message =
+    remaining > 0 ? `${addedMessage} ${remaining} more pending — click Refresh again to continue.` : addedMessage;
   redirect(`/admin/listings/synced?refreshed=${encodeURIComponent(message)}`);
 }

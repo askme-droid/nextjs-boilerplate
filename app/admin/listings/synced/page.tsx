@@ -4,6 +4,14 @@ import { getSyndicatedListings } from "@/lib/listings/admin-queries";
 import { deleteListing, publishListing } from "../actions";
 import { refreshSyncedListings } from "../sync-actions";
 
+// "Refresh from fd.sg" (below) now embeds every image it scrapes (CLIP
+// inference per image, not just HTTP fetches) before this page's default
+// function duration budget was ever sized for that — request the platform
+// max so a sync pulling in several new listings at once has room. Vercel
+// clamps this to whatever the plan actually allows, so it's safe to ask for
+// more than is available.
+export const maxDuration = 300;
+
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",

@@ -23,13 +23,34 @@ import { slugify } from "./slug";
  * duplicates or touches a listing after it's been imported once.
  */
 
+// fd.sg isn't consistent about category labels across its own listings —
+// the first full sync created "Food & Beverage", "Food & Beverages", and
+// "Food & Drink" as three separate categories (18/1/4 listings), and
+// "Softwares" alongside "IT & Software" (3/1). Map known variants to the
+// one that already has the most listings, so future syncs reuse it instead
+// of fragmenting further. Keyed lowercase; extend this if fd.sg introduces
+// another variant.
+const CATEGORY_ALIASES: Record<string, string> = {
+  "food & beverage": "Food & Beverages",
+  "food & drink": "Food & Beverages",
+  softwares: "IT & Software",
+};
+
 // The real fd.sg's own listing archive is its homepage, paginated
 // (/page/2/, /page/3/, ...) — not a separate landing page the way
 // digital.fd.sg had one.
 const ARCHIVE_BASE = "https://www.fd.sg/";
 const MAX_ARCHIVE_PAGES = 20; // safety cap against an infinite loop, not a real expected limit
 
-export type SyncResult = { added: number; skipped: number; total: number };
+// Each new listing now costs a scrape plus a CLIP embedding per image, not
+// just an HTTP fetch — expensive enough that importing a large batch of new
+// listings in one run risks the function's duration limit (see maxDuration
+// on app/admin/listings/synced/page.tsx). Capping per run keeps each
+// "Refresh" click bounded; the button is already designed to be clicked
+// repeatedly, so whatever's left over is picked up next click.
+const MAX_NEW_PER_RUN = 20;
+
+export type SyncResult = { added: number; skipped: number; total: number; remaining: number };
 
 /** All listing detail URLs currently on fd.sg's archive, across every page.
  *  Stops once a page adds no URLs we haven't already seen (handles both an
@@ -157,10 +178,13 @@ export async function syncFdsgListings(): Promise<SyncResult> {
     .where(isNotNull(listings.externalUrl));
   const existingUrls = new Set(existingExternal.map((r) => r.externalUrl).filter((u): u is string => !!u));
 
-  const newUrls = urls.filter((u) => !existingUrls.has(u));
-  if (newUrls.length === 0) {
-    return { added: 0, skipped: urls.length, total: urls.length };
+  const allNewUrls = urls.filter((u) => !existingUrls.has(u));
+  if (allNewUrls.length === 0) {
+    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0 };
   }
+
+  const newUrls = allNewUrls.slice(0, MAX_NEW_PER_RUN);
+  const remaining = allNewUrls.length - newUrls.length;
 
   const existingCats = await db.select({ id: categories.id, name: categories.name }).from(categories);
   const catByName = new Map(existingCats.map((c) => [c.name.toLowerCase(), c.id]));
@@ -187,13 +211,14 @@ export async function syncFdsgListings(): Promise<SyncResult> {
 
     let categoryId: string | null = null;
     if (scraped.category) {
-      const key = scraped.category.toLowerCase();
+      const categoryName = CATEGORY_ALIASES[scraped.category.toLowerCase()] ?? scraped.category;
+      const key = categoryName.toLowerCase();
       categoryId = catByName.get(key) ?? null;
       if (!categoryId) {
-        const catSlug = slugify(scraped.category);
+        const catSlug = slugify(categoryName);
         const [catRow] = await db
           .insert(categories)
-          .values({ name: scraped.category, slug: catSlug })
+          .values({ name: categoryName, slug: catSlug })
           .returning({ id: categories.id });
         categoryId = catRow.id;
         catByName.set(key, categoryId);
@@ -229,5 +254,5 @@ export async function syncFdsgListings(): Promise<SyncResult> {
     added += 1;
   }
 
-  return { added, skipped: urls.length - newUrls.length, total: urls.length };
+  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining };
 }
