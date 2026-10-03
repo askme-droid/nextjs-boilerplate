@@ -91,6 +91,7 @@ export function FeaturedListings({ listings }: { listings: ListingWithRelations[
                 columns), otherwise the second row is cropped on short
                 screens. On normal-height screens the 72rem cap wins. */}
             <GalleryContainer
+              rotateXStart={-60}
               style={{ originY: 0 }}
               className="mx-auto size-auto w-full max-w-[min(72rem,calc(2*(100svh-8rem)+5rem))] gap-4 px-6"
             >

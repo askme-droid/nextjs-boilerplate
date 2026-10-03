@@ -105,10 +105,17 @@ export const GalleryContainer = ({
   children,
   className,
   style,
+  // Added to the upstream block: starting tilt in degrees. The default pivots
+  // around the middle, so one half swings toward the viewer. A caller that
+  // pivots on the top edge (style={{ originY: 0 }}) needs a negative value so
+  // the grid folds *away* — a positive one throws the lower rows toward the
+  // camera, where they balloon and get clipped by ContainerSticky's overflow.
+  rotateXStart = 75,
   ...props
-}: React.HTMLAttributes<HTMLDivElement> & HTMLMotionProps<"div">) => {
+}: React.HTMLAttributes<HTMLDivElement> &
+  HTMLMotionProps<"div"> & { rotateXStart?: number }) => {
   const { scrollYProgress } = useContainerScrollContext()
-  const rotateX = useTransform(scrollYProgress, [0, 0.5], [75, 0])
+  const rotateX = useTransform(scrollYProgress, [0, 0.5], [rotateXStart, 0])
   const scale = useTransform(scrollYProgress, [0.5, 0.9], [1.2, 1])
 
   return (
