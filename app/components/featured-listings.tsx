@@ -12,19 +12,33 @@ import { FeaturedTile } from "./featured-tile";
 const COLUMNS = 3;
 
 // The pinned box is a full viewport tall but the (4:3) grid inside it is much
-// shorter, so there's a band of dead space above and below the grid:
-// viewport height minus grid height, where grid height ≈ 0.5 × content width
-// − 1.5rem (two rows of 4:3 tiles across three columns, content capped at
-// 72rem). The gallery is pulled up/down into that slack so it sits closer to
-// the heading above and the search card below.
-const GALLERY_SLACK = "max(0px, 100svh - 0.5 * min(72rem, 100vw) + 1.5rem)";
+// shorter, so the grid floats in the middle with dead space above and below.
+//
+// Grid width is capped at 72rem and, on short screens, at
+// 2 × (100svh − 8rem) + 5rem (see the GalleryContainer max-width below);
+// two rows of 4:3 tiles across three columns make its height ≈ 0.5 × width
+// − 1.5rem. So the blank band above the grid (B) and below it are each half
+// of (viewport height − grid height).
+const GALLERY_WIDTH = "min(72rem, 100vw, 2 * (100svh - 8rem) + 5rem)";
+const GALLERY_SLACK = `max(0px, 100svh - 0.5 * ${GALLERY_WIDTH} + 1.5rem)`;
 
-// Gentle per-column parallax (percent of the column's height). Centre column
-// moves the opposite way so the three don't travel in lockstep.
+// Gap, when the grid is level, between the heading's text and the first row
+// of tiles. The runway is pulled up by (B + heading padding − this) so the
+// top edge of the grid lands exactly this far below the subtitle; the grid
+// hinges on its top edge while it tilts (originY below), so the gap holds
+// during the scroll-in too instead of growing as the tilt sinks the top edge.
+const GAP_BELOW_HEADING = "50px";
+const HEADING_PADDING_BOTTOM = "2rem"; // the pb-8 on the heading block
+
+// Gentle per-column parallax (percent of the column's height), applied only
+// once the grid has levelled out (the component's column drift runs over the
+// second half of the scroll). Every column STARTS at 0 so the three tops line
+// up and the gap under the heading is one clean number; the centre column
+// then drifts the opposite way from the sides so they don't travel in lockstep.
 const Y_RANGES: string[][] = [
-  ["-4%", "0%"],
-  ["4%", "0%"],
-  ["-4%", "0%"],
+  ["0%", "-1.5%"],
+  ["0%", "1.5%"],
+  ["0%", "-1.5%"],
 ];
 
 /**
@@ -65,7 +79,7 @@ export function FeaturedListings({ listings }: { listings: ListingWithRelations[
       <div
         className="hidden lg:block motion-reduce:lg:hidden"
         style={{
-          marginTop: `calc(-0.44 * ${GALLERY_SLACK})`,
+          marginTop: `calc(-1 * max(0px, 0.5 * ${GALLERY_SLACK} + ${HEADING_PADDING_BOTTOM} - ${GAP_BELOW_HEADING}))`,
           marginBottom: `calc(-0.3 * ${GALLERY_SLACK})`,
         }}
       >
@@ -76,7 +90,10 @@ export function FeaturedListings({ listings }: { listings: ListingWithRelations[
                 breathing room, plus the 5rem of padding/gaps across three
                 columns), otherwise the second row is cropped on short
                 screens. On normal-height screens the 72rem cap wins. */}
-            <GalleryContainer className="mx-auto size-auto w-full max-w-[min(72rem,calc(2*(100svh-8rem)+5rem))] gap-4 px-6">
+            <GalleryContainer
+              style={{ originY: 0 }}
+              className="mx-auto size-auto w-full max-w-[min(72rem,calc(2*(100svh-8rem)+5rem))] gap-4 px-6"
+            >
               {columns.map((items, c) => (
                 <GalleryCol key={c} yRange={Y_RANGES[c]} className="gap-4">
                   {items.map((listing) => (
