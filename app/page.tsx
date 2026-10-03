@@ -15,9 +15,34 @@ import {
 // Promo banners for the homepage hero slider — swap these out (or wire up
 // an admin-managed source later) whenever the current promotions change.
 const HERO_SLIDES: HeroSlide[] = [
-  { src: "/hero/slide-1.jpg", alt: "VisViva Hair Studio opening promotion — 50% off" },
-  { src: "/hero/slide-2.jpg", alt: "Megachure — smart, innovative & sustainability" },
-  { src: "/hero/slide-3.jpg", alt: "National Day promotions — free express manicure and $5 off gel services" },
+  {
+    src: "/hero/overly-cheezy-pizza.jpg",
+    alt: "Overly Cheezy Pizza — 1-for-1 regular pizzas at $25.90 and large pizzas at $33.90, plus 10% off your first online order",
+  },
+  {
+    src: "/hero/mindspace-open-house.jpg",
+    alt: "MindSpace after-school academy open house — enjoy over $2,460 in savings",
+  },
+  {
+    src: "/hero/singgate-fr059-door-lock.jpg",
+    alt: "Singgate FR059 digital door lock — 3D face and palm vein recognition, free installation, 2-year warranty",
+  },
+  {
+    src: "/hero/lingoace-free-trial.jpg",
+    alt: "LingoAce — free trial of online Chinese lessons for learners aged 3 to 15",
+  },
+  {
+    src: "/hero/san-laundry-capsules.jpg",
+    alt: "SAN 3-in-1 laundry detergent capsules — detergent, softener and anti-bacterial, on sale",
+  },
+  {
+    src: "/hero/uems-healthcare-attendant.jpg",
+    alt: "UEMS is hiring healthcare attendants in Seng Kang — salary up to $2,100",
+  },
+  {
+    src: "/hero/kumon-registration.jpg",
+    alt: "Kumon — 100% off registration fee (save $50) when you sign up by 15 September 2024",
+  },
 ];
 
 function firstValue(value: string | string[] | undefined): string {

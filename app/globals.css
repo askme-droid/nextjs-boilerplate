@@ -28,6 +28,11 @@
   --border: #e4e4e7;
   --input: #e4e4e7;
   --ring: var(--brand-teal);
+
+  /* Homepage hero backdrop: solid brand teal. A variable (rather than
+     bg-brand-teal inline) because the flyer strip's left-edge fade has to
+     blend into exactly this color. */
+  --hero-surface: var(--brand-teal);
 }
 
 @theme inline {
@@ -51,6 +56,21 @@
   --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+/* Homepage hero flyer strip (app/components/hero-slider.tsx). The track holds
+   the slides twice, so -50% lands on a frame identical to 0%. */
+@theme {
+  --animate-hero-marquee: hero-marquee 45s linear infinite;
+
+  @keyframes hero-marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
 }
 
 @media (prefers-color-scheme: dark) {

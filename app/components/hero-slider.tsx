@@ -1,80 +1,77 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { Pause, Play } from "lucide-react";
+import { useState } from "react";
 
 export type HeroSlide = {
   src: string;
   alt: string;
 };
 
-const AUTO_ADVANCE_MS = 5000;
-
-/** Auto-advancing image slider for the homepage hero, with manual dot
- *  navigation. Pauses auto-advance while a viewer is interacting via the
- *  dots isn't implemented — these are short promo banners, not something
- *  someone needs to linger on, so simplicity wins here. */
-export function HeroSlider({
-  slides,
-  dots = "on-color",
-}: {
-  slides: HeroSlide[];
-  /** "on-color": white dots, for a saturated/dark backdrop (the original
-   *  teal hero). "on-surface": theme-foreground dots, for a light/dark page
-   *  surface where white would vanish. */
-  dots?: "on-color" | "on-surface";
-}) {
-  const [index, setIndex] = useState(0);
-  const activeDot = dots === "on-surface" ? "bg-foreground" : "bg-white";
-  const idleDot =
-    dots === "on-surface"
-      ? "bg-foreground/30 hover:bg-foreground/50"
-      : "bg-white/50 hover:bg-white/75";
-
-  useEffect(() => {
-    if (slides.length <= 1) return;
-    const id = setInterval(() => {
-      setIndex((i) => (i + 1) % slides.length);
-    }, AUTO_ADVANCE_MS);
-    return () => clearInterval(id);
-  }, [slides.length]);
+/**
+ * Homepage hero strip: portrait promo flyers scrolling slowly right-to-left
+ * in a seamless loop (see hero-marquee in globals.css).
+ *
+ * The slides are rendered twice back to back and the track animates by
+ * exactly -50%, so the loop restarts on an identical frame; the second copy
+ * is aria-hidden so screen readers don't hear every flyer twice. Pauses on
+ * hover/focus, and via an explicit button (WCAG 2.2.2: auto-moving content
+ * needs a way to stop it that doesn't depend on a mouse). With
+ * prefers-reduced-motion it doesn't animate at all — it's a normal
+ * horizontally scrollable row with just the first copy.
+ *
+ * Card sizes are fixed (not aspect-ratio driven) because every flyer is
+ * A4-shaped (~0.71) and the track's width has to be known for the -50% loop.
+ */
+export function HeroSlider({ slides }: { slides: HeroSlide[] }) {
+  const [paused, setPaused] = useState(false);
 
   if (slides.length === 0) return null;
 
-  return (
-    <div className="w-full">
-      <div className="relative aspect-[852/333] w-full overflow-hidden rounded-xl shadow-lg">
-        {slides.map((slide, i) => (
-          <Image
-            key={slide.src}
-            src={slide.src}
-            alt={slide.alt}
-            fill
-            priority={i === 0}
-            sizes="(min-width: 1024px) 48rem, 90vw"
-            className={`object-cover transition-opacity duration-700 ${
-              i === index ? "opacity-100" : "opacity-0"
-            }`}
-          />
-        ))}
-      </div>
+  const loop = [...slides, ...slides];
 
-      {slides.length > 1 && (
-        <div className="mt-3 flex justify-center gap-2">
-          {slides.map((slide, i) => (
-            <button
-              key={slide.src}
-              type="button"
-              onClick={() => setIndex(i)}
-              aria-label={`Show slide ${i + 1}`}
-              aria-current={i === index}
-              className={`h-2 rounded-full transition-all ${
-                i === index ? `w-6 ${activeDot}` : `w-2 ${idleDot}`
-              }`}
-            />
-          ))}
-        </div>
-      )}
+  return (
+    <div className="group relative w-full overflow-hidden py-3 motion-reduce:overflow-x-auto">
+      <ul
+        className={`flex w-max animate-hero-marquee motion-reduce:animate-none group-hover:[animation-play-state:paused] group-focus-within:[animation-play-state:paused] ${
+          paused ? "[animation-play-state:paused]" : ""
+        }`}
+      >
+        {loop.map((slide, i) => {
+          const isCopy = i >= slides.length;
+          return (
+            <li
+              key={`${slide.src}-${isCopy ? "copy" : "orig"}`}
+              aria-hidden={isCopy}
+              className={`mr-4 shrink-0 ${isCopy ? "motion-reduce:hidden" : ""}`}
+            >
+              <div className="relative h-72 w-[205px] overflow-hidden rounded-xl bg-muted shadow-md lg:h-[22rem] lg:w-[251px]">
+                <Image
+                  src={slide.src}
+                  alt={isCopy ? "" : slide.alt}
+                  fill
+                  sizes="(min-width: 1024px) 251px, 205px"
+                  // Eager even off-screen: cards slide in from beyond the clip
+                  // edge, and a lazy one would pop in blank as it arrives.
+                  loading="eager"
+                  className="object-cover"
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <button
+        type="button"
+        onClick={() => setPaused((p) => !p)}
+        aria-pressed={paused}
+        aria-label={paused ? "Play promo carousel" : "Pause promo carousel"}
+        className="absolute right-3 top-4 z-10 flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur transition-colors hover:bg-background motion-reduce:hidden"
+      >
+        {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+      </button>
     </div>
   );
 }
