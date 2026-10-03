@@ -11,6 +11,14 @@ import { FeaturedTile } from "./featured-tile";
 
 const COLUMNS = 3;
 
+// The pinned box is a full viewport tall but the (4:3) grid inside it is much
+// shorter, so there's a band of dead space above and below the grid:
+// viewport height minus grid height, where grid height ≈ 0.5 × content width
+// − 1.5rem (two rows of 4:3 tiles across three columns, content capped at
+// 72rem). The gallery is pulled up/down into that slack so it sits closer to
+// the heading above and the search card below.
+const GALLERY_SLACK = "max(0px, 100svh - 0.5 * min(72rem, 100vw) + 1.5rem)";
+
 // Gentle per-column parallax (percent of the column's height). Centre column
 // moves the opposite way so the three don't travel in lockstep.
 const Y_RANGES: string[][] = [
@@ -54,13 +62,21 @@ export function FeaturedListings({ listings }: { listings: ListingWithRelations[
         </ContainerAnimated>
       </ContainerStagger>
 
-      <div className="hidden lg:block motion-reduce:lg:hidden">
+      <div
+        className="hidden lg:block motion-reduce:lg:hidden"
+        style={{
+          marginTop: `calc(-0.44 * ${GALLERY_SLACK})`,
+          marginBottom: `calc(-0.3 * ${GALLERY_SLACK})`,
+        }}
+      >
         <ContainerScroll className="h-[220vh]">
           <ContainerSticky className="flex h-svh items-center justify-center">
-            {/* Width is capped so two rows of 4:5 tiles always fit the
-                viewport height (2 × 1.25 × tile width + gap, minus the header
-                room), otherwise the second row is cropped on short screens. */}
-            <GalleryContainer className="mx-auto size-auto w-full max-w-[min(72rem,calc(1.2*(100svh-7rem)+1rem))] gap-4 px-6">
+            {/* Width is capped so two rows of 4:3 tiles always fit the
+                viewport height (2 × 0.75 × tile width + gap, with ~8rem of
+                breathing room, plus the 5rem of padding/gaps across three
+                columns), otherwise the second row is cropped on short
+                screens. On normal-height screens the 72rem cap wins. */}
+            <GalleryContainer className="mx-auto size-auto w-full max-w-[min(72rem,calc(2*(100svh-8rem)+5rem))] gap-4 px-6">
               {columns.map((items, c) => (
                 <GalleryCol key={c} yRange={Y_RANGES[c]} className="gap-4">
                   {items.map((listing) => (

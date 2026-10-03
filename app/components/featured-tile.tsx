@@ -29,13 +29,15 @@ export function FeaturedTile({ listing }: { listing: ListingWithRelations }) {
         aria-hidden
         className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/85 via-black/45 to-transparent"
       />
-      <div className="absolute inset-x-0 bottom-0 flex flex-col items-start gap-1.5 p-3 text-white sm:p-4">
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-start gap-1.5 p-2.5 text-white sm:p-4">
+        {/* Dropped on phones: a 4:3 tile is only ~115px tall there, and badge
+            + title together would cover most of the photo. */}
         {listing.categories && (
-          <span className="rounded-full bg-brand-teal px-2.5 py-0.5 text-xs font-medium">
+          <span className="hidden rounded-full bg-brand-teal px-2.5 py-0.5 text-xs font-medium sm:inline-block">
             {listing.categories.name}
           </span>
         )}
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug sm:text-base">
+        <h3 className="line-clamp-2 text-xs font-semibold leading-snug sm:text-base">
           {listing.title}
         </h3>
       </div>
@@ -43,7 +45,7 @@ export function FeaturedTile({ listing }: { listing: ListingWithRelations }) {
   );
 
   const className =
-    "group relative block aspect-[4/5] w-full overflow-hidden rounded-xl bg-zinc-100 shadow-md dark:bg-zinc-900";
+    "group relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-zinc-100 shadow-md dark:bg-zinc-900";
 
   return listing.external_url ? (
     <a
