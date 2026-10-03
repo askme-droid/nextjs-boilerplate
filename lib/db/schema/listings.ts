@@ -49,6 +49,10 @@ export const listings = pgTable("listings", {
   keywords: text("keywords").array(),
   status: text("status", { enum: LISTING_STATUSES }).notNull().default("draft"),
   featuredImageUrl: text("featured_image_url"),
+  // Staff-curated pick for the homepage "Featured listings" section (see
+  // getFeaturedListings in lib/listings/queries.ts). Not to be confused with
+  // listing_images.is_featured, which is which *photo* represents a listing.
+  homepageFeatured: boolean("homepage_featured").notNull().default(false),
   // Set only for listings syndicated from elsewhere (e.g. fd.sg) that we show
   // in search/browse here but whose actual content stays at the source —
   // the card and the detail route both send visitors there instead of

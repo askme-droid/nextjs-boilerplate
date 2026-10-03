@@ -1,4 +1,5 @@
 import type { HeroSlide } from "@/app/components/hero-slider";
+import { FeaturedListings } from "@/app/components/featured-listings";
 import { HeroSection } from "@/components/blocks/hero-section-6";
 import { ListingCard } from "@/app/components/listing-card";
 import { ListingsPagination } from "@/app/components/listings-pagination";
@@ -6,6 +7,7 @@ import { ListingsSearchForm } from "@/app/components/listings-search-form";
 import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/queries";
 import {
   getCategories,
+  getFeaturedListings,
   getListings,
   getListingsByIds,
   type ListingCategory,
@@ -58,6 +60,9 @@ type PageData = {
   categories: ListingCategory[];
   experiences: ListingTag[];
   listings: ListingWithRelations[];
+  /** Homepage "Featured listings" gallery; empty (section hidden) on any
+   *  search/filter/page > 1 so results aren't pushed below it. */
+  featured: ListingWithRelations[];
   page: number;
   totalPages: number;
 };
@@ -93,6 +98,7 @@ async function loadPageData(
           categories,
           experiences,
           listings,
+          featured: [],
           page: 1,
           totalPages: 1,
         },
@@ -114,13 +120,14 @@ async function loadPageData(
       ? requestedExperience
       : "";
 
-    const { listings, page: currentPage, totalPages } = await getListings({
-      q,
-      category,
-      location,
-      experience,
-      page,
-    });
+    const isDefaultView = !q && !category && !location && !experience && page === 1;
+
+    const [{ listings, page: currentPage, totalPages }, featured] = await Promise.all([
+      getListings({ q, category, location, experience, page }),
+      // Decorative extra: a failure here must not take the whole page down
+      // into the error state, so it degrades to "no featured section".
+      isDefaultView ? getFeaturedListings(6).catch(() => []) : Promise.resolve([]),
+    ]);
 
     return {
       ok: true,
@@ -133,6 +140,7 @@ async function loadPageData(
         categories,
         experiences,
         listings,
+        featured,
         page: currentPage,
         totalPages,
       },
@@ -152,6 +160,8 @@ export default async function Home({
   return (
     <main className="flex flex-1 flex-col">
       <HeroSection slides={HERO_SLIDES} />
+
+      {result.ok && <FeaturedListings listings={result.data.featured} />}
 
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-6 pt-8">
         {!result.ok ? (

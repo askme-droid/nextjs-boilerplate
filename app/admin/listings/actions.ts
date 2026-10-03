@@ -35,6 +35,8 @@ export type ListingFormValues = {
   description: string;
   status: string;
   expires_at: string;
+  /** Checkbox: "1" when ticked, "" when not (an unticked box isn't sent at all). */
+  homepage_featured: string;
 };
 
 export type ListingFormState = {
@@ -59,6 +61,7 @@ function readValues(formData: FormData): ListingFormValues {
     description: get("description"),
     status: get("status"),
     expires_at: get("expires_at"),
+    homepage_featured: formData.has("homepage_featured") ? "1" : "",
   };
 }
 
@@ -120,6 +123,7 @@ export async function saveListing(
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
     expiresAt: values.expires_at || null,
+    homepageFeatured: values.homepage_featured === "1",
   };
 
   let listingId: string;

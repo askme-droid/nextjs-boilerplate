@@ -24,6 +24,7 @@ const emptyValues: ListingFormValues = {
   description: "",
   status: "draft",
   expires_at: "",
+  homepage_featured: "",
 };
 
 export function ListingForm({
@@ -230,6 +231,22 @@ export function ListingForm({
           defaultValue={values.expires_at}
           className={inputClass}
         />
+      </label>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="homepage_featured"
+          defaultChecked={values.homepage_featured === "1"}
+          className="mt-0.5"
+        />
+        <span>
+          <span className="font-medium">Feature on the homepage</span>
+          <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+            Shown first in the &quot;Featured listings&quot; gallery (up to 6). Slots left
+            over are filled with the newest published listings that have an image.
+          </span>
+        </span>
       </label>
 
       {allTags && (

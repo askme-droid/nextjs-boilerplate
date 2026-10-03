@@ -301,6 +301,30 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
 }
 
 /**
+ * Listings for the homepage "Featured listings" gallery: staff-flagged ones
+ * first (homepage_featured), then topped up with the newest so the section is
+ * still full before anyone has curated it. Listings with no image at all are
+ * skipped — the gallery is image-led and a blank tile reads as broken.
+ */
+export async function getFeaturedListings(limit = 6): Promise<ListingWithRelations[]> {
+  const hasImage = sql`(
+    exists (select 1 from ${listingImages} where ${listingImages.listingId} = ${listings.id})
+    or ${listings.featuredImageUrl} is not null
+  )`;
+
+  const rows = await db
+    .select({ id: listings.id })
+    .from(listings)
+    .where(and(eq(listings.status, "published"), hasImage))
+    .orderBy(desc(listings.homepageFeatured), desc(listings.createdAt))
+    .limit(limit);
+
+  // getListingsByIds re-sorts to the order of the ids it's given, so the
+  // flagged-first ranking above survives the second query.
+  return getListingsByIds(rows.map((r) => r.id));
+}
+
+/**
  * A single published listing by slug, with all its images and experience
  * tags, or `null` if it doesn't exist or isn't published.
  *

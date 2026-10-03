@@ -109,6 +109,7 @@ export function EditListingClient({
                 social_links: initialValues.social_links,
                 cta_label: initialValues.cta_label,
                 cta_url: initialValues.cta_url,
+                homepage_featured: initialValues.homepage_featured,
               }
             : initialValues
         }

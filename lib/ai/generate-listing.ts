@@ -114,5 +114,8 @@ export async function generateListingDraft({
     description: parsed.description,
     status: "draft",
     expires_at: parsed.expires_at ?? "",
+    // An editorial choice, never the model's; the edit form keeps whatever's
+    // saved (see edit-listing-client.tsx), so this blank is never applied.
+    homepage_featured: "",
   };
 }

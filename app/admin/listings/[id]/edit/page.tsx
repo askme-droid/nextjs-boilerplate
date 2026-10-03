@@ -70,6 +70,7 @@ export default async function EditListingPage({
           description: listing.description ?? "",
           status: listing.status,
           expires_at: listing.expires_at ?? "",
+          homepage_featured: listing.homepage_featured ? "1" : "",
         }}
         allTags={allTags}
         selectedTagIds={listing.tagIds}

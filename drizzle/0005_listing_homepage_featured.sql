@@ -1,0 +1,1 @@
+ALTER TABLE "listings" ADD COLUMN "homepage_featured" boolean DEFAULT false NOT NULL;
