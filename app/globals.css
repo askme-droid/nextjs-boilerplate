@@ -10,6 +10,24 @@
   --brand-teal: #0eb2bf;
   --brand-orange: #f6ab4d;
   --brand-gray: #5c5d61;
+
+  /* shadcn semantic tokens (components/ui/*). Mapped onto the brand palette
+     rather than shadcn's default neutral greys: the primary action color on
+     this site is already brand orange (the Search button), and focus rings
+     are already brand teal. */
+  --primary: var(--brand-orange);
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #171717;
+  --muted: #f4f4f5;
+  --muted-foreground: #5c5d61;
+  --accent: #f4f4f5;
+  --accent-foreground: #171717;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: var(--brand-teal);
 }
 
 @theme inline {
@@ -18,6 +36,19 @@
   --color-brand-teal: var(--brand-teal);
   --color-brand-orange: var(--brand-orange);
   --color-brand-gray: var(--brand-gray);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -26,6 +57,14 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --secondary: #27272a;
+    --secondary-foreground: #ededed;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --accent: #27272a;
+    --accent-foreground: #ededed;
+    --border: #27272a;
+    --input: #27272a;
   }
 }
 

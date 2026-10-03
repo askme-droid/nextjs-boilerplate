@@ -1,4 +1,5 @@
-import { HeroSlider, type HeroSlide } from "@/app/components/hero-slider";
+import type { HeroSlide } from "@/app/components/hero-slider";
+import { HeroSection } from "@/components/blocks/hero-section-6";
 import { ListingCard } from "@/app/components/listing-card";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
@@ -125,24 +126,9 @@ export default async function Home({
 
   return (
     <main className="flex flex-1 flex-col">
-      <div className="bg-brand-teal px-6 pb-16 pt-10 text-white sm:pb-20 sm:pt-14">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-8 lg:flex-row">
-          <div className="flex flex-col gap-2 lg:w-1/3">
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Find great deals near you
-            </h1>
-            <p className="text-white/90">
-              Browse promos, flyers, and listings from local businesses.
-            </p>
-          </div>
+      <HeroSection slides={HERO_SLIDES} />
 
-          <div className="w-full lg:w-2/3">
-            <HeroSlider slides={HERO_SLIDES} />
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto -mt-10 flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-6 sm:-mt-12">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-6 pt-8">
         {!result.ok ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
             <p className="text-lg text-red-600 dark:text-red-400">
@@ -154,7 +140,10 @@ export default async function Home({
           </div>
         ) : (
           <>
-            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
+            <div
+              id="search"
+              className="scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
+            >
               <ListingsSearchForm
                 q={result.data.q}
                 category={result.data.category}

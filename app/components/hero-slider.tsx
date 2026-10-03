@@ -14,8 +14,22 @@ const AUTO_ADVANCE_MS = 5000;
  *  navigation. Pauses auto-advance while a viewer is interacting via the
  *  dots isn't implemented — these are short promo banners, not something
  *  someone needs to linger on, so simplicity wins here. */
-export function HeroSlider({ slides }: { slides: HeroSlide[] }) {
+export function HeroSlider({
+  slides,
+  dots = "on-color",
+}: {
+  slides: HeroSlide[];
+  /** "on-color": white dots, for a saturated/dark backdrop (the original
+   *  teal hero). "on-surface": theme-foreground dots, for a light/dark page
+   *  surface where white would vanish. */
+  dots?: "on-color" | "on-surface";
+}) {
   const [index, setIndex] = useState(0);
+  const activeDot = dots === "on-surface" ? "bg-foreground" : "bg-white";
+  const idleDot =
+    dots === "on-surface"
+      ? "bg-foreground/30 hover:bg-foreground/50"
+      : "bg-white/50 hover:bg-white/75";
 
   useEffect(() => {
     if (slides.length <= 1) return;
@@ -55,7 +69,7 @@ export function HeroSlider({ slides }: { slides: HeroSlide[] }) {
               aria-label={`Show slide ${i + 1}`}
               aria-current={i === index}
               className={`h-2 rounded-full transition-all ${
-                i === index ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white/75"
+                i === index ? `w-6 ${activeDot}` : `w-2 ${idleDot}`
               }`}
             />
           ))}
