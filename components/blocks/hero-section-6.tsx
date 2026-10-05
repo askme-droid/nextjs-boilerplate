@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowRight, Check } from "lucide-react"
 
 import { HeroSlider, type HeroSlide } from "@/app/components/hero-slider"
+import { ScanCameraIcon } from "@/app/components/scan-camera-icon"
 import { Button } from "@/components/ui/button"
 
 const highlights = ["Flyer deals", "E-vouchers", "Local promotions"]
@@ -26,10 +27,19 @@ export function HeroSection({ slides }: { slides: HeroSlide[] }) {
         <div className="relative z-10 mx-auto max-w-xl text-center lg:mx-0 lg:w-[45%] lg:text-left">
           <Link
             href="#search"
-            className="mx-auto flex w-fit items-center gap-2 rounded-lg border border-border bg-background p-1 pr-3 text-foreground lg:mx-0"
+            className="relative mx-auto flex w-fit items-center gap-2 overflow-hidden rounded-lg border border-border bg-background p-1 pr-3 text-foreground lg:mx-0"
           >
-            <span className="rounded-md bg-muted px-2 py-1 text-xs">New</span>
-            <span className="text-sm">Search listings by photo</span>
+            {/* Light sheen sweeping across the pill every few seconds — the
+                "this is new, try it" nudge. Gone for reduced-motion. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-0 hidden w-1/4 bg-linear-to-r from-transparent via-brand-teal/30 to-transparent motion-safe:block motion-safe:animate-sheen"
+            />
+            <span className="relative rounded-md bg-brand-teal px-2 py-1 text-xs font-medium text-zinc-950">
+              New
+            </span>
+            <ScanCameraIcon always className="relative" />
+            <span className="relative text-sm">Search listings by photo</span>
             <span className="block h-4 w-px bg-border" />
             <ArrowRight className="size-4" />
           </Link>

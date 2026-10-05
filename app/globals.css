@@ -73,6 +73,67 @@
   }
 }
 
+/* "Search by photo" motion: the hero pill (sheen + scanning camera), the camera
+   button's one-off attention ring, the scan card shown while a photo is being
+   matched, and the staggered reveal of the results. Every use is behind
+   Tailwind's motion-safe: variant, so reduced-motion visitors get none of it. */
+@theme {
+  --animate-sheen: sheen 4.5s ease-in-out infinite;
+  --animate-scan-line: scan-line 1.6s ease-in-out infinite;
+  --animate-attention-ping: attention-ping 1.6s cubic-bezier(0, 0, 0.2, 1) 3;
+  --animate-rise-in: rise-in 0.5s ease-out both;
+  --animate-pop-in: pop-in 0.25s ease-out both;
+
+  @keyframes sheen {
+    0%,
+    55% {
+      transform: translateX(-130%) skewX(-20deg);
+    }
+    100% {
+      transform: translateX(380%) skewX(-20deg);
+    }
+  }
+  @keyframes scan-line {
+    0%,
+    100% {
+      top: 8%;
+    }
+    50% {
+      top: 88%;
+    }
+  }
+  @keyframes attention-ping {
+    0% {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(1.9);
+      opacity: 0;
+    }
+  }
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

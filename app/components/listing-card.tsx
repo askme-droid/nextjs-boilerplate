@@ -1,10 +1,20 @@
+import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { pickListingImage } from "@/lib/listings/image";
 import type { ListingWithRelations } from "@/lib/listings/queries";
 
-export function ListingCard({ listing }: { listing: ListingWithRelations }) {
+export function ListingCard({
+  listing,
+  className,
+  style,
+}: {
+  listing: ListingWithRelations;
+  className?: string;
+  style?: CSSProperties;
+}) {
   const imageUrl = pickListingImage(listing);
 
   const body = (
@@ -61,7 +71,13 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
   );
 
   return (
-    <article className="group overflow-hidden rounded-lg border border-zinc-200 transition-shadow hover:shadow-md hover:shadow-brand-teal/10 dark:border-zinc-800">
+    <article
+      className={cn(
+        "group overflow-hidden rounded-lg border border-zinc-200 transition-shadow hover:shadow-md hover:shadow-brand-teal/10 dark:border-zinc-800",
+        className,
+      )}
+      style={style}
+    >
       {listing.external_url ? (
         // Syndicated from elsewhere (e.g. fd.sg) — sends the visitor to the
         // source instead of a local copy, since that's where the content

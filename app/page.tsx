@@ -214,8 +214,19 @@ export default async function Home({
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {result.data.listings.map((listing) => (
-                  <ListingCard key={listing.id} listing={listing} />
+                {result.data.listings.map((listing, index) => (
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    // Photo-search results rise in best-match-first; ordinary
+                    // browsing/filtering stays instant.
+                    className={result.data.isImageSearch ? "motion-safe:animate-rise-in" : undefined}
+                    style={
+                      result.data.isImageSearch
+                        ? { animationDelay: `${Math.min(index, 11) * 70}ms` }
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
             )}
