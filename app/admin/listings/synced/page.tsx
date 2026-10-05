@@ -38,7 +38,7 @@ export default async function SyncedListingsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Synced listings</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -46,18 +46,18 @@ export default async function SyncedListingsPage({
             to the original source.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <form action={refreshSyncedListings}>
             <button
               type="submit"
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               Refresh from fd.sg
             </button>
           </form>
           <Link
             href="/admin/listings"
-            className="text-sm font-medium underline-offset-4 hover:underline"
+            className="whitespace-nowrap text-sm font-medium underline-offset-4 hover:underline"
           >
             ← Listings
           </Link>
