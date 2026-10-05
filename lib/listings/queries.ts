@@ -316,7 +316,11 @@ export async function getFeaturedListings(limit = 6): Promise<ListingWithRelatio
     .select({ id: listings.id })
     .from(listings)
     .where(and(eq(listings.status, "published"), hasImage))
-    .orderBy(desc(listings.homepageFeatured), desc(listings.createdAt))
+    .orderBy(
+      desc(listings.homepageFeatured),
+      asc(listings.homepageFeaturedOrder),
+      desc(listings.createdAt),
+    )
     .limit(limit);
 
   // getListingsByIds re-sorts to the order of the ids it's given, so the

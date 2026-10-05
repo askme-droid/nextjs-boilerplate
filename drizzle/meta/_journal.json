@@ -43,6 +43,13 @@
       "when": 1790999799247,
       "tag": "0005_listing_homepage_featured",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791002973096,
+      "tag": "0006_listing_homepage_featured_order",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { isStaff } from "@/lib/auth/roles";
@@ -209,4 +209,91 @@ export async function getExperienceTags(): Promise<ListingTag[]> {
     .select({ id: experienceTags.id, name: experienceTags.name, slug: experienceTags.slug })
     .from(experienceTags)
     .orderBy(asc(experienceTags.name));
+}
+
+export type FeaturedAdminRow = {
+  id: string;
+  title: string;
+  status: string;
+  categoryName: string | null;
+  imageUrl: string | null;
+  /** Syndicated from elsewhere (fd.sg etc.) rather than owned here. */
+  synced: boolean;
+  /** Has any photo at all — the gallery skips listings without one. */
+  hasImage: boolean;
+};
+
+const featuredAdminSelect = {
+  id: listings.id,
+  title: listings.title,
+  status: listings.status,
+  categoryName: categories.name,
+  imageUrl: listings.featuredImageUrl,
+  externalUrl: listings.externalUrl,
+  hasImage: sql<boolean>`(
+    exists (select 1 from ${listingImages} where ${listingImages.listingId} = ${listings.id})
+    or ${listings.featuredImageUrl} is not null
+  )`,
+};
+
+function toFeaturedAdminRow(r: {
+  id: string;
+  title: string;
+  status: string;
+  categoryName: string | null;
+  imageUrl: string | null;
+  externalUrl: string | null;
+  hasImage: boolean;
+}): FeaturedAdminRow {
+  return {
+    id: r.id,
+    title: r.title,
+    status: r.status,
+    categoryName: r.categoryName,
+    imageUrl: r.imageUrl,
+    synced: r.externalUrl !== null,
+    hasImage: r.hasImage,
+  };
+}
+
+/** Listings staff have picked for the homepage, in display order. Includes
+ *  ones that currently can't show (unpublished / no photo) so staff can see
+ *  and fix or remove them rather than wonder where they went. */
+export async function getFeaturedAdminListings(
+  role: string | null | undefined,
+): Promise<FeaturedAdminRow[]> {
+  requireStaffRole(role);
+  const rows = await db
+    .select(featuredAdminSelect)
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(eq(listings.homepageFeatured, true))
+    .orderBy(asc(listings.homepageFeaturedOrder), desc(listings.createdAt));
+  return rows.map(toFeaturedAdminRow);
+}
+
+/** Published, not-yet-picked listings to choose from; `q` narrows by title. */
+export async function searchFeaturableListings(
+  role: string | null | undefined,
+  q: string,
+  limit = 20,
+): Promise<FeaturedAdminRow[]> {
+  requireStaffRole(role);
+  const term = q.trim();
+  const rows = await db
+    .select(featuredAdminSelect)
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(
+      and(
+        eq(listings.status, "published"),
+        eq(listings.homepageFeatured, false),
+        term
+          ? or(ilike(listings.title, `%${term}%`), ilike(listings.location, `%${term}%`))
+          : undefined,
+      ),
+    )
+    .orderBy(desc(listings.createdAt))
+    .limit(limit);
+  return rows.map(toFeaturedAdminRow);
 }

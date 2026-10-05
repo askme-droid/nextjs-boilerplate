@@ -9,3 +9,6 @@ export type ListingStatus = (typeof LISTING_STATUSES)[number];
 // that transition via app/admin/listings/actions.ts.
 export const USER_SUBMITTABLE_STATUSES = ["draft", "pending"] as const;
 export type UserSubmittableStatus = (typeof USER_SUBMITTABLE_STATUSES)[number];
+
+// Tiles in the homepage "Featured listings" gallery (3 columns × 2 rows).
+export const FEATURED_SLOTS = 6;

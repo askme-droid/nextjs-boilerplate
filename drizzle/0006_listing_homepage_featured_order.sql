@@ -1,0 +1,1 @@
+ALTER TABLE "listings" ADD COLUMN "homepage_featured_order" integer DEFAULT 0 NOT NULL;

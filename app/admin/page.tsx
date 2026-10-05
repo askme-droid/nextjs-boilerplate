@@ -15,6 +15,9 @@ export default async function AdminPage() {
       <Link href="/admin/listings" className={linkClass}>
         Manage listings
       </Link>
+      <Link href="/admin/listings/featured" className={linkClass}>
+        Featured listings
+      </Link>
       <Link href="/admin/listings/synced" className={linkClass}>
         Synced listings
       </Link>

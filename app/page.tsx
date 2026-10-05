@@ -4,6 +4,7 @@ import { HeroSection } from "@/components/blocks/hero-section-6";
 import { ListingCard } from "@/app/components/listing-card";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
+import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/queries";
 import {
   getCategories,
@@ -126,7 +127,7 @@ async function loadPageData(
       getListings({ q, category, location, experience, page }),
       // Decorative extra: a failure here must not take the whole page down
       // into the error state, so it degrades to "no featured section".
-      isDefaultView ? getFeaturedListings(6).catch(() => []) : Promise.resolve([]),
+      isDefaultView ? getFeaturedListings(FEATURED_SLOTS).catch(() => []) : Promise.resolve([]),
     ]);
 
     return {

@@ -53,6 +53,10 @@ export const listings = pgTable("listings", {
   // getFeaturedListings in lib/listings/queries.ts). Not to be confused with
   // listing_images.is_featured, which is which *photo* represents a listing.
   homepageFeatured: boolean("homepage_featured").notNull().default(false),
+  // Position among the flagged listings (lowest first); managed from
+  // /admin/listings/featured. Ties (e.g. everything still at the default 0)
+  // fall back to newest first.
+  homepageFeaturedOrder: integer("homepage_featured_order").notNull().default(0),
   // Set only for listings syndicated from elsewhere (e.g. fd.sg) that we show
   // in search/browse here but whose actual content stays at the source —
   // the card and the detail route both send visitors there instead of

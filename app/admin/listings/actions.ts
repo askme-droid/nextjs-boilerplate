@@ -124,6 +124,9 @@ export async function saveListing(
     status: status as (typeof LISTING_STATUSES)[number],
     expiresAt: values.expires_at || null,
     homepageFeatured: values.homepage_featured === "1",
+    // Unticking drops the listing out of the manual order too; ticking leaves
+    // the stored position alone (the Featured page owns ordering).
+    ...(values.homepage_featured === "1" ? {} : { homepageFeaturedOrder: 0 }),
   };
 
   let listingId: string;

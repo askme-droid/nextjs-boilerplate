@@ -25,6 +25,12 @@ export default async function AdminListingsPage({
         <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
         <div className="flex items-center gap-3">
           <Link
+            href="/admin/listings/featured"
+            className="text-sm font-medium underline-offset-4 hover:underline"
+          >
+            Featured listings →
+          </Link>
+          <Link
             href="/admin/listings/synced"
             className="text-sm font-medium underline-offset-4 hover:underline"
           >
