@@ -21,18 +21,18 @@ export default async function AdminListingsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link
             href="/admin/listings/featured"
-            className="text-sm font-medium underline-offset-4 hover:underline"
+            className="whitespace-nowrap text-sm font-medium underline-offset-4 hover:underline"
           >
             Featured listings →
           </Link>
           <Link
             href="/admin/listings/synced"
-            className="text-sm font-medium underline-offset-4 hover:underline"
+            className="whitespace-nowrap text-sm font-medium underline-offset-4 hover:underline"
           >
             Synced listings →
           </Link>
