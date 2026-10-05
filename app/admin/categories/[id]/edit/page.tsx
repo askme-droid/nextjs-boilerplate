@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-staff";
 import { getCategoryById, getListingCountForCategory } from "@/lib/categories/queries";
 import { CategoryForm } from "../../category-form";
-import { deleteCategory } from "../../actions";
+import { DeleteCategoryButton } from "../../delete-category-button";
 
 export default async function EditCategoryPage({
   params,
@@ -48,15 +48,12 @@ export default async function EditCategoryPage({
                   listingCount === 1 ? "uses" : "use"
                 } this category — deleting it will leave ${listingCount === 1 ? "that listing" : "them"} uncategorized, not delete ${listingCount === 1 ? "it" : "them"}.`}
           </p>
-          <form action={deleteCategory}>
-            <input type="hidden" name="id" value={category.id} />
-            <button
-              type="submit"
-              className="w-fit rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
-            >
-              Delete category
-            </button>
-          </form>
+          <DeleteCategoryButton
+            id={category.id}
+            name={category.name}
+            listingCount={listingCount}
+            variant="button"
+          />
         </section>
       </CategoryForm>
     </div>
