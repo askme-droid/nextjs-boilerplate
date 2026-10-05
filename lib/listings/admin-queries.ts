@@ -228,7 +228,15 @@ const featuredAdminSelect = {
   title: listings.title,
   status: listings.status,
   categoryName: categories.name,
-  imageUrl: listings.featuredImageUrl,
+  // Same choice as pickListingImage: the flagged photo, else the first by
+  // position, else the listing's own featured_image_url.
+  imageUrl: sql<string | null>`coalesce(
+    (select ${listingImages.url} from ${listingImages}
+      where ${listingImages.listingId} = ${listings.id}
+      order by ${listingImages.isFeatured} desc, ${listingImages.position} asc
+      limit 1),
+    ${listings.featuredImageUrl}
+  )`,
   externalUrl: listings.externalUrl,
   hasImage: sql<boolean>`(
     exists (select 1 from ${listingImages} where ${listingImages.listingId} = ${listings.id})
