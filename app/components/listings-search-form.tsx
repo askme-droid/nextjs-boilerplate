@@ -293,7 +293,7 @@ export function ListingsSearchForm({
           {/* One swipeable row on phones, wrapping on wider screens. */}
           <div
             ref={chipRow}
-            className="relative -mx-1 flex gap-2 overflow-x-auto pb-1 pl-1 pr-8 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:pr-1 [&::-webkit-scrollbar]:hidden"
+            className="relative -mx-1 flex gap-2 overflow-x-auto pb-1 pl-1 pr-8 [scrollbar-width:none] sm:flex-wrap sm:justify-center sm:overflow-visible sm:pr-1 [&::-webkit-scrollbar]:hidden"
           >
             <Chip
               active={values.category === "" && !hasImageMatch}
