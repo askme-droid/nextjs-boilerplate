@@ -21,6 +21,9 @@ export default async function AdminPage() {
       <Link href="/admin/listings/synced" className={linkClass}>
         Synced listings
       </Link>
+      <Link href="/admin/tools/flyer-print" className={linkClass}>
+        Flyer print prep
+      </Link>
       {role === "admin" && (
         <Link href="/admin/categories" className={linkClass}>
           Manage categories
