@@ -114,6 +114,21 @@ export function ListingsSearchForm({
     if (timer.current) clearTimeout(timer.current);
   }, []);
 
+  // On phones the chips are one swipeable row, so the highlighted one can sit
+  // off-screen (after a reload, Back, or a pick from the dropdown). Slide the
+  // row — only the row, never the page — to put it in view.
+  const chipRow = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = chipRow.current;
+    const active = row?.querySelector<HTMLElement>("[aria-pressed='true']");
+    if (!row || !active || row.scrollWidth <= row.clientWidth) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    row.scrollTo({
+      left: active.offsetLeft - (row.clientWidth - active.offsetWidth) / 2,
+      behavior: reduce ? "auto" : "smooth",
+    });
+  }, [values.category, hasImageMatch]);
+
   // The new results have rendered once the URL's params change; if this
   // search asked for it, put the search card (and so the results) at the top.
   useEffect(() => {
@@ -276,7 +291,10 @@ export function ListingsSearchForm({
       {chips.length > 0 && (
         <div role="group" aria-label="Quick category filter" className="relative">
           {/* One swipeable row on phones, wrapping on wider screens. */}
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
+          <div
+            ref={chipRow}
+            className="relative -mx-1 flex gap-2 overflow-x-auto pb-1 pl-1 pr-8 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:pr-1 [&::-webkit-scrollbar]:hidden"
+          >
             <Chip
               active={values.category === "" && !hasImageMatch}
               onClick={() => changeChoice("category", "")}
