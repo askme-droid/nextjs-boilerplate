@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { del } from "@vercel/blob";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { isBlobVideoUrl } from "@/lib/listings/constants";
 
 // Same rule as every other action in this app: re-check requireStaff() here,
 // since a Server Action is reachable directly, not only through its page.
@@ -21,7 +23,26 @@ function refresh() {
   revalidatePath(FEATURED_PATH);
 }
 
-/** Pick a listing for the homepage; it goes to the end of the picked list. */
+/** Delete an uploaded clip from Blob storage. Best-effort: a failure leaves an
+ *  orphaned file, which is not worth failing the staff member's action over. */
+async function deleteVideoFile(url: string | null | undefined) {
+  if (!url || !isBlobVideoUrl(url)) return;
+  try {
+    await del(url);
+  } catch {
+    // ignore
+  }
+}
+
+function readVideoUrl(formData: FormData): string {
+  const videoUrl = String(formData.get("videoUrl") ?? "");
+  if (!isBlobVideoUrl(videoUrl)) done("That video upload wasn't recognised — try again.");
+  return videoUrl;
+}
+
+/** Pick a listing for the homepage slider; it goes to the end of the picked
+ *  list. Its video is uploaded afterwards (see setFeaturedVideo) — until then
+ *  the homepage simply skips it. */
 export async function addFeatured(formData: FormData) {
   await requireStaff();
   const id = String(formData.get("id") ?? "");
@@ -36,7 +57,31 @@ export async function addFeatured(formData: FormData) {
     .where(eq(listings.id, id));
 
   refresh();
-  done("Added to the homepage.");
+  done("Picked. Now upload its video so it shows in the slider.");
+}
+
+/** Save the clip for a picked listing (first upload or a replacement). The
+ *  video goes browser -> Blob first (see video-upload.tsx); its URL arrives
+ *  here. */
+export async function setFeaturedVideo(formData: FormData) {
+  await requireStaff();
+  const id = String(formData.get("id") ?? "");
+  if (!id) done("No listing selected.");
+  const videoUrl = readVideoUrl(formData);
+
+  const [previous] = await db
+    .select({ videoUrl: listings.featuredVideoUrl })
+    .from(listings)
+    .where(eq(listings.id, id));
+
+  await db
+    .update(listings)
+    .set({ featuredVideoUrl: videoUrl })
+    .where(and(eq(listings.id, id), eq(listings.homepageFeatured, true)));
+
+  await deleteVideoFile(previous?.videoUrl);
+  refresh();
+  done("Video saved.");
 }
 
 export async function removeFeatured(formData: FormData) {
@@ -44,13 +89,19 @@ export async function removeFeatured(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) done("No listing selected.");
 
-  await db
-    .update(listings)
-    .set({ homepageFeatured: false, homepageFeaturedOrder: 0 })
+  const [previous] = await db
+    .select({ videoUrl: listings.featuredVideoUrl })
+    .from(listings)
     .where(eq(listings.id, id));
 
+  await db
+    .update(listings)
+    .set({ homepageFeatured: false, homepageFeaturedOrder: 0, featuredVideoUrl: null })
+    .where(eq(listings.id, id));
+
+  await deleteVideoFile(previous?.videoUrl);
   refresh();
-  done("Removed from the homepage.");
+  done("Removed from the homepage slider.");
 }
 
 /** Swap a picked listing with its neighbour. Renumbers the whole picked list

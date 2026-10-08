@@ -1,0 +1,1 @@
+ALTER TABLE "listings" ADD COLUMN "featured_video_url" text;

@@ -50,6 +50,13 @@
       "when": 1791002973096,
       "tag": "0006_listing_homepage_featured_order",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791423006428,
+      "tag": "0007_listing_featured_video",
+      "breakpoints": true
     }
   ]
 }

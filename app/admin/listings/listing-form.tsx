@@ -243,8 +243,9 @@ export function ListingForm({
         <span>
           <span className="font-medium">Feature on the homepage</span>
           <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
-            Shown first in the &quot;Featured listings&quot; gallery (up to 6). Slots left
-            over are filled with the newest published listings that have an image.
+            Puts this listing in the homepage video slider (up to 6). It only shows once a
+            video is uploaded — do that, and set the order, on the Featured listings page
+            (Admin → Listings → Featured listings).
           </span>
         </span>
       </label>

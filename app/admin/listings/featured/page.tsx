@@ -8,6 +8,7 @@ import {
 } from "@/lib/listings/admin-queries";
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { addFeatured, moveFeatured, removeFeatured } from "../featured-actions";
+import { VideoUpload } from "./video-upload";
 
 const buttonClass =
   "rounded-md border border-zinc-300 px-2.5 py-1 text-sm font-medium hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent dark:border-zinc-700 dark:hover:bg-zinc-800";
@@ -15,8 +16,19 @@ const buttonClass =
 function Thumb({ row }: { row: FeaturedAdminRow }) {
   return (
     <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
-      {row.imageUrl && (
-        <Image src={row.imageUrl} alt="" fill unoptimized sizes="4rem" className="object-cover" />
+      {row.videoUrl ? (
+        // #t=0.1 makes the browser paint a frame instead of a black box.
+        <video
+          src={`${row.videoUrl}#t=0.1`}
+          muted
+          playsInline
+          preload="metadata"
+          className="size-full object-cover"
+        />
+      ) : (
+        row.imageUrl && (
+          <Image src={row.imageUrl} alt="" fill unoptimized sizes="4rem" className="object-cover" />
+        )
       )}
     </div>
   );
@@ -25,7 +37,7 @@ function Thumb({ row }: { row: FeaturedAdminRow }) {
 /** Why a picked listing isn't actually showing, or null if it is. */
 function problem(row: FeaturedAdminRow): string | null {
   if (row.status !== "published") return `Not published (${row.status}) — hidden until it is.`;
-  if (!row.hasImage) return "No photo — skipped until it has one.";
+  if (!row.videoUrl) return "No video — skipped until one is uploaded.";
   return null;
 }
 
@@ -42,11 +54,10 @@ export default async function FeaturedListingsAdminPage({
     searchFeaturableListings(role, q),
   ]);
 
-  // Mirrors the homepage: the gallery shows the first FEATURED_SLOTS picked
-  // listings that can actually render, then tops up with the newest.
+  // Mirrors the homepage: the slider shows the first FEATURED_SLOTS picked
+  // listings that are published and have a video. There is no top-up.
   const visible = picked.filter((row) => !problem(row));
   const shownIds = new Set(visible.slice(0, FEATURED_SLOTS).map((row) => row.id));
-  const autoFilled = Math.max(0, FEATURED_SLOTS - shownIds.size);
 
   return (
     <div className="flex flex-col gap-8">
@@ -59,9 +70,9 @@ export default async function FeaturedListingsAdminPage({
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Featured listings</h1>
         <p className="max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-          The homepage gallery shows {FEATURED_SLOTS} tiles, left to right, top row first. Pick
-          listings and put them in order here; any slot you leave empty is filled with the newest
-          listings automatically.
+          The homepage video slider shows up to {FEATURED_SLOTS} listings, in the order below. A
+          listing only appears once it has a video: pick it below, then use Upload video on its row
+          (MP4 or WebM, landscape 16:9, up to 50MB).
         </p>
       </div>
 
@@ -75,13 +86,13 @@ export default async function FeaturedListingsAdminPage({
         <h2 className="text-lg font-semibold">
           On the homepage{" "}
           <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">
-            ({shownIds.size} picked, {autoFilled} auto-filled)
+            ({shownIds.size} of {FEATURED_SLOTS} slides live)
           </span>
         </h2>
 
         {picked.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Nothing picked yet, so the gallery is showing the {FEATURED_SLOTS} newest listings.
+            Nothing picked yet, so the video slider is hidden on the homepage.
           </p>
         ) : (
           <ol className="flex flex-col divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
@@ -114,7 +125,8 @@ export default async function FeaturedListingsAdminPage({
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <VideoUpload listingId={row.id} label={row.videoUrl ? "Replace video" : "Upload video"} />
                     <form action={moveFeatured}>
                       <input type="hidden" name="id" value={row.id} />
                       <input type="hidden" name="direction" value="up" />
@@ -186,11 +198,6 @@ export default async function FeaturedListingsAdminPage({
                     {row.categoryName ?? "No category"}
                     {row.synced ? " · synced from fd.sg" : ""}
                   </p>
-                  {!row.hasImage && (
-                    <p className="text-sm text-amber-700 dark:text-amber-400">
-                      No photo — won&apos;t show until it has one.
-                    </p>
-                  )}
                 </div>
                 <form action={addFeatured}>
                   <input type="hidden" name="id" value={row.id} />

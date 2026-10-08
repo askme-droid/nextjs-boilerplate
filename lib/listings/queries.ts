@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 
@@ -300,32 +300,57 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
     .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
 }
 
-/**
- * Listings for the homepage "Featured listings" gallery: staff-flagged ones
- * first (homepage_featured), then topped up with the newest so the section is
- * still full before anyone has curated it. Listings with no image at all are
- * skipped — the gallery is image-led and a blank tile reads as broken.
- */
-export async function getFeaturedListings(limit = 6): Promise<ListingWithRelations[]> {
-  const hasImage = sql`(
-    exists (select 1 from ${listingImages} where ${listingImages.listingId} = ${listings.id})
-    or ${listings.featuredImageUrl} is not null
-  )`;
+export type FeaturedVideoSlide = {
+  id: string;
+  title: string;
+  slug: string;
+  /** Set for syndicated listings — the slide opens there instead of locally. */
+  externalUrl: string | null;
+  categoryName: string | null;
+  videoUrl: string;
+  /** The listing's photo, shown until the video has loaded; may be absent. */
+  posterUrl: string | null;
+};
 
+/**
+ * Slides for the homepage "Featured listings" video slider: published
+ * listings that staff picked (homepage_featured) *and* uploaded a video for,
+ * in the order set on /admin/listings/featured. There is deliberately no
+ * top-up with other listings — the slider is video-only, so a listing without
+ * one has nothing to show.
+ */
+export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]> {
   const rows = await db
-    .select({ id: listings.id })
+    .select({
+      id: listings.id,
+      title: listings.title,
+      slug: listings.slug,
+      externalUrl: listings.externalUrl,
+      categoryName: categories.name,
+      videoUrl: listings.featuredVideoUrl,
+      // Same photo choice as pickListingImage: the flagged one, else the first
+      // by position, else the listing's own featured_image_url.
+      posterUrl: sql<string | null>`coalesce(
+        (select ${listingImages.url} from ${listingImages}
+          where ${listingImages.listingId} = ${listings.id}
+          order by ${listingImages.isFeatured} desc, ${listingImages.position} asc
+          limit 1),
+        ${listings.featuredImageUrl}
+      )`,
+    })
     .from(listings)
-    .where(and(eq(listings.status, "published"), hasImage))
-    .orderBy(
-      desc(listings.homepageFeatured),
-      asc(listings.homepageFeaturedOrder),
-      desc(listings.createdAt),
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(
+      and(
+        eq(listings.status, "published"),
+        eq(listings.homepageFeatured, true),
+        isNotNull(listings.featuredVideoUrl),
+      ),
     )
+    .orderBy(asc(listings.homepageFeaturedOrder), desc(listings.createdAt))
     .limit(limit);
 
-  // getListingsByIds re-sorts to the order of the ids it's given, so the
-  // flagged-first ranking above survives the second query.
-  return getListingsByIds(rows.map((r) => r.id));
+  return rows.flatMap((r) => (r.videoUrl ? [{ ...r, videoUrl: r.videoUrl }] : []));
 }
 
 /**

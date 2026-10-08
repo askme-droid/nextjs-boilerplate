@@ -217,10 +217,10 @@ export type FeaturedAdminRow = {
   status: string;
   categoryName: string | null;
   imageUrl: string | null;
+  /** The slider clip; the homepage skips a picked listing that has none. */
+  videoUrl: string | null;
   /** Syndicated from elsewhere (fd.sg etc.) rather than owned here. */
   synced: boolean;
-  /** Has any photo at all — the gallery skips listings without one. */
-  hasImage: boolean;
 };
 
 const featuredAdminSelect = {
@@ -238,10 +238,7 @@ const featuredAdminSelect = {
     ${listings.featuredImageUrl}
   )`,
   externalUrl: listings.externalUrl,
-  hasImage: sql<boolean>`(
-    exists (select 1 from ${listingImages} where ${listingImages.listingId} = ${listings.id})
-    or ${listings.featuredImageUrl} is not null
-  )`,
+  videoUrl: listings.featuredVideoUrl,
 };
 
 function toFeaturedAdminRow(r: {
@@ -251,7 +248,7 @@ function toFeaturedAdminRow(r: {
   categoryName: string | null;
   imageUrl: string | null;
   externalUrl: string | null;
-  hasImage: boolean;
+  videoUrl: string | null;
 }): FeaturedAdminRow {
   return {
     id: r.id,
@@ -259,8 +256,8 @@ function toFeaturedAdminRow(r: {
     status: r.status,
     categoryName: r.categoryName,
     imageUrl: r.imageUrl,
+    videoUrl: r.videoUrl,
     synced: r.externalUrl !== null,
-    hasImage: r.hasImage,
   };
 }
 

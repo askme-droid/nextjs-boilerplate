@@ -50,13 +50,17 @@ export const listings = pgTable("listings", {
   status: text("status", { enum: LISTING_STATUSES }).notNull().default("draft"),
   featuredImageUrl: text("featured_image_url"),
   // Staff-curated pick for the homepage "Featured listings" section (see
-  // getFeaturedListings in lib/listings/queries.ts). Not to be confused with
+  // getFeaturedVideos in lib/listings/queries.ts). Not to be confused with
   // listing_images.is_featured, which is which *photo* represents a listing.
   homepageFeatured: boolean("homepage_featured").notNull().default(false),
   // Position among the flagged listings (lowest first); managed from
   // /admin/listings/featured. Ties (e.g. everything still at the default 0)
   // fall back to newest first.
   homepageFeaturedOrder: integer("homepage_featured_order").notNull().default(0),
+  // The clip shown in the homepage video slider (Vercel Blob URL, uploaded
+  // from /admin/listings/featured). The slider is video-only, so a picked
+  // listing without one is simply not shown.
+  featuredVideoUrl: text("featured_video_url"),
   // Set only for listings syndicated from elsewhere (e.g. fd.sg) that we show
   // in search/browse here but whose actual content stays at the source —
   // the card and the detail route both send visitors there instead of

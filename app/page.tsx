@@ -1,5 +1,5 @@
 import type { HeroSlide } from "@/app/components/hero-slider";
-import { FeaturedListings } from "@/app/components/featured-listings";
+import { FeaturedVideoSlider } from "@/app/components/featured-video-slider";
 import { HeroSection } from "@/components/blocks/hero-section-6";
 import { ListingCard } from "@/app/components/listing-card";
 import { ListingsPagination } from "@/app/components/listings-pagination";
@@ -8,9 +8,10 @@ import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/queries";
 import {
   getCategories,
-  getFeaturedListings,
+  getFeaturedVideos,
   getListings,
   getListingsByIds,
+  type FeaturedVideoSlide,
   type ListingCategory,
   type ListingWithRelations,
 } from "@/lib/listings/queries";
@@ -61,9 +62,9 @@ type PageData = {
   categories: ListingCategory[];
   experiences: ListingTag[];
   listings: ListingWithRelations[];
-  /** Homepage "Featured listings" gallery; empty (section hidden) on any
+  /** Homepage "Featured listings" video slider; empty (section hidden) on any
    *  search/filter/page > 1 so results aren't pushed below it. */
-  featured: ListingWithRelations[];
+  featured: FeaturedVideoSlide[];
   page: number;
   totalPages: number;
 };
@@ -127,7 +128,7 @@ async function loadPageData(
       getListings({ q, category, location, experience, page }),
       // Decorative extra: a failure here must not take the whole page down
       // into the error state, so it degrades to "no featured section".
-      isDefaultView ? getFeaturedListings(FEATURED_SLOTS).catch(() => []) : Promise.resolve([]),
+      isDefaultView ? getFeaturedVideos(FEATURED_SLOTS).catch(() => []) : Promise.resolve([]),
     ]);
 
     return {
@@ -162,13 +163,9 @@ export default async function Home({
     <main className="flex flex-1 flex-col">
       <HeroSection slides={HERO_SLIDES} />
 
-      {result.ok && <FeaturedListings listings={result.data.featured} />}
+      {result.ok && <FeaturedVideoSlider slides={result.data.featured} />}
 
-      {/* relative z-10: the featured gallery above pulls itself down into this
-          block's top edge (see GALLERY_SLACK), and its pinned box is a
-          positioned element that would otherwise sit on top of — and eat
-          clicks meant for — the top of the search card. */}
-      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-6 pt-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-6 pt-8">
         {!result.ok ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
             <p className="text-lg text-red-600 dark:text-red-400">
