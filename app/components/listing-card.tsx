@@ -1,21 +1,15 @@
-import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format-relative-time";
+import { endsSoonLabel, isNewListing } from "@/lib/listings/badges";
 import { pickListingImage } from "@/lib/listings/image";
 import type { ListingWithRelations } from "@/lib/listings/queries";
 
-export function ListingCard({
-  listing,
-  className,
-  style,
-}: {
-  listing: ListingWithRelations;
-  className?: string;
-  style?: CSSProperties;
-}) {
+export function ListingCard({ listing }: { listing: ListingWithRelations }) {
   const imageUrl = pickListingImage(listing);
+  const isNew = isNewListing(listing.created_at);
+  const endsSoon = endsSoonLabel(listing.expires_at);
 
   const body = (
     <>
@@ -31,13 +25,40 @@ export function ListingCard({
             fill
             unoptimized
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none"
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-600">
             No image
           </div>
         )}
+
+        {(isNew || endsSoon) && (
+          <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-2">
+            {isNew ? (
+              <span className="rounded-full bg-brand-teal px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
+                New
+              </span>
+            ) : (
+              <span />
+            )}
+            {endsSoon && (
+              <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
+                {endsSoon}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Slides up on hover or keyboard focus. Decorative: the whole card is
+            already one link. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-2 items-center justify-center gap-1 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3 pb-3 pt-12 text-sm font-semibold text-white opacity-0 transition duration-300 group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 motion-reduce:translate-y-0 motion-reduce:transition-none"
+        >
+          View deal
+          {listing.external_url ? <ArrowUpRight className="size-4" /> : <ArrowRight className="size-4" />}
+        </span>
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-4">
@@ -72,11 +93,7 @@ export function ListingCard({
 
   return (
     <article
-      className={cn(
-        "group overflow-hidden rounded-lg border border-zinc-200 transition-shadow hover:shadow-md hover:shadow-brand-teal/10 dark:border-zinc-800",
-        className,
-      )}
-      style={style}
+      className="group h-full overflow-hidden rounded-lg border border-zinc-200 bg-white transition-[transform,box-shadow,border-color] duration-300 hover:border-brand-teal/40 hover:shadow-lg hover:shadow-brand-teal/15 motion-safe:hover:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-950"
     >
       {listing.external_url ? (
         // Syndicated from elsewhere (e.g. fd.sg) — sends the visitor to the

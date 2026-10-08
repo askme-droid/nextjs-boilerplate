@@ -2,6 +2,9 @@ import type { HeroSlide } from "@/app/components/hero-slider";
 import { FeaturedVideoSlider } from "@/app/components/featured-video-slider";
 import { HeroSection } from "@/components/blocks/hero-section-6";
 import { ListingCard } from "@/app/components/listing-card";
+import { Reveal } from "@/app/components/reveal";
+import type { CategoryChip } from "@/app/components/listings-search-form";
+import { getCategoriesWithCounts } from "@/lib/categories/queries";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
@@ -60,6 +63,8 @@ type PageData = {
   experience: string;
   isImageSearch: boolean;
   categories: ListingCategory[];
+  /** Quick-filter pills: categories that have something to show. */
+  chips: CategoryChip[];
   experiences: ListingTag[];
   listings: ListingWithRelations[];
   /** Homepage "Featured listings" video slider; empty (section hidden) on any
@@ -69,6 +74,15 @@ type PageData = {
   totalPages: number;
 };
 
+/** Categories with at least one published listing, fullest first. */
+async function getCategoryChips(): Promise<CategoryChip[]> {
+  const rows = await getCategoriesWithCounts();
+  return rows
+    .filter((row) => row.publishedCount > 0)
+    .sort((a, b) => b.publishedCount - a.publishedCount || a.name.localeCompare(b.name))
+    .map((row) => ({ slug: row.slug, name: row.name, count: row.publishedCount }));
+}
+
 async function loadPageData(
   params: Record<string, string | string[] | undefined>,
 ): Promise<{ ok: true; data: PageData } | { ok: false; error: string }> {
@@ -76,9 +90,11 @@ async function loadPageData(
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
   try {
-    const [categories, experiences] = await Promise.all([
+    const [categories, experiences, chips] = await Promise.all([
       getCategories(),
       getExperienceTags(),
+      // Decorative extra, like the slider: if it fails the pills just go away.
+      getCategoryChips().catch((): CategoryChip[] => []),
     ]);
 
     // "Search by image" (see app/components/image-search-button.tsx) is its
@@ -98,6 +114,7 @@ async function loadPageData(
           experience: "",
           isImageSearch: true,
           categories,
+          chips,
           experiences,
           listings,
           featured: [],
@@ -140,6 +157,7 @@ async function loadPageData(
         experience,
         isImageSearch: false,
         categories,
+        chips,
         experiences,
         listings,
         featured,
@@ -157,7 +175,16 @@ export default async function Home({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const result = await loadPageData(await searchParams);
+  const params = await searchParams;
+  const result = await loadPageData(params);
+  const gridKey = [
+    firstValue(params.q),
+    firstValue(params.category),
+    firstValue(params.location),
+    firstValue(params.experience),
+    firstValue(params.imageMatch),
+    firstValue(params.page),
+  ].join("|");
 
   return (
     <main className="flex flex-1 flex-col">
@@ -188,6 +215,7 @@ export default async function Home({
                 experience={result.data.experience}
                 hasImageMatch={result.data.isImageSearch}
                 categories={result.data.categories}
+                chips={result.data.chips}
                 experiences={result.data.experiences}
               />
             </div>
@@ -210,20 +238,17 @@ export default async function Home({
                     : "No listings have been published yet."}
               </p>
             ) : (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              // Keyed by the search itself, so a new search or page replays the
+              // reveal for the whole grid instead of silently swapping cards.
+              <div
+                key={gridKey}
+                className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4"
+              >
                 {result.data.listings.map((listing, index) => (
-                  <ListingCard
-                    key={listing.id}
-                    listing={listing}
-                    // Photo-search results rise in best-match-first; ordinary
-                    // browsing/filtering stays instant.
-                    className={result.data.isImageSearch ? "motion-safe:animate-rise-in" : undefined}
-                    style={
-                      result.data.isImageSearch
-                        ? { animationDelay: `${Math.min(index, 11) * 70}ms` }
-                        : undefined
-                    }
-                  />
+                  // Staggered by column, so a row arrives left to right.
+                  <Reveal key={listing.id} delay={(index % 4) * 80} className="h-full">
+                    <ListingCard listing={listing} />
+                  </Reveal>
                 ))}
               </div>
             )}
