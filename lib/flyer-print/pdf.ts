@@ -11,6 +11,7 @@
 // were when the PDF was made.
 
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+import { ENHANCE_SCALE, MAX_ENHANCED_PIXELS } from "./enhance";
 import { placement, type FitMode, type PrintPlan } from "./geometry";
 
 type PdfJs = typeof import("pdfjs-dist");
@@ -87,6 +88,24 @@ function canvasFor(width: number, height: number) {
 export async function renderPdfPreview(page: PDFPageProxy, longSide = 1200): Promise<ImageBitmap> {
   const { width, height } = pageSize(page);
   const scale = longSide / Math.max(width, height);
+  const canvas = canvasFor(Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)));
+  await page.render({ canvas, viewport: page.getViewport({ scale }), background: "#ffffff" }).promise;
+  const bitmap = await createImageBitmap(canvas);
+  canvas.width = 0;
+  canvas.height = 0;
+  return bitmap;
+}
+
+/** The page drawn at the size the AI step starts from: large enough to hold
+ *  the detail of a picture inside the PDF (about 135 dpi on A4), small enough
+ *  that its 4x enlargement stays within what the browser can hold. */
+export async function renderPdfForEnhance(page: PDFPageProxy, longSide = 1600): Promise<ImageBitmap> {
+  const { width, height } = pageSize(page);
+  let scale = longSide / Math.max(width, height);
+  const maxInputPixels = (MAX_ENHANCED_PIXELS / (ENHANCE_SCALE * ENHANCE_SCALE)) * 0.9;
+  if (width * height * scale * scale > maxInputPixels) {
+    scale = Math.sqrt(maxInputPixels / (width * height));
+  }
   const canvas = canvasFor(Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)));
   await page.render({ canvas, viewport: page.getViewport({ scale }), background: "#ffffff" }).promise;
   const bitmap = await createImageBitmap(canvas);

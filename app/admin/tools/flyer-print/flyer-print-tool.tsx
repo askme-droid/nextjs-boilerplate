@@ -31,6 +31,7 @@ import {
   isPdfFile,
   openPdf,
   pageSize,
+  renderPdfForEnhance,
   renderPdfPreview,
   renderPdfToTrim,
 } from "@/lib/flyer-print/pdf";
@@ -70,7 +71,9 @@ type Result = {
   pdfBytes: number;
 };
 
-type Enhanced = EnhanceResult & { id: number };
+// For a PDF, `reference` is the page drawing the AI started from (the
+// "before" side of the comparison); for a picture it is the picture itself.
+type Enhanced = EnhanceResult & { id: number; reference?: ImageBitmap };
 
 const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
@@ -146,7 +149,8 @@ export function FlyerPrintTool() {
 
   const dpi = source && !source.pdf ? effectiveDpi(source.bitmap.width, source.bitmap.height, plan, fit) : null;
   const verdict = dpi === null ? null : judgeDpi(dpi);
-  const printScale = source ? placement(source.bitmap.width, source.bitmap.height, plan, fit).scale : 1;
+  const reference = enhanced?.reference ?? source?.bitmap ?? null;
+  const printScale = reference ? placement(reference.width, reference.height, plan, fit).scale : 1;
   const cropped = source && fit === "fill" ? croppedShare(source.bitmap.width, source.bitmap.height, plan) : 0;
 
   // The downloads belong to the settings they were made with.
@@ -170,6 +174,7 @@ export function FlyerPrintTool() {
     if (held) {
       held.canvas.width = 0;
       held.canvas.height = 0;
+      held.reference?.close();
     }
     enhancedRef.current = null;
     setEnhanced(null);
@@ -182,8 +187,13 @@ export function FlyerPrintTool() {
     const controller = new AbortController();
     abortRef.current = controller;
     setEnhancing({ phase: "loading", done: 0, total: 0 });
+    let drawing: ImageBitmap | null = null;
     try {
-      const made = await enhanceBitmap(source.bitmap, {
+      // A picture is enhanced as it is. A PDF page is first drawn at a
+      // moderate size (so a picture inside it is not blown up before the AI
+      // sees it), and that drawing is what the AI works from.
+      if (source.pdf) drawing = await renderPdfForEnhance(source.pdf.page);
+      const made = await enhanceBitmap(drawing ?? source.bitmap, {
         signal: controller.signal,
         onProgress: setEnhancing,
       });
@@ -191,9 +201,11 @@ export function FlyerPrintTool() {
       if (previous) {
         previous.canvas.width = 0;
         previous.canvas.height = 0;
+        previous.reference?.close();
       }
       enhanceCount.current += 1;
-      const next = { ...made, id: enhanceCount.current };
+      const next: Enhanced = { ...made, id: enhanceCount.current, reference: drawing ?? undefined };
+      drawing = null; // now owned by `next`
       enhancedRef.current = next;
       setEnhanced(next);
       setUseEnhanced(true);
@@ -206,6 +218,7 @@ export function FlyerPrintTool() {
         );
       }
     } finally {
+      drawing?.close();
       setEnhancing(null);
       abortRef.current = null;
     }
@@ -267,6 +280,8 @@ export function FlyerPrintTool() {
     setWorking("Loading the page…");
     try {
       const next = await preparePdfSource(source.pdf.doc, pageNumber, source.name);
+      abortRef.current?.abort();
+      dropEnhanced();
       source.bitmap.close();
       setSource(next);
     } catch {
@@ -424,12 +439,11 @@ export function FlyerPrintTool() {
           {source?.pdf && (
             <p className={`${hintClass} rounded-lg border border-zinc-200 p-3 dark:border-zinc-800`}>
               PDFs are drawn directly at the print size, so text and shapes stay sharp on any paper.
-              Photos inside a PDF are only as sharp as they were when it was saved, and AI enhancement
-              is for picture files.
+              Photos inside a PDF are only as sharp as they were when it was saved.
             </p>
           )}
 
-          {source && !source.pdf && (
+          {source && (
             <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
               <div>
                 <h3 className="text-sm font-semibold">Low resolution? Enhance with AI</h3>
@@ -437,6 +451,12 @@ export function FlyerPrintTool() {
                   Rebuilds sharper edges and text, with about {ENHANCE_SCALE}× more pixels. It runs on
                   this computer, so the flyer is never uploaded.
                 </p>
+                {source.pdf && (
+                  <p className={hintClass}>
+                    For a PDF, use this when it holds a low-resolution picture. Skip it for PDFs made
+                    from text and shapes, which are already sharp.
+                  </p>
+                )}
               </div>
 
               {!canEnhance(source.bitmap.width, source.bitmap.height) ? (
@@ -517,7 +537,7 @@ export function FlyerPrintTool() {
                     <span className="font-medium">Use the enhanced version</span>
                   </label>
                   <EnhanceCompare
-                    original={source.bitmap}
+                    original={enhanced.reference ?? source.bitmap}
                     enhanced={enhanced.canvas}
                     printScale={printScale}
                   />
@@ -671,7 +691,9 @@ export function FlyerPrintTool() {
                 <dd>
                   A PDF page, {Math.round(source.pdf.widthMm)} × {Math.round(source.pdf.heightMm)} mm.{" "}
                   <span className="text-emerald-700 dark:text-emerald-400">
-                    It is drawn at the print size, so text and shapes will be sharp.
+                    {enhancedInUse
+                      ? "The AI-enhanced version is in use."
+                      : "It is drawn at the print size, so text and shapes will be sharp."}
                   </span>
                 </dd>
               </>

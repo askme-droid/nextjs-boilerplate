@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ENHANCE_SCALE } from "@/lib/flyer-print/enhance";
 
 // The window is a patch of the page at real print resolution, so what you see
 // is what the printer gets (shown larger than life so edges are easy to judge).
@@ -88,6 +87,8 @@ export function EnhanceCompare({
     const srcH = Math.min(original.height, VIEW_H / printScale);
     const viewW = Math.max(1, Math.round(srcW * printScale));
     const viewH = Math.max(1, Math.round(srcH * printScale));
+    // How many pixels the enhanced image has per pixel of the original.
+    const ratio = enhanced.width / original.width;
     const spot = AREAS[area];
     const sx = clamp(spot.x * original.width - srcW / 2, 0, original.width - srcW);
     const sy = clamp(spot.y * original.height - srcH / 2, 0, original.height - srcH);
@@ -107,10 +108,10 @@ export function EnhanceCompare({
     ctx.clip();
     ctx.drawImage(
       enhanced,
-      sx * ENHANCE_SCALE,
-      sy * ENHANCE_SCALE,
-      srcW * ENHANCE_SCALE,
-      srcH * ENHANCE_SCALE,
+      sx * ratio,
+      sy * ratio,
+      srcW * ratio,
+      srcH * ratio,
       0,
       0,
       viewW,
