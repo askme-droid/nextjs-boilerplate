@@ -15,6 +15,9 @@ import {
 
 export type BleedMode = "mirror" | "stretch";
 
+/** The flyer to print: the uploaded image, or its AI-enhanced version. */
+export type PrintSource = ImageBitmap | HTMLCanvasElement;
+
 export type RenderOptions = {
   plan: PrintPlan;
   fit: FitMode;
@@ -71,7 +74,7 @@ function toBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
 
 /** The flyer on the trim area at exactly 300 dpi: resized with pica (high
  *  quality Lanczos-style resampling), cropped to fill or fitted on white. */
-async function buildTrim(bitmap: ImageBitmap, plan: PrintPlan, fit: FitMode, onStage: Stage) {
+async function buildTrim(bitmap: PrintSource, plan: PrintPlan, fit: FitMode, onStage: Stage) {
   const { Pica } = await import("pica");
   const pica = new Pica();
 
@@ -84,7 +87,7 @@ async function buildTrim(bitmap: ImageBitmap, plan: PrintPlan, fit: FitMode, onS
   onStage("Resizing to 300 dpi…");
   await nextFrame();
 
-  let source: ImageBitmap | HTMLCanvasElement = bitmap;
+  let source: PrintSource = bitmap;
   let cropped: HTMLCanvasElement | null = null;
   let targetW = drawW;
   let targetH = drawH;
@@ -287,7 +290,7 @@ async function buildPdf(art: HTMLCanvasElement, plan: PrintPlan, title: string) 
 // --- Entry point -----------------------------------------------------------
 
 export async function renderPrintFiles(
-  bitmap: ImageBitmap,
+  bitmap: PrintSource,
   options: RenderOptions,
   onStage: Stage,
 ): Promise<RenderResult> {

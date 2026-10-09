@@ -10,12 +10,22 @@ import {
   croppedShare,
   effectiveDpi,
   judgeDpi,
+  placement,
   planPrint,
   type FitMode,
   type Orientation,
   type PaperKey,
 } from "@/lib/flyer-print/geometry";
-import { renderPrintFiles, type BleedMode } from "@/lib/flyer-print/render";
+import {
+  ENHANCE_SCALE,
+  canEnhance,
+  enhanceBitmap,
+  webGpuAvailable,
+  type EnhanceProgress,
+  type EnhanceResult,
+} from "@/lib/flyer-print/enhance";
+import { renderPrintFiles, type BleedMode, type PrintSource } from "@/lib/flyer-print/render";
+import { EnhanceCompare } from "./enhance-compare";
 
 const fieldClass =
   "rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700";
@@ -39,6 +49,8 @@ type Result = {
   pdfBytes: number;
 };
 
+type Enhanced = EnhanceResult & { id: number };
+
 const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 const verdictClass = {
@@ -61,6 +73,13 @@ export function FlyerPrintTool() {
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [enhanced, setEnhanced] = useState<Enhanced | null>(null);
+  const [useEnhanced, setUseEnhanced] = useState(true);
+  const [enhancing, setEnhancing] = useState<EnhanceProgress | null>(null);
+  const [gpu, setGpu] = useState<boolean | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const enhancedRef = useRef<Enhanced | null>(null);
+  const enhanceCount = useRef(0);
 
   // Everything we've made an object URL for, so it can be released.
   const urls = useRef<string[]>([]);
@@ -73,6 +92,17 @@ export function FlyerPrintTool() {
     return () => held.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    void webGpuAvailable().then((available) => {
+      if (alive) setGpu(available);
+    });
+    return () => {
+      alive = false;
+      abortRef.current?.abort();
+    };
+  }, []);
+
   const orientation: Orientation =
     orientationChoice === "auto"
       ? source
@@ -82,8 +112,13 @@ export function FlyerPrintTool() {
   const bleedMm = addBleed ? Math.min(MAX_BLEED_MM, Math.max(0, Number.parseFloat(bleedInput) || 0)) : 0;
   const plan = planPrint({ paper, orientation, bleedMm, marks });
 
+  // The AI-enhanced copy (4x the pixels) stands in for the original when chosen.
+  const enhancedInUse = !!enhanced && useEnhanced;
+  const activeSource: PrintSource | null = source ? (enhancedInUse ? enhanced.canvas : source.bitmap) : null;
+
   const dpi = source ? effectiveDpi(source.bitmap.width, source.bitmap.height, plan, fit) : null;
   const verdict = dpi === null ? null : judgeDpi(dpi);
+  const printScale = source ? placement(source.bitmap.width, source.bitmap.height, plan, fit).scale : 1;
   const cropped = source && fit === "fill" ? croppedShare(source.bitmap.width, source.bitmap.height, plan) : 0;
 
   // The downloads belong to the settings they were made with.
@@ -97,8 +132,55 @@ export function FlyerPrintTool() {
     bleedMm,
     bleedMode,
     marks,
+    enhancedInUse ? enhanced.id : 0,
   ]);
   const current = result && result.key === settingsKey ? result : null;
+
+  function dropEnhanced() {
+    const held = enhancedRef.current;
+    if (held) {
+      held.canvas.width = 0;
+      held.canvas.height = 0;
+    }
+    enhancedRef.current = null;
+    setEnhanced(null);
+    setEnhancing(null);
+  }
+
+  async function enhance() {
+    if (!source) return;
+    setError(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setEnhancing({ phase: "loading", done: 0, total: 0 });
+    try {
+      const made = await enhanceBitmap(source.bitmap, {
+        signal: controller.signal,
+        onProgress: setEnhancing,
+      });
+      const previous = enhancedRef.current;
+      if (previous) {
+        previous.canvas.width = 0;
+        previous.canvas.height = 0;
+      }
+      enhanceCount.current += 1;
+      const next = { ...made, id: enhanceCount.current };
+      enhancedRef.current = next;
+      setEnhanced(next);
+      setUseEnhanced(true);
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
+        setError(
+          e instanceof Error
+            ? e.message
+            : "The AI enhancement could not run in this browser. You can still create the print files without it.",
+        );
+      }
+    } finally {
+      setEnhancing(null);
+      abortRef.current = null;
+    }
+  }
 
   async function loadFile(file: File) {
     setError(null);
@@ -118,6 +200,8 @@ export function FlyerPrintTool() {
       setError("That image is too large to process in the browser (over 120 megapixels).");
       return;
     }
+    abortRef.current?.abort();
+    dropEnhanced();
     source?.bitmap.close();
     setSource({ name: file.name, bitmap, previewUrl: track(URL.createObjectURL(file)) });
   }
@@ -130,13 +214,13 @@ export function FlyerPrintTool() {
   }
 
   async function create() {
-    if (!source) return;
+    if (!source || !activeSource) return;
     setError(null);
     setWorking("Starting…");
     const baseName = source.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "-") || "flyer";
     const title = `${baseName} — ${paper} print file`;
     try {
-      const made = await renderPrintFiles(source.bitmap, { plan, fit, bleedMode, title }, setWorking);
+      const made = await renderPrintFiles(activeSource, { plan, fit, bleedMode, title }, setWorking);
       setResult({
         key: settingsKey,
         baseName,
@@ -157,7 +241,7 @@ export function FlyerPrintTool() {
     }
   }
 
-  const suffix = `${paper}-300dpi${plan.bleedMm > 0 ? `-bleed${plan.bleedMm}mm` : ""}${plan.marks ? "-marks" : ""}`;
+  const suffix = `${paper}-300dpi${enhancedInUse ? "-ai" : ""}${plan.bleedMm > 0 ? `-bleed${plan.bleedMm}mm` : ""}${plan.marks ? "-marks" : ""}`;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
@@ -201,6 +285,107 @@ export function FlyerPrintTool() {
                   {source.bitmap.width} × {source.bitmap.height} px
                 </p>
               </div>
+            </div>
+          )}
+
+          {source && (
+            <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <div>
+                <h3 className="text-sm font-semibold">Low resolution? Enhance with AI</h3>
+                <p className={hintClass}>
+                  Rebuilds sharper edges and text, with about {ENHANCE_SCALE}× more pixels. It runs on
+                  this computer, so the flyer is never uploaded.
+                </p>
+              </div>
+
+              {!canEnhance(source.bitmap.width, source.bitmap.height) ? (
+                <p className={hintClass}>
+                  This image already has plenty of pixels, so there is nothing to gain here.
+                </p>
+              ) : enhancing ? (
+                <div className="flex flex-col gap-2">
+                  <div
+                    role="progressbar"
+                    aria-label="AI enhancement progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={enhancing.total ? Math.round((enhancing.done / enhancing.total) * 100) : 0}
+                    className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+                  >
+                    <div
+                      className="h-full bg-brand-teal transition-[width]"
+                      style={{
+                        width: enhancing.total ? `${(enhancing.done / enhancing.total) * 100}%` : "8%",
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span aria-live="polite">
+                      {enhancing.phase === "loading"
+                        ? "Loading the AI model…"
+                        : `Enhancing… ${enhancing.done} of ${enhancing.total}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => abortRef.current?.abort()}
+                      className="text-sm text-zinc-600 underline underline-offset-4 hover:text-foreground dark:text-zinc-400"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={enhance}
+                      disabled={working !== null}
+                      className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    >
+                      {enhanced ? "Enhance again" : "Enhance with AI"}
+                    </button>
+                    {gpu !== null && !enhanced && (
+                      <span className={hintClass}>
+                        {gpu
+                          ? "Uses your graphics card — usually a few seconds."
+                          : "No graphics card access here, so it runs on the processor — it can take a minute or two."}
+                      </span>
+                    )}
+                  </div>
+                  {!enhanced && (
+                    <p className={hintClass}>
+                      The first time, it downloads about 30 MB, which your browser then keeps.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {enhanced && !enhancing && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                    Enhanced in {(enhanced.ms / 1000).toFixed(1)} s on the{" "}
+                    {enhanced.backend === "webgpu" ? "graphics card" : "processor"}.
+                  </p>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={useEnhanced}
+                      onChange={(e) => setUseEnhanced(e.target.checked)}
+                    />
+                    <span className="font-medium">Use the enhanced version</span>
+                  </label>
+                  <EnhanceCompare
+                    original={source.bitmap}
+                    enhanced={enhanced.canvas}
+                    printScale={printScale}
+                  />
+                  <p className={hintClass}>
+                    AI can smooth very fine detail and add a faint glow around dark text. Check small
+                    print in the comparison before using it.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -344,7 +529,13 @@ export function FlyerPrintTool() {
                 <dt className="text-zinc-500 dark:text-zinc-400">Your flyer is</dt>
                 <dd>
                   <span className="font-medium">about {Math.round(dpi)} dpi</span> at this size.{" "}
-                  <span className={verdictClass[verdict.level]}>{verdict.text}</span>
+                  {enhancedInUse ? (
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      The AI-enhanced version is in use.
+                    </span>
+                  ) : (
+                    <span className={verdictClass[verdict.level]}>{verdict.text}</span>
+                  )}
                 </dd>
               </>
             )}
