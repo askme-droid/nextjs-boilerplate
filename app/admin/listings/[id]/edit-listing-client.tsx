@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import type { ListingCategory, ListingTag } from "@/lib/listings/queries";
 import type { ListingFormValues } from "../actions";
 import { ListingForm } from "../listing-form";
 import { generateListing, type GenerateState } from "../generate-actions";
+import { FlyerReader } from "./flyer-reader";
 
 const fieldClass =
   "rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -26,6 +27,8 @@ export function EditListingClient({
    *  button (see ListingForm). */
   children?: React.ReactNode;
 }) {
+  // The flyer picked in the box below, also read by the free flyer reader.
+  const flyerInput = useRef<HTMLInputElement>(null);
   const [state, formAction, pending] = useActionState<GenerateState, FormData>(
     generateListing,
     {},
@@ -65,6 +68,7 @@ export function EditListingClient({
           <label className="text-sm">
             Flyer image (optional)
             <input
+              ref={flyerInput}
               type="file"
               name="image"
               accept="image/png,image/jpeg,image/webp"
@@ -91,6 +95,8 @@ export function EditListingClient({
             you click &quot;Save changes&quot;.
           </p>
         </form>
+
+        <FlyerReader categories={categories} getFile={() => flyerInput.current?.files?.[0] ?? null} />
       </section>
 
       <ListingForm
