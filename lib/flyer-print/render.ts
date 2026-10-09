@@ -23,6 +23,9 @@ export type RenderOptions = {
   fit: FitMode;
   bleedMode: BleedMode;
   title: string;
+  /** A finished trim-sized canvas (a PDF page drawn at exactly 300 dpi). When
+   *  given, the source is not resized at all and is only used for its shape. */
+  trim?: HTMLCanvasElement;
 };
 
 export type RenderResult = {
@@ -296,7 +299,7 @@ export async function renderPrintFiles(
 ): Promise<RenderResult> {
   const { plan, fit, bleedMode, title } = options;
 
-  const trim = await buildTrim(bitmap, plan, fit, onStage);
+  const trim = options.trim ?? (await buildTrim(bitmap, plan, fit, onStage));
 
   onStage(plan.bleed > 0 ? "Adding bleed…" : "Preparing the page…");
   await nextFrame();

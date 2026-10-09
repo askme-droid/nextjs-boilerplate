@@ -25,6 +25,16 @@ import {
   type EnhanceResult,
 } from "@/lib/flyer-print/enhance";
 import { renderPrintFiles, type BleedMode, type PrintSource } from "@/lib/flyer-print/render";
+import {
+  PdfProblem,
+  type OpenedPdf,
+  isPdfFile,
+  openPdf,
+  pageSize,
+  renderPdfPreview,
+  renderPdfToTrim,
+} from "@/lib/flyer-print/pdf";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { EnhanceCompare } from "./enhance-compare";
 
 const fieldClass =
@@ -37,7 +47,18 @@ const downloadClass =
 // Decoding and resizing hold several full-size copies in memory at once.
 const MAX_SOURCE_PIXELS = 120_000_000;
 
-type Source = { name: string; bitmap: ImageBitmap; previewUrl: string };
+type PdfInfo = {
+  doc: PDFDocumentProxy;
+  page: PDFPageProxy;
+  pageNumber: number;
+  pageCount: number;
+  widthMm: number;
+  heightMm: number;
+};
+
+// For a PDF, `bitmap` is only a small rendering (to show a thumbnail and read
+// the page's shape); the print files are drawn from the PDF page itself.
+type Source = { name: string; bitmap: ImageBitmap; previewUrl: string; pdf?: PdfInfo };
 
 type Result = {
   key: string;
@@ -80,6 +101,7 @@ export function FlyerPrintTool() {
   const abortRef = useRef<AbortController | null>(null);
   const enhancedRef = useRef<Enhanced | null>(null);
   const enhanceCount = useRef(0);
+  const pdfRef = useRef<OpenedPdf | null>(null);
 
   // Everything we've made an object URL for, so it can be released.
   const urls = useRef<string[]>([]);
@@ -90,6 +112,12 @@ export function FlyerPrintTool() {
   useEffect(() => {
     const held = urls.current;
     return () => held.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      void pdfRef.current?.close();
+    };
   }, []);
 
   useEffect(() => {
@@ -116,7 +144,7 @@ export function FlyerPrintTool() {
   const enhancedInUse = !!enhanced && useEnhanced;
   const activeSource: PrintSource | null = source ? (enhancedInUse ? enhanced.canvas : source.bitmap) : null;
 
-  const dpi = source ? effectiveDpi(source.bitmap.width, source.bitmap.height, plan, fit) : null;
+  const dpi = source && !source.pdf ? effectiveDpi(source.bitmap.width, source.bitmap.height, plan, fit) : null;
   const verdict = dpi === null ? null : judgeDpi(dpi);
   const printScale = source ? placement(source.bitmap.width, source.bitmap.height, plan, fit).scale : 1;
   const cropped = source && fit === "fill" ? croppedShare(source.bitmap.width, source.bitmap.height, plan) : 0;
@@ -126,6 +154,7 @@ export function FlyerPrintTool() {
     source?.name,
     source?.bitmap.width,
     source?.bitmap.height,
+    source?.pdf?.pageNumber,
     paper,
     orientation,
     fit,
@@ -182,10 +211,79 @@ export function FlyerPrintTool() {
     }
   }
 
+  /** Opens a page of a PDF: a small rendering for the thumbnail and shape. */
+  async function preparePdfSource(doc: PDFDocumentProxy, pageNumber: number, name: string): Promise<Source> {
+    const page = await doc.getPage(pageNumber);
+    const size = pageSize(page);
+    const bitmap = await renderPdfPreview(page);
+    const thumb = document.createElement("canvas");
+    thumb.width = bitmap.width;
+    thumb.height = bitmap.height;
+    thumb.getContext("2d")?.drawImage(bitmap, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => thumb.toBlob(resolve, "image/jpeg", 0.8));
+    thumb.width = 0;
+    return {
+      name,
+      bitmap,
+      previewUrl: blob ? track(URL.createObjectURL(blob)) : "",
+      pdf: {
+        doc,
+        page,
+        pageNumber,
+        pageCount: doc.numPages,
+        widthMm: size.widthMm,
+        heightMm: size.heightMm,
+      },
+    };
+  }
+
+  async function loadPdf(file: File) {
+    setWorking("Opening the PDF…");
+    try {
+      const opened = await openPdf(file);
+      let next: Source;
+      try {
+        next = await preparePdfSource(opened.doc, 1, file.name);
+      } catch (e) {
+        void opened.close();
+        throw e;
+      }
+      abortRef.current?.abort();
+      dropEnhanced();
+      source?.bitmap.close();
+      void pdfRef.current?.close();
+      pdfRef.current = opened;
+      setSource(next);
+    } catch (e) {
+      setError(e instanceof PdfProblem ? e.message : "That PDF could not be opened.");
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function changePdfPage(pageNumber: number) {
+    if (!source?.pdf) return;
+    setError(null);
+    setWorking("Loading the page…");
+    try {
+      const next = await preparePdfSource(source.pdf.doc, pageNumber, source.name);
+      source.bitmap.close();
+      setSource(next);
+    } catch {
+      setError("That page could not be drawn.");
+    } finally {
+      setWorking(null);
+    }
+  }
+
   async function loadFile(file: File) {
     setError(null);
+    if (isPdfFile(file)) {
+      await loadPdf(file);
+      return;
+    }
     if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) {
-      setError("Choose a PNG, JPEG or WebP image.");
+      setError("Choose a PNG, JPEG, WebP or PDF file.");
       return;
     }
     let bitmap: ImageBitmap;
@@ -203,6 +301,8 @@ export function FlyerPrintTool() {
     abortRef.current?.abort();
     dropEnhanced();
     source?.bitmap.close();
+    void pdfRef.current?.close();
+    pdfRef.current = null;
     setSource({ name: file.name, bitmap, previewUrl: track(URL.createObjectURL(file)) });
   }
 
@@ -217,10 +317,20 @@ export function FlyerPrintTool() {
     if (!source || !activeSource) return;
     setError(null);
     setWorking("Starting…");
-    const baseName = source.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "-") || "flyer";
+    const baseName =
+      (source.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "-") || "flyer") +
+      (source.pdf && source.pdf.pageCount > 1 ? `-page${source.pdf.pageNumber}` : "");
     const title = `${baseName} — ${paper} print file`;
     try {
-      const made = await renderPrintFiles(activeSource, { plan, fit, bleedMode, title }, setWorking);
+      // A PDF page is drawn straight onto the print-sized canvas, so vector
+      // artwork and text stay sharp; only an AI-enhanced copy goes the
+      // picture route.
+      let trim: HTMLCanvasElement | undefined;
+      if (source.pdf && !enhancedInUse) {
+        setWorking("Drawing the PDF page…");
+        trim = await renderPdfToTrim(source.pdf.page, plan, fit);
+      }
+      const made = await renderPrintFiles(activeSource, { plan, fit, bleedMode, title, trim }, setWorking);
       setResult({
         key: settingsKey,
         baseName,
@@ -261,11 +371,11 @@ export function FlyerPrintTool() {
                 : "border-zinc-300 hover:border-brand-teal dark:border-zinc-700"
             }`}
           >
-            <span className="font-medium">Click to choose, or drop an image here</span>
-            <span className={hintClass}>PNG, JPEG or WebP. It stays on this computer — nothing is uploaded.</span>
+            <span className="font-medium">Click to choose, or drop an image or PDF here</span>
+            <span className={hintClass}>PNG, JPEG, WebP or PDF. It stays on this computer — nothing is uploaded.</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"
               className="sr-only"
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -282,13 +392,44 @@ export function FlyerPrintTool() {
               <div className="min-w-0 text-sm">
                 <p className="truncate font-medium">{source.name}</p>
                 <p className="text-zinc-500 dark:text-zinc-400">
-                  {source.bitmap.width} × {source.bitmap.height} px
+                  {source.pdf
+                    ? `PDF · ${Math.round(source.pdf.widthMm)} × ${Math.round(source.pdf.heightMm)} mm`
+                    : `${source.bitmap.width} × ${source.bitmap.height} px`}
                 </p>
               </div>
             </div>
           )}
 
-          {source && (
+          {source?.pdf && source.pdf.pageCount > 1 && (
+            <label className={labelClass}>
+              Page
+              <select
+                value={source.pdf.pageNumber}
+                onChange={(e) => void changePdfPage(Number(e.target.value))}
+                disabled={working !== null}
+                className={fieldClass}
+              >
+                {Array.from({ length: source.pdf.pageCount }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    Page {i + 1} of {source.pdf?.pageCount}
+                  </option>
+                ))}
+              </select>
+              <span className={hintClass}>
+                One page is printed at a time. Make a second set of files for the other side.
+              </span>
+            </label>
+          )}
+
+          {source?.pdf && (
+            <p className={`${hintClass} rounded-lg border border-zinc-200 p-3 dark:border-zinc-800`}>
+              PDFs are drawn directly at the print size, so text and shapes stay sharp on any paper.
+              Photos inside a PDF are only as sharp as they were when it was saved, and AI enhancement
+              is for picture files.
+            </p>
+          )}
+
+          {source && !source.pdf && (
             <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
               <div>
                 <h3 className="text-sm font-semibold">Low resolution? Enhance with AI</h3>
@@ -519,6 +660,18 @@ export function FlyerPrintTool() {
                   <span className="text-zinc-500 dark:text-zinc-400">
                     {" "}
                     ({plan.pageW} × {plan.pageH} px)
+                  </span>
+                </dd>
+              </>
+            )}
+
+            {source?.pdf && (
+              <>
+                <dt className="text-zinc-500 dark:text-zinc-400">Your flyer is</dt>
+                <dd>
+                  A PDF page, {Math.round(source.pdf.widthMm)} × {Math.round(source.pdf.heightMm)} mm.{" "}
+                  <span className="text-emerald-700 dark:text-emerald-400">
+                    It is drawn at the print size, so text and shapes will be sharp.
                   </span>
                 </dd>
               </>

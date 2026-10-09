@@ -44,5 +44,6 @@ supabase/.temp
 *.tsbuildinfo
 next-env.d.ts
 
-# onnxruntime-web runtime copied in by scripts/copy-ort-runtime.mjs (build output)
+# Runtime files (onnxruntime-web, pdf.js) copied in by scripts/copy-ort-runtime.mjs (build output)
 /public/ort/
+/public/pdfjs/
