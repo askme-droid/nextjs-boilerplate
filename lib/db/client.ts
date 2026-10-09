@@ -8,7 +8,6 @@ import * as schema from "./schema";
 // per-request-not-per-module pattern, but a real Postgres pool needs to
 // persist across requests, not be recreated each time.
 declare global {
-  // eslint-disable-next-line no-var
   var __dbClient: postgres.Sql | undefined;
 }
 

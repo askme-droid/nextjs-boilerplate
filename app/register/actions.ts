@@ -1,7 +1,6 @@
 "use server";
 
 import { APIError } from "better-auth/api";
-import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/auth";
 
 export type RegisterState = {
