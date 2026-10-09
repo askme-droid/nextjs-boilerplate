@@ -24,6 +24,8 @@ export const metadata: Metadata = {
   },
   description:
     "Browse flyer deals, e-vouchers and promotions from local Singapore businesses — search by category, location or even by photo.",
+  // Proves to Google Search Console that this site is ours.
+  verification: { google: "kw9aRWmRLg8noEH0ZXMY2rxxp8_vSJk2CbIA-7iigok" },
   openGraph: {
     siteName: "FDSG",
     type: "website",
