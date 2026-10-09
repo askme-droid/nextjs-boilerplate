@@ -49,7 +49,7 @@ export default async function EditListingPage({
           <a href={listing.external_url} target="_blank" rel="noopener noreferrer nofollow" className="underline">
             {listing.external_url}
           </a>
-          . Changes below only affect how this listing's card looks in search — the actual content stays at the source.
+          . Changes below only affect how this listing&apos;s card looks in search — the actual content stays at the source.
         </p>
       )}
 
