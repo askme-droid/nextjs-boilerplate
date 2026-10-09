@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 
@@ -351,6 +351,18 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
     .limit(limit);
 
   return rows.flatMap((r) => (r.videoUrl ? [{ ...r, videoUrl: r.videoUrl }] : []));
+}
+
+/**
+ * Every published listing that has its own page, for the sitemap. Syndicated
+ * listings (with an external_url) are left out: their page just redirects.
+ */
+export async function getSitemapListings(): Promise<{ slug: string; updatedAt: Date }[]> {
+  return db
+    .select({ slug: listings.slug, updatedAt: listings.updatedAt })
+    .from(listings)
+    .where(and(eq(listings.status, "published"), isNull(listings.externalUrl)))
+    .orderBy(desc(listings.updatedAt));
 }
 
 /**
