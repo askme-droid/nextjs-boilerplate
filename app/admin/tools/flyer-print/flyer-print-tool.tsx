@@ -71,6 +71,8 @@ type Result = {
   pdfBytes: number;
   cmykUrl?: string;
   cmykBytes?: number;
+  /** The preview as it would look printed in CMYK. */
+  proofUrl?: string;
 };
 
 // For a PDF, `reference` is the page drawing the AI started from (the
@@ -96,6 +98,7 @@ export function FlyerPrintTool() {
   const [bleedMode, setBleedMode] = useState<BleedMode>("mirror");
   const [marks, setMarks] = useState(true);
   const [cmyk, setCmyk] = useState(true);
+  const [showProof, setShowProof] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -360,6 +363,7 @@ export function FlyerPrintTool() {
         pdfBytes: made.pdf.size,
         cmykUrl: made.cmykPdf ? track(URL.createObjectURL(made.cmykPdf)) : undefined,
         cmykBytes: made.cmykPdf?.size,
+        proofUrl: made.proofUrl ? track(made.proofUrl) : undefined,
       });
     } catch (e) {
       setError(
@@ -797,11 +801,41 @@ export function FlyerPrintTool() {
               </a>
             </div>
 
+            {current.proofUrl && (
+              <div role="group" aria-label="Preview colours" className="flex flex-wrap items-center gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowProof(false)}
+                  aria-pressed={!showProof}
+                  className={`rounded-full border px-3 py-1 ${!showProof ? "border-foreground bg-foreground text-background" : "border-zinc-300 dark:border-zinc-700"}`}
+                >
+                  Screen colours
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowProof(true)}
+                  aria-pressed={showProof}
+                  className={`rounded-full border px-3 py-1 ${showProof ? "border-foreground bg-foreground text-background" : "border-zinc-300 dark:border-zinc-700"}`}
+                >
+                  Printed in CMYK
+                </button>
+                <span className={hintClass}>
+                  {showProof
+                    ? "A simulation of the CMYK PDF on coated paper. Your screen is only a close guide."
+                    : "The original RGB colours, as on your screen."}
+                </span>
+              </div>
+            )}
+
             <div className="rounded-lg border border-zinc-200 bg-zinc-100 p-3 dark:border-zinc-800 dark:bg-zinc-900">
               {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview */}
               <img
-                src={current.previewUrl}
-                alt="Preview of the finished print page, with crop marks if selected"
+                src={showProof && current.proofUrl ? current.proofUrl : current.previewUrl}
+                alt={
+                  showProof && current.proofUrl
+                    ? "Preview of the finished print page as it would look printed in CMYK"
+                    : "Preview of the finished print page, with crop marks if selected"
+                }
                 className="mx-auto max-h-[36rem] w-auto max-w-full shadow-md"
               />
             </div>
@@ -822,8 +856,8 @@ export function FlyerPrintTool() {
                 <li>
                   The CMYK PDF is converted with the FOGRA39 profile (ISO Coated v2), which is
                   embedded in the file, and its crop marks use black ink only. Bright screen colours
-                  such as vivid orange or teal print duller in CMYK. The preview above shows the
-                  original RGB colours. The PDF and PNG stay RGB.
+                  such as vivid orange or teal print duller in CMYK — switch the preview above to “Printed
+                  in CMYK” to see by how much. The PDF and PNG stay RGB.
                 </li>
               ) : (
                 <li>Colours stay as RGB. Tick “Also make a CMYK PDF” for a print-shop-ready CMYK file.</li>

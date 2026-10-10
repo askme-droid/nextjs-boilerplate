@@ -38,6 +38,9 @@ export type RenderResult = {
   cmykPdf?: Blob;
   /** Small JPEG of the finished page, for on-screen checking. */
   previewUrl: string;
+  /** The same preview as it would look printed in CMYK (a soft proof); only
+   *  with the CMYK PDF. */
+  proofUrl?: string;
 };
 
 type Stage = (message: string) => void;
@@ -418,9 +421,8 @@ export async function renderPrintFiles(
 
   // The colour engine and profile load here, so a failure (signed out, profile
   // missing) stops with a clear message.
-  const cmykPdf = options.cmyk
-    ? await buildCmykPdf(art, plan, title, await loadCmykEngine(), onStage)
-    : undefined;
+  const engine = options.cmyk ? await loadCmykEngine() : undefined;
+  const cmykPdf = engine ? await buildCmykPdf(art, plan, title, engine, onStage) : undefined;
 
   // A small copy of the finished page to look at before downloading.
   const scale = Math.min(1, PREVIEW_MAX_PX / Math.max(page.width, page.height));
@@ -430,9 +432,33 @@ export async function renderPrintFiles(
   pctx.drawImage(page, 0, 0, preview.width, preview.height);
   const previewUrl = URL.createObjectURL(await toBlob(preview, "image/jpeg", 0.85));
 
+  // The same picture as the CMYK ink would print it: duller where the screen
+  // colours are brighter than the printing process can reach.
+  let proofUrl: string | undefined;
+  if (engine) {
+    const shown = context(preview).getImageData(0, 0, preview.width, preview.height).data;
+    const count = preview.width * preview.height;
+    const rgb = new Uint8Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      rgb[i * 3] = shown[i * 4];
+      rgb[i * 3 + 1] = shown[i * 4 + 1];
+      rgb[i * 3 + 2] = shown[i * 4 + 2];
+    }
+    const printed = engine.proof(rgb, count);
+    const out = new ImageData(preview.width, preview.height);
+    for (let i = 0; i < count; i++) {
+      out.data[i * 4] = printed[i * 3];
+      out.data[i * 4 + 1] = printed[i * 3 + 1];
+      out.data[i * 4 + 2] = printed[i * 3 + 2];
+      out.data[i * 4 + 3] = 255;
+    }
+    context(preview).putImageData(out, 0, 0);
+    proofUrl = URL.createObjectURL(await toBlob(preview, "image/jpeg", 0.85));
+  }
+
   release(preview);
   if (page !== art) release(page);
   release(art);
 
-  return { png, pdf, cmykPdf, previewUrl };
+  return { png, pdf, cmykPdf, previewUrl, proofUrl };
 }

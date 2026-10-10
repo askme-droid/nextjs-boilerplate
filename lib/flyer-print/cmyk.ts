@@ -35,6 +35,9 @@ export type CmykEngine = {
   profile: Uint8Array;
   /** `rgb` holds 3 bytes per pixel; the result 4 bytes per pixel (C, M, Y, K). */
   convert(rgb: Uint8Array, pixels: number): Uint8Array;
+  /** Soft proof: `rgb` (3 bytes per pixel) as it would look once printed in
+   *  CMYK — out to CMYK and straight back to screen colours. */
+  proof(rgb: Uint8Array, pixels: number): Uint8Array;
 };
 
 let loading: Promise<CmykEngine> | null = null;
@@ -71,11 +74,21 @@ export function loadCmykEngine(): Promise<CmykEngine> {
       mod.INTENT_RELATIVE_COLORIMETRIC,
       mod.cmsFLAGS_BLACKPOINTCOMPENSATION,
     );
-    if (!transform) throw new Error("The CMYK conversion could not be set up.");
+    // And back again, for the soft-proof preview.
+    const backTransform = lcms.cmsCreateTransform(
+      cmyk,
+      mod.TYPE_CMYK_8,
+      srgb,
+      mod.TYPE_RGB_8,
+      mod.INTENT_RELATIVE_COLORIMETRIC,
+      mod.cmsFLAGS_BLACKPOINTCOMPENSATION,
+    );
+    if (!transform || !backTransform) throw new Error("The CMYK conversion could not be set up.");
 
     return {
       profile,
       convert: (rgb, pixels) => lcms.cmsDoTransform(transform, rgb, pixels),
+      proof: (rgb, pixels) => lcms.cmsDoTransform(backTransform, lcms.cmsDoTransform(transform, rgb, pixels), pixels),
     };
   })();
   // A failed load must not be remembered, or the option would never work again.
