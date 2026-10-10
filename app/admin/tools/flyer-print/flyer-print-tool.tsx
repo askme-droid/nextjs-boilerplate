@@ -69,6 +69,8 @@ type Result = {
   previewUrl: string;
   pngBytes: number;
   pdfBytes: number;
+  cmykUrl?: string;
+  cmykBytes?: number;
 };
 
 // For a PDF, `reference` is the page drawing the AI started from (the
@@ -93,6 +95,7 @@ export function FlyerPrintTool() {
   const [bleedInput, setBleedInput] = useState(String(DEFAULT_BLEED_MM));
   const [bleedMode, setBleedMode] = useState<BleedMode>("mirror");
   const [marks, setMarks] = useState(true);
+  const [cmyk, setCmyk] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +168,7 @@ export function FlyerPrintTool() {
     bleedMm,
     bleedMode,
     marks,
+    cmyk,
     enhancedInUse ? enhanced.id : 0,
   ]);
   const current = result && result.key === settingsKey ? result : null;
@@ -345,7 +349,7 @@ export function FlyerPrintTool() {
         setWorking("Drawing the PDF page…");
         trim = await renderPdfToTrim(source.pdf.page, plan, fit);
       }
-      const made = await renderPrintFiles(activeSource, { plan, fit, bleedMode, title, trim }, setWorking);
+      const made = await renderPrintFiles(activeSource, { plan, fit, bleedMode, title, trim, cmyk }, setWorking);
       setResult({
         key: settingsKey,
         baseName,
@@ -354,6 +358,8 @@ export function FlyerPrintTool() {
         previewUrl: track(made.previewUrl),
         pngBytes: made.png.size,
         pdfBytes: made.pdf.size,
+        cmykUrl: made.cmykPdf ? track(URL.createObjectURL(made.cmykPdf)) : undefined,
+        cmykBytes: made.cmykPdf?.size,
       });
     } catch (e) {
       setError(
@@ -654,6 +660,22 @@ export function FlyerPrintTool() {
                 </span>
               </span>
             </label>
+
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={cmyk}
+                onChange={(e) => setCmyk(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium">Also make a CMYK PDF</span>
+                <span className={`${hintClass} block`}>
+                  Colours converted to CMYK with the FOGRA39 profile (coated paper, offset). Slower,
+                  and the file is bigger.
+                </span>
+              </span>
+            </label>
           </div>
         </section>
       </div>
@@ -761,6 +783,11 @@ export function FlyerPrintTool() {
               <a href={current.pdfUrl} download={`${current.baseName}-${suffix}.pdf`} className={downloadClass}>
                 Download PDF ({megabytes(current.pdfBytes)})
               </a>
+              {current.cmykUrl && current.cmykBytes !== undefined && (
+                <a href={current.cmykUrl} download={`${current.baseName}-${suffix}-CMYK.pdf`} className={downloadClass}>
+                  Download CMYK PDF ({megabytes(current.cmykBytes)})
+                </a>
+              )}
               <a
                 href={current.pngUrl}
                 download={`${current.baseName}-${suffix}.png`}
@@ -791,7 +818,16 @@ export function FlyerPrintTool() {
                   the edge.
                 </li>
               )}
-              <li>Colours stay as RGB. Your print shop converts them to CMYK.</li>
+              {current.cmykUrl ? (
+                <li>
+                  The CMYK PDF is converted with the FOGRA39 profile (ISO Coated v2), which is
+                  embedded in the file, and its crop marks use black ink only. Bright screen colours
+                  such as vivid orange or teal print duller in CMYK. The preview above shows the
+                  original RGB colours. The PDF and PNG stay RGB.
+                </li>
+              ) : (
+                <li>Colours stay as RGB. Tick “Also make a CMYK PDF” for a print-shop-ready CMYK file.</li>
+              )}
             </ul>
           </section>
         )}

@@ -24,6 +24,8 @@ const nextConfig: NextConfig = {
   // lib/listings/embeddings.ts, since it's ~16MB added per matched function.
   outputFileTracingIncludes: {
     "/api/search-by-image": ["./node_modules/onnxruntime-node/bin/napi-v3/linux/x64/*"],
+    // Read from disk by the route (not imported), so tracing needs the hint.
+    "/admin/tools/flyer-print/fogra39": ["./lib/flyer-print/profiles/ISOcoated_v2_eci.icc"],
     "/admin/listings/**": ["./node_modules/onnxruntime-node/bin/napi-v3/linux/x64/*"],
   },
 };

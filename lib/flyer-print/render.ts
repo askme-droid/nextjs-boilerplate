@@ -12,6 +12,7 @@ import {
   type FitMode,
   type PrintPlan,
 } from "./geometry";
+import { canvasToCmyk, CMYK_CONDITION, loadCmykEngine, type CmykEngine } from "./cmyk";
 
 export type BleedMode = "mirror" | "stretch";
 
@@ -26,11 +27,15 @@ export type RenderOptions = {
   /** A finished trim-sized canvas (a PDF page drawn at exactly 300 dpi). When
    *  given, the source is not resized at all and is only used for its shape. */
   trim?: HTMLCanvasElement;
+  /** Also make a CMYK PDF (FOGRA39) for the print shop. */
+  cmyk?: boolean;
 };
 
 export type RenderResult = {
   png: Blob;
   pdf: Blob;
+  /** The same page with every colour converted to CMYK; only when asked for. */
+  cmykPdf?: Blob;
   /** Small JPEG of the finished page, for on-screen checking. */
   previewUrl: string;
 };
@@ -290,6 +295,100 @@ async function buildPdf(art: HTMLCanvasElement, plan: PrintPlan, title: string) 
   return new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
 }
 
+// --- CMYK PDF -------------------------------------------------------------
+
+/** Squeezes bytes the way a PDF "FlateDecode" stream expects (zlib). */
+async function deflate(bytes: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
+  const squeezed = new Blob([bytes as BlobPart]).stream().pipeThrough(new CompressionStream("deflate"));
+  return new Uint8Array(await new Response(squeezed).arrayBuffer());
+}
+
+/**
+ * The same page as buildPdf, but the artwork is a CMYK image (FOGRA39 numbers
+ * from a real ICC conversion) and the crop marks are 100% black ink only. The
+ * profile is embedded as the PDF's "output intent", which is how print
+ * software knows what the CMYK numbers mean.
+ */
+async function buildCmykPdf(
+  art: HTMLCanvasElement,
+  plan: PrintPlan,
+  title: string,
+  engine: CmykEngine,
+  onStage: Stage,
+) {
+  const { PDFDocument, PDFName, PDFString, cmyk, concatTransformationMatrix, drawObject, popGraphicsState, pushGraphicsState } =
+    await import("pdf-lib");
+
+  onStage("Converting colours to CMYK…");
+  await nextFrame();
+  const ink = await canvasToCmyk(engine, art, (done, total) =>
+    onStage(`Converting colours to CMYK… ${Math.round((done / total) * 100)}%`),
+  );
+
+  onStage("Creating the CMYK PDF…");
+  await nextFrame();
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(title);
+  const page = pdf.addPage([pxToPt(plan.pageW), pxToPt(plan.pageH)]);
+
+  const image = pdf.context.register(
+    pdf.context.stream(await deflate(ink), {
+      Type: "XObject",
+      Subtype: "Image",
+      Width: art.width,
+      Height: art.height,
+      ColorSpace: "DeviceCMYK",
+      BitsPerComponent: 8,
+      Filter: "FlateDecode",
+    }),
+  );
+  const artX = pxToPt(plan.slug);
+  const artW = pxToPt(art.width);
+  const artH = pxToPt(art.height);
+  const imageName = page.node.newXObject("Artwork", image);
+  page.pushOperators(
+    pushGraphicsState(),
+    concatTransformationMatrix(artW, 0, 0, artH, artX, artX),
+    drawObject(imageName),
+    popGraphicsState(),
+  );
+
+  if (plan.marks) {
+    const black = cmyk(0, 0, 0, 1); // black ink only, not a four-colour black
+    for (const r of markRects(plan)) {
+      page.drawRectangle({
+        x: pxToPt(r.x),
+        y: pxToPt(plan.pageH - r.y - r.h),
+        width: pxToPt(r.w),
+        height: pxToPt(r.h),
+        color: black,
+      });
+    }
+  }
+
+  const trimOffset = pxToPt(plan.slug + plan.bleed);
+  page.setTrimBox(trimOffset, trimOffset, pxToPt(plan.trimW), pxToPt(plan.trimH));
+  page.setBleedBox(artX, artX, artW, artH);
+
+  // Says what the CMYK numbers mean: this profile, unmodified.
+  const profile = pdf.context.register(
+    pdf.context.stream(await deflate(engine.profile), { N: 4, Alternate: "DeviceCMYK", Filter: "FlateDecode" }),
+  );
+  const intent = pdf.context.obj({
+    Type: "OutputIntent",
+    S: "GTS_PDFX",
+    OutputConditionIdentifier: PDFString.of(CMYK_CONDITION.identifier),
+    OutputCondition: PDFString.of(CMYK_CONDITION.description),
+    RegistryName: PDFString.of("http://www.color.org"),
+    Info: PDFString.of(CMYK_CONDITION.name),
+    DestOutputProfile: profile,
+  });
+  pdf.catalog.set(PDFName.of("OutputIntents"), pdf.context.obj([intent]));
+
+  const bytes = await pdf.save();
+  return new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
+}
+
 // --- Entry point -----------------------------------------------------------
 
 export async function renderPrintFiles(
@@ -317,6 +416,12 @@ export async function renderPrintFiles(
   await nextFrame();
   const pdf = await buildPdf(art, plan, title);
 
+  // The colour engine and profile load here, so a failure (signed out, profile
+  // missing) stops with a clear message.
+  const cmykPdf = options.cmyk
+    ? await buildCmykPdf(art, plan, title, await loadCmykEngine(), onStage)
+    : undefined;
+
   // A small copy of the finished page to look at before downloading.
   const scale = Math.min(1, PREVIEW_MAX_PX / Math.max(page.width, page.height));
   const preview = createCanvas(Math.round(page.width * scale), Math.round(page.height * scale));
@@ -329,5 +434,5 @@ export async function renderPrintFiles(
   if (page !== art) release(page);
   release(art);
 
-  return { png, pdf, previewUrl };
+  return { png, pdf, cmykPdf, previewUrl };
 }
