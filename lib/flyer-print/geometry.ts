@@ -11,6 +11,15 @@ export const PAPER_SIZES = {
 export type PaperKey = keyof typeof PAPER_SIZES;
 export type Orientation = "portrait" | "landscape";
 
+/** Any other finished size, in millimetres, exactly as it will be cut. */
+export type CustomPaper = { widthMm: number; heightMm: number };
+
+export const MIN_CUSTOM_MM = 20;
+export const MAX_CUSTOM_MM = 1000;
+/** The whole page, bleed and marks included. Bigger than about A2 asks the
+ *  browser for more memory than it reliably has. */
+export const MAX_PAGE_PIXELS = 40_000_000;
+
 export const DEFAULT_BLEED_MM = 3;
 export const MAX_BLEED_MM = 10;
 
@@ -46,15 +55,24 @@ export type PrintPlan = {
 };
 
 export function planPrint(options: {
-  paper: PaperKey;
+  paper: PaperKey | CustomPaper;
   orientation: Orientation;
   bleedMm: number;
   marks: boolean;
 }): PrintPlan {
-  const { w, h } = PAPER_SIZES[options.paper];
-  const landscape = options.orientation === "landscape";
-  const trimWmm = landscape ? h : w;
-  const trimHmm = landscape ? w : h;
+  // A standard size is stored upright and turned by the orientation; a custom
+  // size is already the finished width and height, so it is used as given.
+  let trimWmm: number;
+  let trimHmm: number;
+  if (typeof options.paper === "string") {
+    const { w, h } = PAPER_SIZES[options.paper];
+    const landscape = options.orientation === "landscape";
+    trimWmm = landscape ? h : w;
+    trimHmm = landscape ? w : h;
+  } else {
+    trimWmm = options.paper.widthMm;
+    trimHmm = options.paper.heightMm;
+  }
   const bleedMm = Math.min(MAX_BLEED_MM, Math.max(0, options.bleedMm));
   const slugMm = options.marks ? MARK_SLUG_MM : 0;
 
@@ -78,6 +96,22 @@ export function planPrint(options: {
     pageWmm: trimWmm + 2 * (bleedMm + slugMm),
     pageHmm: trimHmm + 2 * (bleedMm + slugMm),
   };
+}
+
+/** Reads the two custom-size boxes: the size, or why it cannot be used. */
+export function checkCustomPaper(
+  widthText: string,
+  heightText: string,
+): { paper: CustomPaper | null; problem: string | null } {
+  const widthMm = Number.parseFloat(widthText);
+  const heightMm = Number.parseFloat(heightText);
+  if (!Number.isFinite(widthMm) || !Number.isFinite(heightMm)) {
+    return { paper: null, problem: "Enter both a width and a height in millimetres." };
+  }
+  if (widthMm < MIN_CUSTOM_MM || heightMm < MIN_CUSTOM_MM || widthMm > MAX_CUSTOM_MM || heightMm > MAX_CUSTOM_MM) {
+    return { paper: null, problem: `Each side must be between ${MIN_CUSTOM_MM} and ${MAX_CUSTOM_MM} mm.` };
+  }
+  return { paper: { widthMm, heightMm }, problem: null };
 }
 
 /** Landscape images get a landscape page unless the visitor says otherwise. */

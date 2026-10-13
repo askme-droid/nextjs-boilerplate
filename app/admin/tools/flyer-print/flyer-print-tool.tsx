@@ -5,6 +5,10 @@ import {
   DEFAULT_BLEED_MM,
   DPI,
   MAX_BLEED_MM,
+  checkCustomPaper,
+  MAX_CUSTOM_MM,
+  MAX_PAGE_PIXELS,
+  MIN_CUSTOM_MM,
   PAPER_SIZES,
   autoOrientation,
   croppedShare,
@@ -90,7 +94,9 @@ const verdictClass = {
 
 export function FlyerPrintTool() {
   const [source, setSource] = useState<Source | null>(null);
-  const [paper, setPaper] = useState<PaperKey>("A4");
+  const [paper, setPaper] = useState<PaperKey | "custom">("A4");
+  const [customWidth, setCustomWidth] = useState("200");
+  const [customHeight, setCustomHeight] = useState("300");
   const [orientationChoice, setOrientationChoice] = useState<"auto" | Orientation>("auto");
   const [fit, setFit] = useState<FitMode>("fill");
   const [addBleed, setAddBleed] = useState(true);
@@ -140,14 +146,31 @@ export function FlyerPrintTool() {
     };
   }, []);
 
-  const orientation: Orientation =
+  const orientationFromChoice: Orientation =
     orientationChoice === "auto"
       ? source
         ? autoOrientation(source.bitmap.width, source.bitmap.height)
         : "portrait"
       : orientationChoice;
   const bleedMm = addBleed ? Math.min(MAX_BLEED_MM, Math.max(0, Number.parseFloat(bleedInput) || 0)) : 0;
-  const plan = planPrint({ paper, orientation, bleedMm, marks });
+  // A custom size is the finished width and height as typed, so it also sets
+  // the orientation. Until the boxes hold usable numbers the page is planned
+  // as A4 and creating is switched off.
+  const custom = paper === "custom" ? checkCustomPaper(customWidth, customHeight) : null;
+  const customPaper = custom?.paper ?? null;
+  const orientation: Orientation = customPaper
+    ? customPaper.widthMm > customPaper.heightMm
+      ? "landscape"
+      : "portrait"
+    : orientationFromChoice;
+  const plan = planPrint({ paper: paper === "custom" ? (customPaper ?? "A4") : paper, orientation, bleedMm, marks });
+  const sizeProblem =
+    custom?.problem ??
+    (plan.pageW * plan.pageH > MAX_PAGE_PIXELS
+      ? "That page is too large for the browser to build (about A2 with bleed is the limit). Try a smaller size or less bleed."
+      : null);
+  const paperLabel = paper === "custom" ? "Custom" : PAPER_SIZES[paper].label;
+  const paperFileLabel = paper === "custom" ? `custom-${plan.trimWmm}x${plan.trimHmm}mm` : paper;
 
   // The AI-enhanced copy (4x the pixels) stands in for the original when chosen.
   const enhancedInUse = !!enhanced && useEnhanced;
@@ -166,6 +189,8 @@ export function FlyerPrintTool() {
     source?.bitmap.height,
     source?.pdf?.pageNumber,
     paper,
+    plan.trimWmm,
+    plan.trimHmm,
     orientation,
     fit,
     bleedMm,
@@ -342,7 +367,7 @@ export function FlyerPrintTool() {
     const baseName =
       (source.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "-") || "flyer") +
       (source.pdf && source.pdf.pageCount > 1 ? `-page${source.pdf.pageNumber}` : "");
-    const title = `${baseName} — ${paper} print file`;
+    const title = `${baseName} — ${paper === "custom" ? `${plan.trimWmm} × ${plan.trimHmm} mm` : paper} print file`;
     try {
       // A PDF page is drawn straight onto the print-sized canvas, so vector
       // artwork and text stay sharp; only an AI-enhanced copy goes the
@@ -376,7 +401,7 @@ export function FlyerPrintTool() {
     }
   }
 
-  const suffix = `${paper}-300dpi${enhancedInUse ? "-ai" : ""}${plan.bleedMm > 0 ? `-bleed${plan.bleedMm}mm` : ""}${plan.marks ? "-marks" : ""}`;
+  const suffix = `${paperFileLabel}-300dpi${enhancedInUse ? "-ai" : ""}${plan.bleedMm > 0 ? `-bleed${plan.bleedMm}mm` : ""}${plan.marks ? "-marks" : ""}`;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
@@ -569,7 +594,7 @@ export function FlyerPrintTool() {
               Paper size
               <select
                 value={paper}
-                onChange={(e) => setPaper(e.target.value as PaperKey)}
+                onChange={(e) => setPaper(e.target.value as PaperKey | "custom")}
                 className={fieldClass}
               >
                 {Object.entries(PAPER_SIZES).map(([key, size]) => (
@@ -577,21 +602,65 @@ export function FlyerPrintTool() {
                     {size.label} · {size.w} × {size.h} mm
                   </option>
                 ))}
+                <option value="custom">Custom size…</option>
               </select>
             </label>
             <label className={labelClass}>
               Orientation
               <select
-                value={orientationChoice}
+                disabled={paper === "custom"}
+                value={paper === "custom" ? "auto" : orientationChoice}
                 onChange={(e) => setOrientationChoice(e.target.value as "auto" | Orientation)}
                 className={fieldClass}
               >
-                <option value="auto">Automatic</option>
+                <option value="auto">{paper === "custom" ? "From the size" : "Automatic"}</option>
                 <option value="portrait">Portrait</option>
                 <option value="landscape">Landscape</option>
               </select>
             </label>
           </div>
+
+          {paper === "custom" && (
+            <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <div className="grid grid-cols-2 gap-3">
+                <label className={labelClass}>
+                  Width (mm)
+                  <input
+                    type="number"
+                    min={MIN_CUSTOM_MM}
+                    max={MAX_CUSTOM_MM}
+                    step={0.5}
+                    inputMode="decimal"
+                    value={customWidth}
+                    onChange={(e) => setCustomWidth(e.target.value)}
+                    className={fieldClass}
+                  />
+                </label>
+                <label className={labelClass}>
+                  Height (mm)
+                  <input
+                    type="number"
+                    min={MIN_CUSTOM_MM}
+                    max={MAX_CUSTOM_MM}
+                    step={0.5}
+                    inputMode="decimal"
+                    value={customHeight}
+                    onChange={(e) => setCustomHeight(e.target.value)}
+                    className={fieldClass}
+                  />
+                </label>
+              </div>
+              <p className={hintClass}>
+                The finished size after cutting, before bleed. A size that is wider than it is tall
+                prints landscape.
+              </p>
+            </div>
+          )}
+          {sizeProblem && (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+              {sizeProblem}
+            </p>
+          )}
 
           <label className={labelClass}>
             If the shape doesn&apos;t match the paper
@@ -691,7 +760,7 @@ export function FlyerPrintTool() {
           <dl className="grid gap-x-6 gap-y-2 rounded-lg border border-zinc-200 p-4 text-sm sm:grid-cols-[auto_1fr] dark:border-zinc-800">
             <dt className="text-zinc-500 dark:text-zinc-400">Finished size</dt>
             <dd>
-              {PAPER_SIZES[paper].label} {orientation} — {plan.trimWmm} × {plan.trimHmm} mm
+              {paperLabel} {orientation} — {plan.trimWmm} × {plan.trimHmm} mm
               <span className="text-zinc-500 dark:text-zinc-400">
                 {" "}
                 ({plan.trimW} × {plan.trimH} px at {DPI} dpi)
@@ -756,7 +825,7 @@ export function FlyerPrintTool() {
             <button
               type="button"
               onClick={create}
-              disabled={!source || working !== null}
+              disabled={!source || working !== null || sizeProblem !== null}
               className={`${downloadClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {working ? working : current ? "Create again" : "Create print files"}
