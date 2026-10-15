@@ -22,11 +22,11 @@ const socialLinkClass = "text-white/90 transition-colors hover:text-white";
  * just the cookie) since it needs the email and role to decide what to
  * show, not just whether a session exists.
  *
- * Main bar (always white, not theme-aware): the logo and the primary nav
- * (Home/About Us/FAQ/Contact Us). White regardless of site theme because
- * the logo's tagline text is a semi-transparent gray meant for a light
- * background — confirmed by sampling its actual pixels, it fades into a
- * near-black dark-mode background otherwise.
+ * Main bar (always white, not theme-aware): the logo and the primary nav —
+ * Home, plus Blog and Contact Us, which live on the main fd.sg site. White
+ * regardless of site theme because the logo's tagline text is a
+ * semi-transparent gray meant for a light background — confirmed by sampling
+ * its actual pixels, it fades into a near-black dark-mode background otherwise.
  */
 export async function SiteNav() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -106,15 +106,12 @@ export async function SiteNav() {
             <Link href="/" className={mainNavLinkClass}>
               Home
             </Link>
-            <Link href="/about" className={mainNavLinkClass}>
-              About Us
-            </Link>
-            <Link href="/faq" className={mainNavLinkClass}>
-              FAQ
-            </Link>
-            <Link href="/contact" className={mainNavLinkClass}>
+            <a href="https://www.fd.sg/blog/" className={mainNavLinkClass}>
+              Blog
+            </a>
+            <a href="https://www.fd.sg/contact-us/" className={mainNavLinkClass}>
               Contact Us
-            </Link>
+            </a>
           </div>
         </nav>
       </header>
