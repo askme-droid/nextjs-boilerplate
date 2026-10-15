@@ -106,10 +106,11 @@ export async function SiteNav() {
             <Link href="/" className={mainNavLinkClass}>
               Home
             </Link>
-            <a href="https://www.fd.sg/blog/" className={mainNavLinkClass}>
+            {/* noopener only (no noreferrer): fd.sg is our own site, so its analytics can still see these visits come from here. */}
+            <a href="https://www.fd.sg/blog/" target="_blank" rel="noopener" className={mainNavLinkClass}>
               Blog
             </a>
-            <a href="https://www.fd.sg/contact-us/" className={mainNavLinkClass}>
+            <a href="https://www.fd.sg/contact-us/" target="_blank" rel="noopener" className={mainNavLinkClass}>
               Contact Us
             </a>
           </div>
