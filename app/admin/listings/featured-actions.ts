@@ -2,12 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { del } from "@vercel/blob";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
-import { isBlobVideoUrl } from "@/lib/listings/constants";
+import { deleteFileByUrl, isStoredFileUrl } from "@/lib/storage/r2";
 
 // Same rule as every other action in this app: re-check requireStaff() here,
 // since a Server Action is reachable directly, not only through its page.
@@ -23,20 +22,16 @@ function refresh() {
   revalidatePath(FEATURED_PATH);
 }
 
-/** Delete an uploaded clip from Blob storage. Best-effort: a failure leaves an
+/** Delete an uploaded clip from R2 storage. Best-effort: a failure (or an old
+ *  Vercel Blob URL, which can't be deleted from here any more) leaves an
  *  orphaned file, which is not worth failing the staff member's action over. */
 async function deleteVideoFile(url: string | null | undefined) {
-  if (!url || !isBlobVideoUrl(url)) return;
-  try {
-    await del(url);
-  } catch {
-    // ignore
-  }
+  await deleteFileByUrl(url);
 }
 
 function readVideoUrl(formData: FormData): string {
   const videoUrl = String(formData.get("videoUrl") ?? "");
-  if (!isBlobVideoUrl(videoUrl)) done("That video upload wasn't recognised — try again.");
+  if (!isStoredFileUrl(videoUrl)) done("That video upload wasn't recognised — try again.");
   return videoUrl;
 }
 
@@ -61,7 +56,7 @@ export async function addFeatured(formData: FormData) {
 }
 
 /** Save the clip for a picked listing (first upload or a replacement). The
- *  video goes browser -> Blob first (see video-upload.tsx); its URL arrives
+ *  video goes browser -> R2 first (see video-upload.tsx); its URL arrives
  *  here. */
 export async function setFeaturedVideo(formData: FormData) {
   await requireStaff();

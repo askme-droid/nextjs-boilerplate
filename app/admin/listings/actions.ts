@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { put } from "@vercel/blob";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { makeKey, putFile } from "@/lib/storage/r2";
 import { normalizeHttpUrl, parseContactFields } from "@/lib/listings/contact-fields";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import { embedImage, embedImageUrl } from "@/lib/listings/embeddings";
@@ -368,7 +368,7 @@ export async function addImage(formData: FormData) {
   redirect(editUrl(listingId));
 }
 
-/** Uploads one or more image files to Vercel Blob storage and attaches them
+/** Uploads one or more image files to R2 storage (lib/storage/r2.ts) and attaches them
  *  to the listing, in the order they were selected. */
 export async function uploadImages(formData: FormData) {
   await requireStaff();
@@ -389,18 +389,16 @@ export async function uploadImages(formData: FormData) {
     let position = await db.$count(listingImages, eq(listingImages.listingId, listingId));
     for (const file of files) {
       // Embedded from the uploaded bytes directly (not re-fetched from the
-      // blob URL afterwards) — best-effort, same as every other embedding
+      // stored URL afterwards) — best-effort, same as every other embedding
       // call site.
-      const [blob, embedding] = await Promise.all([
-        put(`listings/${listingId}/${file.name}`, file, {
-          access: "public",
-          addRandomSuffix: true,
-        }),
-        embedImage(Buffer.from(await file.arrayBuffer())),
+      const bytes = await file.arrayBuffer();
+      const [url, embedding] = await Promise.all([
+        putFile(makeKey(`listings/${listingId}`, file.name), bytes, file.type),
+        embedImage(Buffer.from(bytes)),
       ]);
       await db.insert(listingImages).values({
         listingId,
-        url: blob.url,
+        url,
         altText: null,
         position,
         // Auto-feature the first image a listing gets, so it isn't imageless

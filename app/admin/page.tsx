@@ -34,6 +34,11 @@ export default async function AdminPage() {
           Manage experiences
         </Link>
       )}
+      {role === "admin" && (
+        <Link href="/admin/tools/move-files" className={linkClass}>
+          Move files to Cloudflare R2
+        </Link>
+      )}
     </main>
   );
 }

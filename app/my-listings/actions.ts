@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { put } from "@vercel/blob";
+import { makeKey, putFile } from "@/lib/storage/r2";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingImages, listings } from "@/lib/db/schema";
@@ -256,13 +256,10 @@ export async function uploadMyListingImages(formData: FormData) {
   try {
     let position = await db.$count(listingImages, eq(listingImages.listingId, listingId));
     for (const file of files) {
-      const blob = await put(`listings/${listingId}/${file.name}`, file, {
-        access: "public",
-        addRandomSuffix: true,
-      });
+      const url = await putFile(makeKey(`listings/${listingId}`, file.name), await file.arrayBuffer(), file.type);
       await db.insert(listingImages).values({
         listingId,
-        url: blob.url,
+        url,
         altText: null,
         position,
         isFeatured: position === 0,
