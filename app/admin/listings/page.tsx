@@ -97,6 +97,14 @@ export default async function AdminListingsPage({
                 >
                   {listing.status}
                 </span>
+                {listing.redirect_url && (
+                  <span
+                    title={`Redirects to ${listing.redirect_url}`}
+                    className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                  >
+                    redirects
+                  </span>
+                )}
                 <Link
                   href={`/admin/listings/${listing.id}/edit`}
                   className="text-sm font-medium hover:underline"

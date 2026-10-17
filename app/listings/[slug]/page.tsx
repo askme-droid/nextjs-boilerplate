@@ -46,6 +46,11 @@ export default async function ListingDetailPage({
   // a shared link, a search engine result).
   if (listing.external_url) redirect(listing.external_url);
 
+  // The client asked for this listing to go to their own landing page. A
+  // temporary (307) redirect, not permanent: staff can clear it at any time
+  // and the listing page should come straight back.
+  if (listing.redirect_url) redirect(listing.redirect_url);
+
   // Featured image first (matches the grid card's choice via
   // pickListingImage), then the rest in position order — every image
   // shown at full width, not a hero-plus-thumbnail-strip split.

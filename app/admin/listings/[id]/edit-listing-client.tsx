@@ -115,6 +115,7 @@ export function EditListingClient({
                 social_links: initialValues.social_links,
                 cta_label: initialValues.cta_label,
                 cta_url: initialValues.cta_url,
+                redirect_url: initialValues.redirect_url,
                 homepage_featured: initialValues.homepage_featured,
               }
             : initialValues

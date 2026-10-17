@@ -156,6 +156,7 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
         >
           {slides.map((slide, index) => {
             const isActive = index === active;
+            const outboundUrl = slide.externalUrl ?? slide.redirectUrl;
             const near = Math.abs(index - active) <= 1;
             const linkClass = cn(
               "inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-teal px-3 py-1.5 text-xs font-semibold text-zinc-950 sm:text-sm",
@@ -241,9 +242,9 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
                       {slide.title}
                     </h3>
                   </div>
-                  {slide.externalUrl ? (
+                  {outboundUrl ? (
                     <a
-                      href={slide.externalUrl}
+                      href={outboundUrl}
                       target="_blank"
                       rel="noopener noreferrer nofollow"
                       tabIndex={isActive ? 0 : -1}

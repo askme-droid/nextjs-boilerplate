@@ -110,6 +110,9 @@ export async function generateListingDraft({
     social_links: "",
     cta_label: "",
     cta_url: "",
+    // Set by staff on a client's request, never the model's; kept from the
+    // saved listing by edit-listing-client.tsx like homepage_featured.
+    redirect_url: "",
     keywords: parsed.keywords.join(", "),
     description: parsed.description,
     status: "draft",

@@ -29,6 +29,10 @@ export type ListingWithRelations = {
   // and the detail route both send visitors there instead of showing a
   // local copy. Null for every listing that's ours.
   external_url: string | null;
+  // Set when a client asked for their listing to go to their own landing
+  // page. Like external_url the card and detail route send visitors there,
+  // but the listing is ours (see the schema comment on redirectUrl).
+  redirect_url: string | null;
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
@@ -198,6 +202,7 @@ export async function getListings(
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
+      redirect_url: listings.redirectUrl,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -226,6 +231,7 @@ export async function getListings(
     status: r.status,
     featured_image_url: r.featured_image_url,
     external_url: r.external_url,
+    redirect_url: r.redirect_url,
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
@@ -261,6 +267,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
+      redirect_url: listings.redirectUrl,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -288,6 +295,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       status: r.status,
       featured_image_url: r.featured_image_url,
       external_url: r.external_url,
+      redirect_url: r.redirect_url,
       created_by: r.created_by,
       expires_at: r.expires_at,
       created_at: r.created_at.toISOString(),
@@ -306,6 +314,8 @@ export type FeaturedVideoSlide = {
   slug: string;
   /** Set for syndicated listings — the slide opens there instead of locally. */
   externalUrl: string | null;
+  /** Set when the client asked for a redirect to their own page. */
+  redirectUrl: string | null;
   categoryName: string | null;
   videoUrl: string;
   /** The listing's photo, shown until the video has loaded; may be absent. */
@@ -326,6 +336,7 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
       title: listings.title,
       slug: listings.slug,
       externalUrl: listings.externalUrl,
+      redirectUrl: listings.redirectUrl,
       categoryName: categories.name,
       videoUrl: listings.featuredVideoUrl,
       // Same photo choice as pickListingImage: the flagged one, else the first
@@ -355,13 +366,20 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
 
 /**
  * Every published listing that has its own page, for the sitemap. Syndicated
- * listings (with an external_url) are left out: their page just redirects.
+ * listings (with an external_url) and listings a client asked to redirect
+ * (redirect_url) are left out: their page just redirects.
  */
 export async function getSitemapListings(): Promise<{ slug: string; updatedAt: Date }[]> {
   return db
     .select({ slug: listings.slug, updatedAt: listings.updatedAt })
     .from(listings)
-    .where(and(eq(listings.status, "published"), isNull(listings.externalUrl)))
+    .where(
+      and(
+        eq(listings.status, "published"),
+        isNull(listings.externalUrl),
+        isNull(listings.redirectUrl),
+      ),
+    )
     .orderBy(desc(listings.updatedAt));
 }
 
@@ -393,6 +411,7 @@ export const getListingBySlug = cache(async (
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
+      redirect_url: listings.redirectUrl,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -444,6 +463,7 @@ export const getListingBySlug = cache(async (
     status: row.status,
     featured_image_url: row.featured_image_url,
     external_url: row.external_url,
+    redirect_url: row.redirect_url,
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),

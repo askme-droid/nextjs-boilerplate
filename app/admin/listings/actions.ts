@@ -7,7 +7,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
-import { parseContactFields } from "@/lib/listings/contact-fields";
+import { normalizeHttpUrl, parseContactFields } from "@/lib/listings/contact-fields";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import { embedImage, embedImageUrl } from "@/lib/listings/embeddings";
 import { isPlaceholderSlug, slugify } from "@/lib/listings/slug";
@@ -31,6 +31,8 @@ export type ListingFormValues = {
   social_links: string;
   cta_label: string;
   cta_url: string;
+  /** Client's own landing page; when set, visitors to this listing go there. */
+  redirect_url: string;
   keywords: string;
   description: string;
   status: string;
@@ -57,12 +59,20 @@ function readValues(formData: FormData): ListingFormValues {
     social_links: get("social_links"),
     cta_label: get("cta_label"),
     cta_url: get("cta_url"),
+    redirect_url: get("redirect_url"),
     keywords: get("keywords"),
     description: get("description"),
     status: get("status"),
     expires_at: get("expires_at"),
     homepage_featured: formData.has("homepage_featured") ? "1" : "",
   };
+}
+
+const OWN_HOSTS = new Set(["directories.fd.sg", "www.directories.fd.sg", "directory.fd.sg"]);
+
+function isOwnListingUrl(url: string, slug: string): boolean {
+  const parsed = new URL(url);
+  return OWN_HOSTS.has(parsed.hostname) && parsed.pathname.replace(/\/+$/, "") === `/listings/${slug}`;
 }
 
 // postgres.js throws a PostgresError whose `code` is the Postgres SQLSTATE —
@@ -100,6 +110,18 @@ export async function saveListing(
   const contact = parseContactFields(values);
   Object.assign(fieldErrors, contact.errors);
 
+  // Only http(s), same rule as the CTA link. Pointing it back at this
+  // listing's own page would redirect in a loop, so that's refused too.
+  let redirectUrl: string | null = null;
+  if (values.redirect_url) {
+    redirectUrl = normalizeHttpUrl(values.redirect_url);
+    if (!redirectUrl) {
+      fieldErrors.redirect_url = "Enter a valid web address, e.g. https://client-site.com/offer";
+    } else if (slug && isOwnListingUrl(redirectUrl, slug)) {
+      fieldErrors.redirect_url = "This points back to the listing itself — use the client's own page.";
+    }
+  }
+
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors, values };
   }
@@ -119,6 +141,7 @@ export async function saveListing(
     socialLinks: contact.parsed.socialLinks,
     ctaLabel: contact.parsed.ctaLabel,
     ctaUrl: contact.parsed.ctaUrl,
+    redirectUrl,
     keywords,
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],

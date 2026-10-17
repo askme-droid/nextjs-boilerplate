@@ -66,6 +66,12 @@ export const listings = pgTable("listings", {
   // the card and the detail route both send visitors there instead of
   // rendering our own copy. Null for every listing that's ours.
   externalUrl: text("external_url"),
+  // Set by staff when a client asks for their listing to point at their own
+  // landing page/domain. Unlike external_url (which marks a listing as
+  // synced from fd.sg and moves it to the Synced admin tab), this is one of
+  // our own listings: it stays in search, categories and the admin list as
+  // normal, but its card links out and its detail page redirects here.
+  redirectUrl: text("redirect_url"),
   // Was uuid FK -> profiles.id under Supabase; Better-Auth's user.id is text,
   // so this column's type changed too (see migration plan). ON DELETE
   // behavior is an assumption (SET NULL — a user's historical listings

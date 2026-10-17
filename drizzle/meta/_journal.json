@@ -57,6 +57,13 @@
       "when": 1791423006428,
       "tag": "0007_listing_featured_video",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792200109046,
+      "tag": "0008_listing_redirect_url",
+      "breakpoints": true
     }
   ]
 }
