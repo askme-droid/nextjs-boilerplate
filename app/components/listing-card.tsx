@@ -7,6 +7,7 @@ import { pickListingImage } from "@/lib/listings/image";
 import type { ListingWithRelations } from "@/lib/listings/queries";
 
 export function ListingCard({ listing }: { listing: ListingWithRelations }) {
+  const outboundUrl = listing.external_url ?? listing.redirect_url;
   const imageUrl = pickListingImage(listing);
   const isNew = isNewListing(listing.created_at);
   const endsSoon = endsSoonLabel(listing.expires_at);
@@ -57,7 +58,7 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
           className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-2 items-center justify-center gap-1 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3 pb-3 pt-12 text-sm font-semibold text-white opacity-0 transition duration-300 group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 motion-reduce:translate-y-0 motion-reduce:transition-none"
         >
           View deal
-          {listing.external_url ? <ArrowUpRight className="size-4" /> : <ArrowRight className="size-4" />}
+          {outboundUrl ? <ArrowUpRight className="size-4" /> : <ArrowRight className="size-4" />}
         </span>
       </div>
 
@@ -95,12 +96,12 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
     <article
       className="group h-full overflow-hidden rounded-lg border border-zinc-200 bg-white transition-[transform,box-shadow,border-color] duration-300 hover:border-brand-teal/40 hover:shadow-lg hover:shadow-brand-teal/15 motion-safe:hover:-translate-y-1 dark:border-zinc-800 dark:bg-zinc-950"
     >
-      {listing.external_url ? (
-        // Syndicated from elsewhere (e.g. fd.sg) — sends the visitor to the
-        // source instead of a local copy, since that's where the content
-        // actually lives.
+      {outboundUrl ? (
+        // Syndicated from elsewhere (e.g. fd.sg), or a client asked for their
+        // listing to go to their own landing page — sends the visitor there
+        // instead of a local copy.
         <a
-          href={listing.external_url}
+          href={outboundUrl}
           target="_blank"
           rel="noopener noreferrer nofollow"
           className="flex flex-col"

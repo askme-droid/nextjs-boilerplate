@@ -20,6 +20,7 @@ const emptyValues: ListingFormValues = {
   social_links: "",
   cta_label: "",
   cta_url: "",
+  redirect_url: "",
   keywords: "",
   description: "",
   status: "draft",
@@ -201,6 +202,25 @@ export function ListingForm({
           )}
         </label>
       </div>
+
+      <label className={labelClass}>
+        Redirect visitors to (optional)
+        <input
+          type="text"
+          name="redirect_url"
+          placeholder="https://client-website.com/landing-page"
+          defaultValue={values.redirect_url}
+          className={inputClass}
+        />
+        <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+          For clients who want their listing to go to their own page or domain. The listing
+          stays in search and categories here, but clicking it opens this address instead of
+          the listing page. Leave empty to show the normal listing page.
+        </span>
+        {state.fieldErrors?.redirect_url && (
+          <p className={errorClass}>{state.fieldErrors.redirect_url}</p>
+        )}
+      </label>
 
       <label className={labelClass}>
         Description

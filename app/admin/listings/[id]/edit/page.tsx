@@ -53,6 +53,17 @@ export default async function EditListingPage({
         </p>
       )}
 
+      {listing.redirect_url && !listing.external_url && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+          Visitors to this listing are redirected to{" "}
+          <a href={listing.redirect_url} target="_blank" rel="noopener noreferrer nofollow" className="underline">
+            {listing.redirect_url}
+          </a>
+          . It still appears in search and categories. Clear &quot;Redirect visitors to&quot; below to show the
+          listing page again.
+        </p>
+      )}
+
       <EditListingClient
         listingId={listing.id}
         categories={categories}
@@ -66,6 +77,7 @@ export default async function EditListingPage({
           social_links: listing.social_links.join("\n"),
           cta_label: listing.cta_label ?? "",
           cta_url: listing.cta_url ?? "",
+          redirect_url: listing.redirect_url ?? "",
           keywords: (listing.keywords ?? []).join(", "),
           description: listing.description ?? "",
           status: listing.status,

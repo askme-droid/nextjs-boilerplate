@@ -24,6 +24,7 @@ export type AdminListingRow = {
   status: string;
   featured_image_url: string | null;
   external_url: string | null;
+  redirect_url: string | null;
   homepage_featured: boolean;
   created_by: string | null;
   expires_at: string | null;
@@ -51,6 +52,7 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
+      redirect_url: listings.redirectUrl,
       homepage_featured: listings.homepageFeatured,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
@@ -76,6 +78,7 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
     status: r.status,
     featured_image_url: r.featured_image_url,
     external_url: r.external_url,
+    redirect_url: r.redirect_url,
     homepage_featured: r.homepage_featured,
     created_by: r.created_by,
     expires_at: r.expires_at,
@@ -139,6 +142,7 @@ export async function getAdminListingById(
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
+      redirect_url: listings.redirectUrl,
       homepage_featured: listings.homepageFeatured,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
@@ -190,6 +194,7 @@ export async function getAdminListingById(
     status: row.status,
     featured_image_url: row.featured_image_url,
     external_url: row.external_url,
+    redirect_url: row.redirect_url,
     homepage_featured: row.homepage_featured,
     created_by: row.created_by,
     expires_at: row.expires_at,
