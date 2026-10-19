@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: "%s | FDSG",
   },
   description:
-    "Browse flyer deals, e-vouchers and promotions from local Singapore businesses — search by category, location or even by photo.",
+    "Browse flyer deals, e-vouchers and promotions from local Singapore businesses — search by category, location or keyword.",
   // Proves to Google Search Console that this site is ours.
   verification: { google: "kw9aRWmRLg8noEH0ZXMY2rxxp8_vSJk2CbIA-7iigok" },
   openGraph: {

@@ -64,6 +64,13 @@
       "when": 1792200109046,
       "tag": "0008_listing_redirect_url",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792378878601,
+      "tag": "0009_listing_seo_fields",
+      "breakpoints": true
     }
   ]
 }

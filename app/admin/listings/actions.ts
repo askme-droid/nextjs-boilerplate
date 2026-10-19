@@ -11,6 +11,7 @@ import { normalizeHttpUrl, parseContactFields } from "@/lib/listings/contact-fie
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import { embedImage, embedImageUrl } from "@/lib/listings/embeddings";
 import { isPlaceholderSlug, slugify } from "@/lib/listings/slug";
+import { FOCUS_KEYWORD_LIMIT, SEO_DESCRIPTION_LIMIT, SEO_TITLE_LIMIT } from "@/lib/seo/listing-seo";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -33,6 +34,10 @@ export type ListingFormValues = {
   cta_url: string;
   /** Client's own landing page; when set, visitors to this listing go there. */
   redirect_url: string;
+  /** SEO panel (see app/admin/listings/seo-panel.tsx). Empty = use fallbacks. */
+  seo_title: string;
+  seo_description: string;
+  focus_keyword: string;
   keywords: string;
   description: string;
   status: string;
@@ -60,6 +65,9 @@ function readValues(formData: FormData): ListingFormValues {
     cta_label: get("cta_label"),
     cta_url: get("cta_url"),
     redirect_url: get("redirect_url"),
+    seo_title: get("seo_title"),
+    seo_description: get("seo_description"),
+    focus_keyword: get("focus_keyword"),
     keywords: get("keywords"),
     description: get("description"),
     status: get("status"),
@@ -122,6 +130,14 @@ export async function saveListing(
     }
   }
 
+  // Lengths past the recommended 60/160 are only warned about in the panel;
+  // these hard caps just stop accidental pastes of whole documents.
+  if (values.seo_title.length > SEO_TITLE_LIMIT) fieldErrors.seo_title = `Keep the SEO title under ${SEO_TITLE_LIMIT} characters.`;
+  if (values.seo_description.length > SEO_DESCRIPTION_LIMIT)
+    fieldErrors.seo_description = `Keep the meta description under ${SEO_DESCRIPTION_LIMIT} characters.`;
+  if (values.focus_keyword.length > FOCUS_KEYWORD_LIMIT)
+    fieldErrors.focus_keyword = `Keep the focus keyword under ${FOCUS_KEYWORD_LIMIT} characters.`;
+
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors, values };
   }
@@ -142,6 +158,9 @@ export async function saveListing(
     ctaLabel: contact.parsed.ctaLabel,
     ctaUrl: contact.parsed.ctaUrl,
     redirectUrl,
+    seoTitle: values.seo_title.replace(/\s+/g, " ").trim() || null,
+    seoDescription: values.seo_description.replace(/\s+/g, " ").trim() || null,
+    focusKeyword: values.focus_keyword.replace(/\s+/g, " ").trim() || null,
     keywords,
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],

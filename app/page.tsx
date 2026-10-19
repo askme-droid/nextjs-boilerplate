@@ -1,4 +1,6 @@
 import type { HeroSlide } from "@/app/components/hero-slider";
+import { JsonLd } from "@/lib/seo/json-ld";
+import { SITE_NAME, SITE_URL } from "@/lib/seo/listing-seo";
 import { FeaturedVideoSlider } from "@/app/components/featured-video-slider";
 import { HeroSection } from "@/components/blocks/hero-section-6";
 import { ListingCard } from "@/app/components/listing-card";
@@ -170,6 +172,36 @@ async function loadPageData(
   }
 }
 
+/** Site-wide identity for search engines and AI assistants: who runs FDSG
+ *  and how to search it. Listing pages reference the WebSite by its @id. */
+const siteJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: SITE_NAME,
+      description: "Flyer deals, e-vouchers and promotions from local Singapore businesses.",
+      inLanguage: "en-SG",
+      publisher: { "@id": `${SITE_URL}/#organization` },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/?q={search_term_string}` },
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: `${SITE_URL}/logo.png`,
+      sameAs: ["https://www.facebook.com/FDSGDeals", "https://www.instagram.com/fdsgdeals/", "https://fd.sg"],
+    },
+  ],
+};
+
 export default async function Home({
   searchParams,
 }: {
@@ -188,6 +220,7 @@ export default async function Home({
 
   return (
     <main className="flex flex-1 flex-col">
+      <JsonLd data={siteJsonLd} />
       <HeroSection slides={HERO_SLIDES} />
 
       {result.ok && <FeaturedVideoSlider slides={result.data.featured} />}

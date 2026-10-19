@@ -116,6 +116,9 @@ export function EditListingClient({
                 cta_label: initialValues.cta_label,
                 cta_url: initialValues.cta_url,
                 redirect_url: initialValues.redirect_url,
+                seo_title: initialValues.seo_title,
+                seo_description: initialValues.seo_description,
+                focus_keyword: initialValues.focus_keyword,
                 homepage_featured: initialValues.homepage_featured,
               }
             : initialValues

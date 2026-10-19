@@ -72,6 +72,14 @@ export const listings = pgTable("listings", {
   // our own listings: it stays in search, categories and the admin list as
   // normal, but its card links out and its detail page redirects here.
   redirectUrl: text("redirect_url"),
+  // SEO panel (admin listing editor, Yoast-style). All optional: when empty
+  // the page falls back to "<title> | FDSG" and the start of the description.
+  // seo_title is used as the full <title> as-is (no "| FDSG" suffix added),
+  // so the 60-character counter in the editor matches what search shows.
+  // focus_keyword is only for the editor's checks — never output as a tag.
+  seoTitle: text("seo_title"),
+  seoDescription: text("seo_description"),
+  focusKeyword: text("focus_keyword"),
   // Was uuid FK -> profiles.id under Supabase; Better-Auth's user.id is text,
   // so this column's type changed too (see migration plan). ON DELETE
   // behavior is an assumption (SET NULL — a user's historical listings

@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import type { ListingCategory, ListingTag } from "@/lib/listings/queries";
 import { publishListing, saveListing, type ListingFormState, type ListingFormValues } from "./actions";
+import { SeoPanel } from "./seo-panel";
 
 const inputClass =
   "mt-1 block w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -21,6 +22,9 @@ const emptyValues: ListingFormValues = {
   cta_label: "",
   cta_url: "",
   redirect_url: "",
+  seo_title: "",
+  seo_description: "",
+  focus_keyword: "",
   keywords: "",
   description: "",
   status: "draft",
@@ -242,6 +246,19 @@ export function ListingForm({
           className={inputClass}
         />
       </label>
+
+      <SeoPanel
+        initial={{
+          seo_title: values.seo_title,
+          seo_description: values.seo_description,
+          focus_keyword: values.focus_keyword,
+        }}
+        errors={{
+          seo_title: state.fieldErrors?.seo_title,
+          seo_description: state.fieldErrors?.seo_description,
+          focus_keyword: state.fieldErrors?.focus_keyword,
+        }}
+      />
 
       <label className={labelClass}>
         Expires
