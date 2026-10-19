@@ -18,6 +18,7 @@ export function EditListingClient({
   selectedTagIds,
   images,
   children,
+  footer,
 }: {
   listingId: string;
   /** Listing photos, offered as social share images in the SEO panel. */
@@ -29,6 +30,8 @@ export function EditListingClient({
   /** The image manager, slotted between the form's fields and its Save
    *  button (see ListingForm). */
   children?: React.ReactNode;
+  /** Shown after the SEO panel (the delete box). */
+  footer?: React.ReactNode;
 }) {
   // The flyer picked in the box below, also read by the free flyer reader.
   const flyerInput = useRef<HTMLInputElement>(null);
@@ -132,6 +135,7 @@ export function EditListingClient({
         }
         allTags={allTags}
         selectedTagIds={selectedTagIds}
+        footer={footer}
       >
         {children}
       </ListingForm>
