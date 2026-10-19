@@ -16,9 +16,12 @@ export function EditListingClient({
   categories,
   allTags,
   selectedTagIds,
+  images,
   children,
 }: {
   listingId: string;
+  /** Listing photos, offered as social share images in the SEO panel. */
+  images?: { url: string; is_featured: boolean; position: number }[];
   initialValues: ListingFormValues;
   categories: ListingCategory[];
   allTags: ListingTag[];
@@ -102,6 +105,7 @@ export function EditListingClient({
       <ListingForm
         key={draft?.key ?? 0}
         listingId={listingId}
+        images={images}
         categories={categories}
         submitLabel="Save changes"
         initialValues={
@@ -119,6 +123,9 @@ export function EditListingClient({
                 seo_title: initialValues.seo_title,
                 seo_description: initialValues.seo_description,
                 focus_keyword: initialValues.focus_keyword,
+                og_title: initialValues.og_title,
+                og_description: initialValues.og_description,
+                og_image_url: initialValues.og_image_url,
                 homepage_featured: initialValues.homepage_featured,
               }
             : initialValues

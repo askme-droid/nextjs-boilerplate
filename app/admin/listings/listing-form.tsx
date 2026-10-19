@@ -25,6 +25,9 @@ const emptyValues: ListingFormValues = {
   seo_title: "",
   seo_description: "",
   focus_keyword: "",
+  og_title: "",
+  og_description: "",
+  og_image_url: "",
   keywords: "",
   description: "",
   status: "draft",
@@ -39,6 +42,7 @@ export function ListingForm({
   submitLabel,
   allTags,
   selectedTagIds,
+  images,
   children,
 }: {
   /** Present when editing; omitted when creating. */
@@ -54,6 +58,8 @@ export function ListingForm({
    */
   allTags?: ListingTag[];
   selectedTagIds?: string[];
+  /** The listing's photos, for picking a social share image (edit form only). */
+  images?: { url: string; is_featured: boolean; position: number }[];
   /** Rendered between the fields and the submit button — the image
    *  manager, on the edit page. It's its own set of <form>s and can't nest
    *  inside this one, so it's slotted in here and the button below
@@ -252,11 +258,19 @@ export function ListingForm({
           seo_title: values.seo_title,
           seo_description: values.seo_description,
           focus_keyword: values.focus_keyword,
+          og_title: values.og_title,
+          og_description: values.og_description,
+          og_image_url: values.og_image_url,
         }}
+        listingId={listingId}
+        images={images}
         errors={{
           seo_title: state.fieldErrors?.seo_title,
           seo_description: state.fieldErrors?.seo_description,
           focus_keyword: state.fieldErrors?.focus_keyword,
+          og_title: state.fieldErrors?.og_title,
+          og_description: state.fieldErrors?.og_description,
+          og_image_url: state.fieldErrors?.og_image_url,
         }}
       />
 

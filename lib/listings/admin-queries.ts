@@ -117,6 +117,9 @@ export type AdminListingDetail = AdminListingRow & {
   seo_title: string | null;
   seo_description: string | null;
   focus_keyword: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  og_image_url: string | null;
   listing_images: ListingImage[];
   tagIds: string[];
 };
@@ -144,6 +147,9 @@ export async function getAdminListingById(
       seo_title: listings.seoTitle,
       seo_description: listings.seoDescription,
       focus_keyword: listings.focusKeyword,
+      og_title: listings.ogTitle,
+      og_description: listings.ogDescription,
+      og_image_url: listings.ogImageUrl,
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
@@ -199,6 +205,9 @@ export async function getAdminListingById(
     seo_title: row.seo_title,
     seo_description: row.seo_description,
     focus_keyword: row.focus_keyword,
+    og_title: row.og_title,
+    og_description: row.og_description,
+    og_image_url: row.og_image_url,
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,

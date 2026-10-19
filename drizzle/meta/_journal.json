@@ -71,6 +71,13 @@
       "when": 1792378878601,
       "tag": "0009_listing_seo_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792380145382,
+      "tag": "0010_listing_social_fields",
+      "breakpoints": true
     }
   ]
 }

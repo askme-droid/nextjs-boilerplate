@@ -6,7 +6,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
-import { makeKey, putFile } from "@/lib/storage/r2";
+import { isStoredFileUrl, makeKey, putFile } from "@/lib/storage/r2";
 import { normalizeHttpUrl, parseContactFields } from "@/lib/listings/contact-fields";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import { embedImage, embedImageUrl } from "@/lib/listings/embeddings";
@@ -38,6 +38,11 @@ export type ListingFormValues = {
   seo_title: string;
   seo_description: string;
   focus_keyword: string;
+  /** Social share overrides. Empty = use the SEO title/description and the
+   *  featured photo. og_image_url is a listing photo URL or an uploaded one. */
+  og_title: string;
+  og_description: string;
+  og_image_url: string;
   keywords: string;
   description: string;
   status: string;
@@ -68,6 +73,9 @@ function readValues(formData: FormData): ListingFormValues {
     seo_title: get("seo_title"),
     seo_description: get("seo_description"),
     focus_keyword: get("focus_keyword"),
+    og_title: get("og_title"),
+    og_description: get("og_description"),
+    og_image_url: get("og_image_url"),
     keywords: get("keywords"),
     description: get("description"),
     status: get("status"),
@@ -137,6 +145,17 @@ export async function saveListing(
     fieldErrors.seo_description = `Keep the meta description under ${SEO_DESCRIPTION_LIMIT} characters.`;
   if (values.focus_keyword.length > FOCUS_KEYWORD_LIMIT)
     fieldErrors.focus_keyword = `Keep the focus keyword under ${FOCUS_KEYWORD_LIMIT} characters.`;
+  if (values.og_title.length > SEO_TITLE_LIMIT) fieldErrors.og_title = `Keep the social title under ${SEO_TITLE_LIMIT} characters.`;
+  if (values.og_description.length > SEO_DESCRIPTION_LIMIT)
+    fieldErrors.og_description = `Keep the social description under ${SEO_DESCRIPTION_LIMIT} characters.`;
+  // Either a file in our own storage (an uploaded social image) or any valid
+  // http(s) image address (a listing photo, which may be hotlinked).
+  const ogImageUrl = values.og_image_url
+    ? isStoredFileUrl(values.og_image_url)
+      ? values.og_image_url
+      : normalizeHttpUrl(values.og_image_url)
+    : null;
+  if (values.og_image_url && !ogImageUrl) fieldErrors.og_image_url = "That social image address isn't valid — pick or upload the image again.";
 
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors, values };
@@ -161,6 +180,9 @@ export async function saveListing(
     seoTitle: values.seo_title.replace(/\s+/g, " ").trim() || null,
     seoDescription: values.seo_description.replace(/\s+/g, " ").trim() || null,
     focusKeyword: values.focus_keyword.replace(/\s+/g, " ").trim() || null,
+    ogTitle: values.og_title.replace(/\s+/g, " ").trim() || null,
+    ogDescription: values.og_description.replace(/\s+/g, " ").trim() || null,
+    ogImageUrl,
     keywords,
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
@@ -525,4 +547,26 @@ export async function moveImage(formData: FormData) {
   const slug = await getListingSlug(listingId);
   if (slug) revalidatePath(`/listings/${slug}`);
   redirect(editUrl(listingId));
+}
+
+/**
+ * Uploads a dedicated social share image (not added to the listing's photo
+ * gallery) and returns its URL; the SEO panel puts it in og_image_url, which
+ * is saved with the rest of the form. Called directly from the panel, not as
+ * a form action, since it lives inside the main listing form.
+ */
+export async function uploadSocialImage(formData: FormData): Promise<{ url?: string; error?: string }> {
+  await requireStaff();
+  const listingId = String(formData.get("listingId") ?? "");
+  const file = formData.get("file");
+  if (!/^[0-9a-f-]{36}$/i.test(listingId)) return { error: "Save the listing first, then add a social image." };
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose an image." };
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) return { error: "The image must be PNG, JPEG, WebP or GIF." };
+  if (file.size > MAX_IMAGE_BYTES) return { error: "The image must be under 5MB." };
+  try {
+    const url = await putFile(makeKey(`social/${listingId}`, file.name), await file.arrayBuffer(), file.type);
+    return { url };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not upload the image." };
+  }
 }

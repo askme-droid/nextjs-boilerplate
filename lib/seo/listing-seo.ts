@@ -201,3 +201,45 @@ export function runSeoChecks(input: {
 
   return checks;
 }
+
+// ── Social sharing (Open Graph: Facebook, WhatsApp, LinkedIn, X) ──────────
+
+/** Facebook's recommended share image size (1.91:1). */
+export const OG_IMAGE_WIDTH = 1200;
+export const OG_IMAGE_HEIGHT = 630;
+/** Rough points where Facebook/LinkedIn cut the text off in a share card. */
+export const SOCIAL_TITLE_MAX = 60;
+export const SOCIAL_DESCRIPTION_MAX = 110;
+
+/** Social title: its own override, else the SEO title rules. */
+export function effectiveSocialTitle(
+  ogTitle: string | null | undefined,
+  seoTitle: string | null | undefined,
+  title: string,
+): string {
+  return squash(ogTitle ?? "") || effectiveTitle(seoTitle, title);
+}
+
+/** Social description: its own override, else the meta description rules. */
+export function effectiveSocialDescription(
+  ogDescription: string | null | undefined,
+  seoDescription: string | null | undefined,
+  description: string | null | undefined,
+): string {
+  return squash(ogDescription ?? "") || effectiveDescription(seoDescription, description);
+}
+
+/** How a share image's size compares with the 1200×630 recommendation. */
+export function socialImageAdvice(width: number, height: number): { ok: boolean; message: string } {
+  const ratio = width / height;
+  if (width < 600 || height < 315) {
+    return { ok: false, message: `Too small (${width}×${height}) — Facebook may show it as a tiny thumbnail. Use at least 1200×630.` };
+  }
+  if (Math.abs(ratio - OG_IMAGE_WIDTH / OG_IMAGE_HEIGHT) > 0.25) {
+    return { ok: false, message: `${width}×${height} isn't landscape 1.91:1 — it will be cropped. 1200×630 fits best.` };
+  }
+  if (width < OG_IMAGE_WIDTH) {
+    return { ok: true, message: `${width}×${height} works, but 1200×630 looks sharper on large screens.` };
+  }
+  return { ok: true, message: `${width}×${height} — good size for sharing.` };
+}

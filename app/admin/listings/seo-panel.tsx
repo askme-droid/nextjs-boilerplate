@@ -2,16 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { isPlaceholderSlug, slugify } from "@/lib/listings/slug";
+import { uploadSocialImage } from "./actions";
 import {
   DESCRIPTION_MAX,
   DESCRIPTION_MIN,
   FOCUS_KEYWORD_LIMIT,
   SEO_DESCRIPTION_LIMIT,
   SEO_TITLE_LIMIT,
+  SOCIAL_DESCRIPTION_MAX,
+  SOCIAL_TITLE_MAX,
   TITLE_MAX,
   TITLE_MIN,
   effectiveDescription,
+  effectiveSocialDescription,
+  effectiveSocialTitle,
   effectiveTitle,
+  socialImageAdvice,
   lengthStatus,
   runSeoChecks,
   type LengthStatus,
@@ -82,18 +88,63 @@ function useListingFields(anchor: React.RefObject<HTMLElement | null>) {
   return fields;
 }
 
+type PanelImage = { url: string; is_featured: boolean; position: number };
+
+/** Loads an image just to read its pixel size (for the 1200×630 advice). */
+function useImageSize(url: string | null) {
+  const [size, setSize] = useState<{ url: string; width: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+    const img = new window.Image();
+    img.onload = () => {
+      if (!cancelled) setSize({ url, width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.src = url;
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+  return size && size.url === url ? size : null;
+}
+
 export function SeoPanel({
   initial,
   errors,
+  listingId,
+  images,
 }: {
-  initial: { seo_title: string; seo_description: string; focus_keyword: string };
-  errors?: { seo_title?: string; seo_description?: string; focus_keyword?: string };
+  initial: {
+    seo_title: string;
+    seo_description: string;
+    focus_keyword: string;
+    og_title: string;
+    og_description: string;
+    og_image_url: string;
+  };
+  errors?: {
+    seo_title?: string;
+    seo_description?: string;
+    focus_keyword?: string;
+    og_title?: string;
+    og_description?: string;
+    og_image_url?: string;
+  };
+  /** Present on the edit form; needed to upload a social image. */
+  listingId?: string;
+  images?: PanelImage[];
 }) {
   const ref = useRef<HTMLFieldSetElement>(null);
   const listing = useListingFields(ref);
   const [seoTitle, setSeoTitle] = useState(initial.seo_title);
   const [seoDescription, setSeoDescription] = useState(initial.seo_description);
   const [keyword, setKeyword] = useState(initial.focus_keyword);
+  const [ogTitle, setOgTitle] = useState(initial.og_title);
+  const [ogDescription, setOgDescription] = useState(initial.og_description);
+  const [ogImageUrl, setOgImageUrl] = useState(initial.og_image_url);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
 
   const title = effectiveTitle(seoTitle, listing.title);
   const description = effectiveDescription(seoDescription, listing.description);
@@ -107,6 +158,31 @@ export function SeoPanel({
     slug,
     content: listing.description,
   });
+  const socialTitle = effectiveSocialTitle(ogTitle, seoTitle, listing.title);
+  const socialDescription = effectiveSocialDescription(ogDescription, seoDescription, listing.description);
+  const photos = [...(images ?? [])].sort((a, b) =>
+    a.is_featured !== b.is_featured ? (a.is_featured ? -1 : 1) : a.position - b.position,
+  );
+  const defaultImage = photos[0]?.url ?? null;
+  const socialImage = ogImageUrl || defaultImage;
+  const isCustomUpload = !!ogImageUrl && !photos.some((p) => p.url === ogImageUrl);
+  const imageSize = useImageSize(socialImage);
+  const imageAdvice = imageSize ? socialImageAdvice(imageSize.width, imageSize.height) : null;
+
+  async function handleUpload(file: File) {
+    if (!listingId) return;
+    setUploadError(null);
+    setUploading(true);
+    const data = new FormData();
+    data.set("listingId", listingId);
+    data.set("file", file);
+    const result = await uploadSocialImage(data);
+    setUploading(false);
+    if (uploadRef.current) uploadRef.current.value = "";
+    if (result.url) setOgImageUrl(result.url);
+    else setUploadError(result.error ?? "Upload failed.");
+  }
+
   const passed = checks.filter((c) => c.ok).length;
   const problems = checks.filter((c) => !c.ok && !c.warn).length;
   const overall = problems > 0 ? "Needs work" : passed === checks.length ? "Good" : "OK";
@@ -221,6 +297,175 @@ export function SeoPanel({
             </li>
           ))}
         </ul>
+      </div>
+
+      {/* ── Social media sharing (Open Graph) ── */}
+      <div className="flex flex-col gap-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+        <div>
+          <p className="text-sm font-semibold">Social media share</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            How this listing looks when shared on Facebook, WhatsApp, LinkedIn or X. Leave empty to use the SEO
+            title, meta description and featured photo.
+          </p>
+        </div>
+
+        {/* Facebook / WhatsApp style preview */}
+        <div className="w-full max-w-md overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="relative aspect-[1.91/1] w-full bg-zinc-200 dark:bg-zinc-800">
+            {socialImage ? (
+              // Admin-only preview of an arbitrary URL; same reasoning as the
+              // image manager's plain <img>.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={socialImage} alt="" className="absolute inset-0 size-full object-cover" />
+            ) : (
+              <span className="absolute inset-0 flex items-center justify-center text-sm text-zinc-500">
+                No image — add a listing photo or upload one below
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5 p-3">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">directories.fd.sg</p>
+            <p className="line-clamp-2 font-semibold leading-snug">{socialTitle}</p>
+            <p className="line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+              {socialDescription || "No description yet."}
+            </p>
+          </div>
+        </div>
+
+        <label className="text-sm font-medium">
+          Social title
+          <input
+            type="text"
+            name="og_title"
+            value={ogTitle}
+            maxLength={SEO_TITLE_LIMIT}
+            onChange={(e) => setOgTitle(e.target.value)}
+            placeholder={effectiveTitle(seoTitle, listing.title)}
+            className={inputClass}
+          />
+          <LengthMeter length={socialTitle.length} min={1} max={SOCIAL_TITLE_MAX} />
+          <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+            {ogTitle.trim() ? "Used for social shares only." : "Empty — using the SEO title."}
+          </span>
+          {errors?.og_title && <p className={errorClass}>{errors.og_title}</p>}
+        </label>
+
+        <label className="text-sm font-medium">
+          Social description
+          <textarea
+            name="og_description"
+            rows={2}
+            value={ogDescription}
+            maxLength={SEO_DESCRIPTION_LIMIT}
+            onChange={(e) => setOgDescription(e.target.value)}
+            placeholder={effectiveDescription(seoDescription, listing.description) || "A short, catchy line for shares"}
+            className={inputClass}
+          />
+          <LengthMeter length={socialDescription.length} min={1} max={SOCIAL_DESCRIPTION_MAX} />
+          <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+            {ogDescription.trim()
+              ? "Facebook shows about 110 characters; keep the key message early."
+              : "Empty — using the meta description."}
+          </span>
+          {errors?.og_description && <p className={errorClass}>{errors.og_description}</p>}
+        </label>
+
+        <div className="text-sm font-medium">
+          Social image
+          <input type="hidden" name="og_image_url" value={ogImageUrl} />
+          <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Social image">
+            {photos.map((photo, i) => {
+              const selected = ogImageUrl ? ogImageUrl === photo.url : i === 0;
+              return (
+                <button
+                  key={photo.url}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setOgImageUrl(i === 0 ? "" : photo.url)}
+                  className={`relative h-16 w-28 overflow-hidden rounded-md border-2 ${
+                    selected ? "border-emerald-500" : "border-transparent opacity-70 hover:opacity-100"
+                  }`}
+                  title={i === 0 ? "Featured photo (default)" : "Use this photo"}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.url} alt="" className="size-full object-cover" />
+                  {i === 0 && (
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-center text-[10px] text-white">
+                      Default
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            {isCustomUpload && (
+              <button
+                type="button"
+                role="radio"
+                aria-checked
+                className="relative h-16 w-28 overflow-hidden rounded-md border-2 border-emerald-500"
+                title="Uploaded social image"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={ogImageUrl} alt="" className="size-full object-cover" />
+                <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-center text-[10px] text-white">
+                  Uploaded
+                </span>
+              </button>
+            )}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {listingId ? (
+              <>
+                <input
+                  ref={uploadRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleUpload(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => uploadRef.current?.click()}
+                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                >
+                  {uploading ? "Uploading…" : "Upload a social image"}
+                </button>
+              </>
+            ) : (
+              <span className="text-xs font-normal text-zinc-500">Save the listing first to upload a social image.</span>
+            )}
+            {ogImageUrl && (
+              <button
+                type="button"
+                onClick={() => setOgImageUrl("")}
+                className="text-sm font-normal text-zinc-600 underline-offset-4 hover:underline dark:text-zinc-400"
+              >
+                Use the featured photo instead
+              </button>
+            )}
+          </div>
+
+          {imageAdvice && (
+            <p
+              className={`mt-1.5 text-xs font-normal ${
+                imageAdvice.ok ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+              }`}
+            >
+              {imageAdvice.message}
+            </p>
+          )}
+          <p className="mt-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+            Best size: 1200 × 630 pixels (landscape). Uploaded images are only used for sharing, not shown in the listing.
+          </p>
+          {uploadError && <p className={errorClass}>{uploadError}</p>}
+          {errors?.og_image_url && <p className={errorClass}>{errors.og_image_url}</p>}
+        </div>
       </div>
     </fieldset>
   );

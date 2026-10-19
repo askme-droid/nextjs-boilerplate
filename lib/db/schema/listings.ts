@@ -80,6 +80,11 @@ export const listings = pgTable("listings", {
   seoTitle: text("seo_title"),
   seoDescription: text("seo_description"),
   focusKeyword: text("focus_keyword"),
+  // Social share overrides (Open Graph: Facebook, WhatsApp, LinkedIn, X).
+  // Empty = fall back to the SEO title/description and the featured photo.
+  ogTitle: text("og_title"),
+  ogDescription: text("og_description"),
+  ogImageUrl: text("og_image_url"),
   // Was uuid FK -> profiles.id under Supabase; Better-Auth's user.id is text,
   // so this column's type changed too (see migration plan). ON DELETE
   // behavior is an assumption (SET NULL — a user's historical listings

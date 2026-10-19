@@ -6,7 +6,14 @@ import { socialLabel } from "@/lib/listings/contact-fields";
 import { pickListingImage } from "@/lib/listings/image";
 import { getListingBySlug, type ListingDetail } from "@/lib/listings/queries";
 import { compact, JsonLd } from "@/lib/seo/json-ld";
-import { SITE_NAME, SITE_URL, effectiveDescription, effectiveTitle } from "@/lib/seo/listing-seo";
+import {
+  SITE_NAME,
+  SITE_URL,
+  effectiveDescription,
+  effectiveSocialDescription,
+  effectiveSocialTitle,
+  effectiveTitle,
+} from "@/lib/seo/listing-seo";
 
 type Params = Promise<{ slug: string }>;
 
@@ -26,7 +33,13 @@ export async function generateMetadata({
   const title = effectiveTitle(listing.seo_title, listing.title);
   const description = effectiveDescription(listing.seo_description, listing.description) || undefined;
   const url = `/listings/${listing.slug}`;
-  const image = pickListingImage(listing);
+  // Social shares (Facebook, WhatsApp, LinkedIn, X) can have their own
+  // title/description/image, set in the SEO panel's "Social media share"
+  // section; otherwise they follow the SEO title/description and featured photo.
+  const socialTitle = effectiveSocialTitle(listing.og_title, listing.seo_title, listing.title);
+  const socialDescription =
+    effectiveSocialDescription(listing.og_description, listing.seo_description, listing.description) || undefined;
+  const image = listing.og_image_url || pickListingImage(listing);
 
   return {
     title: { absolute: title },
@@ -36,14 +49,14 @@ export async function generateMetadata({
       type: "website",
       siteName: SITE_NAME,
       url,
-      title,
-      description,
+      title: socialTitle,
+      description: socialDescription,
       ...(image ? { images: [{ url: image, alt: listing.title }] } : {}),
     },
     twitter: {
       card: image ? "summary_large_image" : "summary",
-      title,
-      description,
+      title: socialTitle,
+      description: socialDescription,
       ...(image ? { images: [image] } : {}),
     },
   };

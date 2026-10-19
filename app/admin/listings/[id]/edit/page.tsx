@@ -66,6 +66,7 @@ export default async function EditListingPage({
 
       <EditListingClient
         listingId={listing.id}
+        images={listing.listing_images}
         categories={categories}
         initialValues={{
           title: listing.title,
@@ -81,6 +82,9 @@ export default async function EditListingPage({
           seo_title: listing.seo_title ?? "",
           seo_description: listing.seo_description ?? "",
           focus_keyword: listing.focus_keyword ?? "",
+          og_title: listing.og_title ?? "",
+          og_description: listing.og_description ?? "",
+          og_image_url: listing.og_image_url ?? "",
           keywords: (listing.keywords ?? []).join(", "),
           description: listing.description ?? "",
           status: listing.status,
