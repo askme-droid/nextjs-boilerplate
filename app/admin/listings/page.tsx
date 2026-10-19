@@ -4,6 +4,7 @@ import { getAdminListings } from "@/lib/listings/admin-queries";
 import { createListing, deleteListing, publishListing } from "./actions";
 import { isExpired } from "@/lib/listings/expiry-dates";
 import { formatViews } from "@/lib/listings/views";
+import { formatListingDate } from "@/lib/listings/dates";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
@@ -90,6 +91,7 @@ export default async function AdminListingsPage({
                   {listing.categories?.name ?? "No category"}
                   {listing.location ? ` · ${listing.location}` : ""}
                   {` · ${formatViews(listing.view_count)}`}
+                  {` · created ${formatListingDate(listing.created_at)}`}
                   {listing.expires_at
                     ? isExpired(listing.expires_at)
                       ? ""

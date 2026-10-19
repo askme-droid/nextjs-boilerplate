@@ -3,6 +3,7 @@ import { requireStaff } from "@/lib/auth/require-staff";
 import { getSyndicatedListings } from "@/lib/listings/admin-queries";
 import { deleteListing, publishListing } from "../actions";
 import { refreshSyncedListings } from "../sync-actions";
+import { formatListingDate } from "@/lib/listings/dates";
 
 // "Refresh from fd.sg" (below) now embeds every image it scrapes (CLIP
 // inference per image, not just HTTP fetches) before this page's default
@@ -100,6 +101,8 @@ export default async function SyncedListingsPage({
                 </div>
                 <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
                   {listing.categories?.name ?? "No category"}
+                  {/* fd.sg's original posting date (from its RSS feed), set on Refresh. */}
+                  {` · posted on fd.sg ${formatListingDate(listing.created_at)}`}
                 </p>
                 {listing.external_url && (
                   <a

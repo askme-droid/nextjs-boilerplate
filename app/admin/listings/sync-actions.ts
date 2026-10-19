@@ -13,11 +13,13 @@ export async function refreshSyncedListings() {
   let errorMessage: string | null = null;
   let added = 0;
   let remaining = 0;
+  let datesUpdated = 0;
 
   try {
     const result = await syncFdsgListings();
     added = result.added;
     remaining = result.remaining;
+    datesUpdated = result.datesUpdated;
   } catch (e) {
     // Computed outside the try below on purpose: redirect() throws
     // internally, and calling it inside this catch would just be caught
@@ -37,7 +39,12 @@ export async function refreshSyncedListings() {
   // Hit the per-run cap (see MAX_NEW_PER_RUN in fdsg-sync.ts) — tell staff
   // there's more so they know to click again rather than assume this was
   // everything.
+  const datesMessage =
+    datesUpdated > 0
+      ? ` Updated the created date of ${datesUpdated} listing${datesUpdated === 1 ? "" : "s"} to match fd.sg.`
+      : "";
   const message =
-    remaining > 0 ? `${addedMessage} ${remaining} more pending — click Refresh again to continue.` : addedMessage;
+    (remaining > 0 ? `${addedMessage} ${remaining} more pending — click Refresh again to continue.` : addedMessage) +
+    datesMessage;
   redirect(`/admin/listings/synced?refreshed=${encodeURIComponent(message)}`);
 }

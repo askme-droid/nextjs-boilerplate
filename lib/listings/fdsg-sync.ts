@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, listingImages, listings } from "@/lib/db/schema";
 import { embedImageUrl } from "./embeddings";
@@ -50,7 +50,75 @@ const MAX_ARCHIVE_PAGES = 20; // safety cap against an infinite loop, not a real
 // repeatedly, so whatever's left over is picked up next click.
 const MAX_NEW_PER_RUN = 20;
 
-export type SyncResult = { added: number; skipped: number; total: number; remaining: number };
+export type SyncResult = {
+  added: number;
+  skipped: number;
+  total: number;
+  remaining: number;
+  /** Existing synced listings whose created date was corrected to fd.sg's. */
+  datesUpdated: number;
+};
+
+/** Normalised form of an fd.sg listing URL for matching (scheme, www,
+ *  case and trailing slash ignored). */
+export function normalizeSourceUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, "").toLowerCase()}${decodeURIComponent(u.pathname).replace(/\/+$/, "").toLowerCase()}`;
+  } catch {
+    return url.trim().replace(/\/+$/, "").toLowerCase();
+  }
+}
+
+const FEED_BASE = "https://www.fd.sg/feed/?post_type=acadp_listings";
+const MAX_FEED_PAGES = 50;
+
+/**
+ * When each fd.sg listing was originally published, keyed by normalised URL.
+ * The listing pages themselves only say "Posted 7 years ago", but
+ * WordPress's RSS feed for the listings post type carries the exact
+ * <pubDate>; it's paginated with &paged=N (10 per page by default) and
+ * returns 404 past the last page.
+ */
+export async function fetchSourceDates(): Promise<Map<string, Date>> {
+  const dates = new Map<string, Date>();
+  for (let page = 1; page <= MAX_FEED_PAGES; page++) {
+    const res = await fetch(page === 1 ? FEED_BASE : `${FEED_BASE}&paged=${page}`);
+    if (!res.ok) break;
+    const $ = cheerio.load(await res.text(), { xml: true });
+    const items = $("item");
+    if (items.length === 0) break;
+    const before = dates.size;
+    items.each((_, item) => {
+      const link = $(item).find("link").first().text().trim();
+      const published = new Date($(item).find("pubDate").first().text().trim());
+      if (link && !Number.isNaN(published.getTime())) dates.set(normalizeSourceUrl(link), published);
+    });
+    if (dates.size === before) break; // same page served again
+  }
+  return dates;
+}
+
+/** Sets created_at on already-imported synced listings to fd.sg's original
+ *  publish date where it differs. Returns how many were changed. */
+async function backfillSourceDates(dates: Map<string, Date>): Promise<number> {
+  if (dates.size === 0) return 0;
+  const synced = await db
+    .select({ id: listings.id, externalUrl: listings.externalUrl, createdAt: listings.createdAt })
+    .from(listings)
+    .where(isNotNull(listings.externalUrl));
+  let changed = 0;
+  for (const row of synced) {
+    const source = row.externalUrl ? dates.get(normalizeSourceUrl(row.externalUrl)) : undefined;
+    if (!source || source.getTime() === row.createdAt.getTime()) continue;
+    await db
+      .update(listings)
+      .set({ createdAt: source })
+      .where(and(eq(listings.id, row.id), ne(listings.createdAt, source)));
+    changed += 1;
+  }
+  return changed;
+}
 
 /** All listing detail URLs currently on fd.sg's archive, across every page.
  *  Stops once a page adds no URLs we haven't already seen (handles both an
@@ -171,6 +239,10 @@ async function scrapeListing(url: string): Promise<ScrapedListing | null> {
  *  untouched. Safe to call as often as wanted. */
 export async function syncFdsgListings(): Promise<SyncResult> {
   const urls = await fetchListingUrls();
+  // Original publish dates from fd.sg's feed. Best-effort: if the feed can't
+  // be read, new imports just get today's date as before.
+  const sourceDates = await fetchSourceDates().catch(() => new Map<string, Date>());
+  const datesUpdated = await backfillSourceDates(sourceDates);
 
   const existingExternal = await db
     .select({ externalUrl: listings.externalUrl })
@@ -180,7 +252,7 @@ export async function syncFdsgListings(): Promise<SyncResult> {
 
   const allNewUrls = urls.filter((u) => !existingUrls.has(u));
   if (allNewUrls.length === 0) {
-    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0 };
+    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0, datesUpdated };
   }
 
   const newUrls = allNewUrls.slice(0, MAX_NEW_PER_RUN);
@@ -235,6 +307,10 @@ export async function syncFdsgListings(): Promise<SyncResult> {
         categoryId,
         status: "published",
         externalUrl: scraped.sourceUrl,
+        // Keep fd.sg's original posting date rather than the import time.
+        ...(sourceDates.get(normalizeSourceUrl(scraped.sourceUrl))
+          ? { createdAt: sourceDates.get(normalizeSourceUrl(scraped.sourceUrl)) }
+          : {}),
       })
       .returning({ id: listings.id });
 
@@ -254,5 +330,5 @@ export async function syncFdsgListings(): Promise<SyncResult> {
     added += 1;
   }
 
-  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining };
+  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining, datesUpdated };
 }

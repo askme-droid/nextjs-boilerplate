@@ -4,6 +4,7 @@ import { getMyListings } from "@/lib/listings/user-queries";
 import { createMyListing, deleteMyListing } from "./actions";
 import { isExpired } from "@/lib/listings/expiry-dates";
 import { formatViews } from "@/lib/listings/views";
+import { formatListingDate } from "@/lib/listings/dates";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
@@ -76,6 +77,7 @@ export default async function MyListingsPage({
                   {listing.categories?.name ?? "No category"}
                   {listing.location ? ` · ${listing.location}` : ""}
                   {listing.status === "published" ? ` · ${formatViews(listing.view_count)}` : ""}
+                  {` · created ${formatListingDate(listing.created_at)}`}
                 </p>
               </div>
               <div className="flex flex-none items-center gap-3">
