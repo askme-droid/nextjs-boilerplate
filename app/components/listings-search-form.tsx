@@ -9,6 +9,11 @@ import type { ListingTag } from "@/lib/experience-tags/queries";
 import type { ListingCategory } from "@/lib/listings/queries";
 import { cn } from "@/lib/utils";
 import { ImageSearchButton } from "./image-search-button";
+
+// Search by image is turned off while the site runs on Cloudflare Workers
+// (see lib/listings/embeddings.ts). Kept as a client-side constant because
+// this is a client component and embeddings.ts is server-only.
+const SHOW_IMAGE_SEARCH = false;
 import {
   consumeScrollRequest,
   requestScrollToResults,
@@ -277,7 +282,7 @@ export function ListingsSearchForm({
           ))}
         </select>
 
-        <ImageSearchButton />
+        {SHOW_IMAGE_SEARCH && <ImageSearchButton />}
 
         <button
           type="submit"

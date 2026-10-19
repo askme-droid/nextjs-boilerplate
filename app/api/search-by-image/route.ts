@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import { and, cosineDistance, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingImages, listings } from "@/lib/db/schema";
-import { embedImage } from "@/lib/listings/embeddings";
-
-// Needs full Node APIs (sharp, onnxruntime-node) — not available on the Edge
-// runtime.
-export const runtime = "nodejs";
+import { embedImage, IMAGE_SEARCH_ENABLED } from "@/lib/listings/embeddings";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -22,6 +18,11 @@ const MAX_RESULTS = 24;
  * listing card.
  */
 export async function POST(request: Request) {
+  // Turned off on Cloudflare Workers — see lib/listings/embeddings.ts.
+  if (!IMAGE_SEARCH_ENABLED) {
+    return NextResponse.json({ error: "Search by image is not available right now." }, { status: 404 });
+  }
+
   const formData = await request.formData();
   const file = formData.get("file");
 

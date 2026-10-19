@@ -7,13 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "predev": "node scripts/copy-ort-runtime.mjs",
-    "prebuild": "node scripts/copy-ort-runtime.mjs"
+    "predev": "node scripts/copy-ort-runtime.mjs && node scripts/embed-icc-profile.mjs",
+    "prebuild": "node scripts/copy-ort-runtime.mjs && node scripts/embed-icc-profile.mjs",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
     "@radix-ui/react-slot": "^1.3.3",
-    "@xenova/transformers": "^2.17.2",
     "aws4fetch": "^1.0.20",
     "better-auth": "^1.7.5",
     "cheerio": "^1.2.0",
@@ -22,7 +24,7 @@
     "drizzle-orm": "^0.45.3",
     "lucide-react": "^1.50.0",
     "motion": "^14.0.0",
-    "next": "16.2.4",
+    "next": "16.4.2",
     "onnxruntime-web": "1.30.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "6.4.299",
@@ -32,19 +34,20 @@
     "react-dom": "19.2.4",
     "resend": "^6.28.1",
     "server-only": "^0.0.1",
-    "sharp": "^0.35.5",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "1.20.12",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
-    "eslint-config-next": "16.2.4",
+    "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "4.151.1"
   }
 }

@@ -43,7 +43,16 @@ export function canEnhance(width: number, height: number) {
   return width * height * SCALE * SCALE <= MAX_ENHANCED_PIXELS;
 }
 
+// The WebGPU build's .wasm is ~26.8 MB, over Cloudflare Workers' 25 MiB
+// per-file limit for static assets, so it isn't deployed with the site. It's
+// served from R2 instead (upload node_modules/onnxruntime-web/dist/
+// ort-wasm-simd-threaded.asyncify.wasm there and set this to its public URL
+// at build time). Without it, the fast WebGPU path is skipped and the slower
+// CPU (WebAssembly) path is used — same result, just slower.
+const ASYNCIFY_WASM_URL = process.env.NEXT_PUBLIC_ORT_ASYNCIFY_WASM_URL;
+
 export async function webGpuAvailable(): Promise<boolean> {
+  if (!ASYNCIFY_WASM_URL) return false;
   try {
     const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
     return !!gpu && !!(await gpu.requestAdapter());
@@ -57,7 +66,13 @@ async function loadOrt(backend: EnhanceBackend): Promise<Ort> {
   // its own .wasm files next to itself.
   const url = ORT_BASE + (backend === "webgpu" ? "ort.webgpu.min.mjs" : "ort.wasm.min.mjs");
   const ort = (await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ url)) as Ort;
-  ort.env.wasm.wasmPaths = ORT_BASE;
+  ort.env.wasm.wasmPaths =
+    backend === "webgpu" && ASYNCIFY_WASM_URL
+      ? {
+          mjs: new URL(ORT_BASE + "ort-wasm-simd-threaded.asyncify.mjs", window.location.origin).href,
+          wasm: ASYNCIFY_WASM_URL,
+        }
+      : ORT_BASE;
   return ort;
 }
 
