@@ -46,6 +46,7 @@ export function ListingForm({
   selectedTagIds,
   images,
   children,
+  footer,
 }: {
   /** Present when editing; omitted when creating. */
   listingId?: string;
@@ -67,6 +68,9 @@ export function ListingForm({
    *  inside this one, so it's slotted in here and the button below
    *  references this form by id instead of living inside it. */
   children?: React.ReactNode;
+  /** Rendered after the SEO panel, just above the Save button — the delete
+   *  box on the edit page. */
+  footer?: React.ReactNode;
 }) {
   const initialState: ListingFormState = { values: initialValues ?? emptyValues };
   const [state, formAction, pending] = useActionState(saveListing, initialState);
@@ -255,27 +259,6 @@ export function ListingForm({
         />
       </label>
 
-      <SeoPanel
-        initial={{
-          seo_title: values.seo_title,
-          seo_description: values.seo_description,
-          focus_keyword: values.focus_keyword,
-          og_title: values.og_title,
-          og_description: values.og_description,
-          og_image_url: values.og_image_url,
-        }}
-        listingId={listingId}
-        images={images}
-        errors={{
-          seo_title: state.fieldErrors?.seo_title,
-          seo_description: state.fieldErrors?.seo_description,
-          focus_keyword: state.fieldErrors?.focus_keyword,
-          og_title: state.fieldErrors?.og_title,
-          og_description: state.fieldErrors?.og_description,
-          og_image_url: state.fieldErrors?.og_image_url,
-        }}
-      />
-
       <ExpiryField defaultValue={values.expires_at} inputClass={inputClass} labelClass={labelClass} />
       {state.fieldErrors?.expires_at && <p className={errorClass}>{state.fieldErrors.expires_at}</p>}
 
@@ -344,7 +327,33 @@ export function ListingForm({
       )}
     </form>
 
+    {/* Listing extras (images) first, then SEO, then the danger zone. The SEO
+        panel sits outside the <form> for layout, so its inputs join the form
+        through form="listing-form" (see seo-panel.tsx). */}
     {children}
+
+      <SeoPanel
+      initial={{
+        seo_title: values.seo_title,
+        seo_description: values.seo_description,
+        focus_keyword: values.focus_keyword,
+        og_title: values.og_title,
+        og_description: values.og_description,
+        og_image_url: values.og_image_url,
+      }}
+      listingId={listingId}
+      images={images}
+      errors={{
+        seo_title: state.fieldErrors?.seo_title,
+        seo_description: state.fieldErrors?.seo_description,
+        focus_keyword: state.fieldErrors?.focus_keyword,
+        og_title: state.fieldErrors?.og_title,
+        og_description: state.fieldErrors?.og_description,
+        og_image_url: state.fieldErrors?.og_image_url,
+      }}
+    />
+
+    {footer}
 
     <div className="flex flex-wrap gap-3">
       <button
