@@ -62,7 +62,9 @@ function useListingFields(anchor: React.RefObject<HTMLElement | null>) {
   const [fields, setFields] = useState({ title: "", slug: "", description: "" });
 
   useEffect(() => {
-    const form = anchor.current?.closest("form");
+    // The panel renders outside the <form> (below the images), so find the
+    // listing form by id rather than by nesting.
+    const form = anchor.current?.closest("form") ?? (document.getElementById("listing-form") as HTMLFormElement | null);
     if (!form) return;
     const read = () => {
       const get = (name: string) => {
@@ -221,6 +223,7 @@ export function SeoPanel({
         <input
           type="text"
           name="focus_keyword"
+            form="listing-form"
           value={keyword}
           maxLength={FOCUS_KEYWORD_LIMIT}
           onChange={(e) => setKeyword(e.target.value)}
@@ -239,6 +242,7 @@ export function SeoPanel({
         <input
           type="text"
           name="seo_title"
+            form="listing-form"
           value={seoTitle}
           maxLength={SEO_TITLE_LIMIT}
           onChange={(e) => setSeoTitle(e.target.value)}
@@ -258,6 +262,7 @@ export function SeoPanel({
         Meta description
         <textarea
           name="seo_description"
+            form="listing-form"
           rows={3}
           value={seoDescription}
           maxLength={SEO_DESCRIPTION_LIMIT}
@@ -337,6 +342,7 @@ export function SeoPanel({
           <input
             type="text"
             name="og_title"
+            form="listing-form"
             value={ogTitle}
             maxLength={SEO_TITLE_LIMIT}
             onChange={(e) => setOgTitle(e.target.value)}
@@ -354,6 +360,7 @@ export function SeoPanel({
           Social description
           <textarea
             name="og_description"
+            form="listing-form"
             rows={2}
             value={ogDescription}
             maxLength={SEO_DESCRIPTION_LIMIT}
@@ -372,7 +379,8 @@ export function SeoPanel({
 
         <div className="text-sm font-medium">
           Social image
-          <input type="hidden" name="og_image_url" value={ogImageUrl} />
+          <input type="hidden" name="og_image_url"
+            form="listing-form" value={ogImageUrl} />
           <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Social image">
             {photos.map((photo, i) => {
               const selected = ogImageUrl ? ogImageUrl === photo.url : i === 0;
