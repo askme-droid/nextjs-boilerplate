@@ -1,13 +1,23 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { FEATURED_VIDEO_MAX_BYTES, FEATURED_VIDEO_TYPES } from "@/lib/listings/constants";
-import { setFeaturedVideo } from "../featured-actions";
+import {
+  FEATURED_IMAGE_MAX_BYTES,
+  FEATURED_IMAGE_TYPES,
+  FEATURED_VIDEO_MAX_BYTES,
+  FEATURED_VIDEO_TYPES,
+} from "@/lib/listings/constants";
+import { setFeaturedImage, setFeaturedVideo } from "../featured-actions";
+
+type Kind = "video" | "image";
+const LIMITS: Record<Kind, { types: readonly string[]; maxBytes: number; typeError: string }> = {
+  video: { types: FEATURED_VIDEO_TYPES, maxBytes: FEATURED_VIDEO_MAX_BYTES, typeError: "The video must be an MP4 or WebM file." },
+  image: { types: FEATURED_IMAGE_TYPES, maxBytes: FEATURED_IMAGE_MAX_BYTES, typeError: "The image must be a JPG, PNG, WebP or GIF file." },
+};
 
 const buttonClass =
   "rounded-md border border-zinc-300 px-2.5 py-1 text-sm font-medium hover:bg-zinc-100 disabled:opacity-50 disabled:hover:bg-transparent dark:border-zinc-700 dark:hover:bg-zinc-800";
 
-const MAX_MB = FEATURED_VIDEO_MAX_BYTES / (1024 * 1024);
 
 /** PUTs a file to a presigned R2 URL, reporting progress (fetch() can't). */
 function putWithProgress(
@@ -34,12 +44,14 @@ function putWithProgress(
 }
 
 /**
- * Pick a clip, send it straight to R2 storage (Server Actions can't carry
+ * Pick a clip (or, with kind="image", an image / animated GIF), send it straight to R2 storage (Server Actions can't carry
  * more than 4.5MB on Vercel) using a short-lived upload URL from
  * /api/featured-video/upload, then hand the resulting URL to the Server
  * Action that saves it against the (already picked) listing.
  */
-export function VideoUpload({ listingId, label }: { listingId: string; label: string }) {
+export function MediaUpload({ listingId, label, kind = "video" }: { listingId: string; label: string; kind?: Kind }) {
+  const limits = LIMITS[kind];
+  const maxMb = limits.maxBytes / (1024 * 1024);
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,12 +62,12 @@ export function VideoUpload({ listingId, label }: { listingId: string; label: st
   async function handleFile(file: File) {
     setError(null);
 
-    if (!(FEATURED_VIDEO_TYPES as readonly string[]).includes(file.type)) {
-      setError("The video must be an MP4 or WebM file.");
+    if (!limits.types.includes(file.type)) {
+      setError(limits.typeError);
       return;
     }
-    if (file.size > FEATURED_VIDEO_MAX_BYTES) {
-      setError(`That file is ${(file.size / (1024 * 1024)).toFixed(0)}MB — the limit is ${MAX_MB}MB.`);
+    if (file.size > limits.maxBytes) {
+      setError(`That file is ${(file.size / (1024 * 1024)).toFixed(0)}MB — the limit is ${maxMb}MB.`);
       return;
     }
 
@@ -64,7 +76,7 @@ export function VideoUpload({ listingId, label }: { listingId: string; label: st
       const res = await fetch("/api/featured-video/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId, fileName: file.name, contentType: file.type, size: file.size }),
+        body: JSON.stringify({ listingId, fileName: file.name, contentType: file.type, size: file.size, kind }),
       });
       const signed = (await res.json()) as {
         uploadUrl?: string;
@@ -80,9 +92,9 @@ export function VideoUpload({ listingId, label }: { listingId: string; label: st
 
       const formData = new FormData();
       formData.set("id", listingId);
-      formData.set("videoUrl", signed.publicUrl);
+      formData.set(kind === "image" ? "imageUrl" : "videoUrl", signed.publicUrl);
       startSaving(async () => {
-        await setFeaturedVideo(formData);
+        await (kind === "image" ? setFeaturedImage(formData) : setFeaturedVideo(formData));
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "The upload failed. Try again.");
@@ -97,7 +109,7 @@ export function VideoUpload({ listingId, label }: { listingId: string; label: st
       <input
         ref={inputRef}
         type="file"
-        accept={FEATURED_VIDEO_TYPES.join(",")}
+        accept={limits.types.join(",")}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];

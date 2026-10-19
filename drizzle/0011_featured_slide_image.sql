@@ -1,0 +1,1 @@
+ALTER TABLE "listings" ADD COLUMN "featured_slide_image_url" text;

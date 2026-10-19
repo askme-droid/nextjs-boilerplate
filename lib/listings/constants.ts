@@ -18,3 +18,11 @@ export const FEATURED_SLOTS = 6;
 // (app/api/featured-video/upload) as well as in the upload form.
 export const FEATURED_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 export const FEATURED_VIDEO_TYPES = ["video/mp4", "video/webm"] as const;
+
+// Image slides (alternative to a video): stills or animated GIFs. GIFs can be
+// heavy, hence a higher cap than listing photos.
+export const FEATURED_IMAGE_MAX_BYTES = 15 * 1024 * 1024;
+export const FEATURED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+
+/** How long an image slide stays before the slider moves on. */
+export const IMAGE_SLIDE_SECONDS = 6;

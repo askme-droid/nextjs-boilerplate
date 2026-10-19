@@ -8,7 +8,7 @@ import {
 } from "@/lib/listings/admin-queries";
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { addFeatured, moveFeatured, removeFeatured } from "../featured-actions";
-import { VideoUpload } from "./video-upload";
+import { MediaUpload } from "./media-upload";
 
 const buttonClass =
   "rounded-md border border-zinc-300 px-2.5 py-1 text-sm font-medium hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent dark:border-zinc-700 dark:hover:bg-zinc-800";
@@ -16,7 +16,11 @@ const buttonClass =
 function Thumb({ row }: { row: FeaturedAdminRow }) {
   return (
     <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
-      {row.videoUrl ? (
+      {row.slideImageUrl ? (
+        // Plain <img> so an animated GIF slide animates in the preview too.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={row.slideImageUrl} alt="" className="size-full object-cover" />
+      ) : row.videoUrl ? (
         // #t=0.1 makes the browser paint a frame instead of a black box.
         <video
           src={`${row.videoUrl}#t=0.1`}
@@ -37,7 +41,7 @@ function Thumb({ row }: { row: FeaturedAdminRow }) {
 /** Why a picked listing isn't actually showing, or null if it is. */
 function problem(row: FeaturedAdminRow): string | null {
   if (row.status !== "published") return `Not published (${row.status}) — hidden until it is.`;
-  if (!row.videoUrl) return "No video — skipped until one is uploaded.";
+  if (!row.videoUrl && !row.slideImageUrl) return "No video or image — skipped until one is uploaded.";
   return null;
 }
 
@@ -55,7 +59,7 @@ export default async function FeaturedListingsAdminPage({
   ]);
 
   // Mirrors the homepage: the slider shows the first FEATURED_SLOTS picked
-  // listings that are published and have a video. There is no top-up.
+  // listings that are published and have a video or slide image. No top-up.
   const visible = picked.filter((row) => !problem(row));
   const shownIds = new Set(visible.slice(0, FEATURED_SLOTS).map((row) => row.id));
 
@@ -70,9 +74,11 @@ export default async function FeaturedListingsAdminPage({
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Featured listings</h1>
         <p className="max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-          The homepage video slider shows up to {FEATURED_SLOTS} listings, in the order below. A
-          listing only appears once it has a video: pick it below, then use Upload video on its row
-          (MP4 or WebM, landscape 16:9, up to 50MB).
+          The homepage slider shows up to {FEATURED_SLOTS} listings, in the order below. A listing
+          only appears once it has a video <em>or</em> an image: pick it below, then use Upload video
+          (MP4 or WebM, up to 50MB) or Upload image (JPG, PNG, WebP or animated GIF, up to 15MB) on
+          its row. Landscape 16:9 fits best (e.g. 1920×1080). Each slide shows one or the other —
+          uploading one replaces the other. Image slides move on after a few seconds.
         </p>
       </div>
 
@@ -92,7 +98,7 @@ export default async function FeaturedListingsAdminPage({
 
         {picked.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Nothing picked yet, so the video slider is hidden on the homepage.
+            Nothing picked yet, so the slider is hidden on the homepage.
           </p>
         ) : (
           <ol className="flex flex-col divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
@@ -126,7 +132,17 @@ export default async function FeaturedListingsAdminPage({
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <VideoUpload listingId={row.id} label={row.videoUrl ? "Replace video" : "Upload video"} />
+                    <MediaUpload listingId={row.id} label={row.videoUrl ? "Replace video" : "Upload video"} />
+                    <MediaUpload
+                      listingId={row.id}
+                      kind="image"
+                      label={row.slideImageUrl ? "Replace image" : "Upload image / GIF"}
+                    />
+                    {(row.videoUrl || row.slideImageUrl) && (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                        {row.videoUrl ? "Video slide" : /\.gif($|\?)/i.test(row.slideImageUrl ?? "") ? "GIF slide" : "Image slide"}
+                      </span>
+                    )}
                     <form action={moveFeatured}>
                       <input type="hidden" name="id" value={row.id} />
                       <input type="hidden" name="direction" value="up" />

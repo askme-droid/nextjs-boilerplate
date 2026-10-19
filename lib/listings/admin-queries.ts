@@ -240,8 +240,10 @@ export type FeaturedAdminRow = {
   status: string;
   categoryName: string | null;
   imageUrl: string | null;
-  /** The slider clip; the homepage skips a picked listing that has none. */
+  /** The slider clip, or… */
   videoUrl: string | null;
+  /** …an image/GIF slide instead. The homepage skips a picked listing with neither. */
+  slideImageUrl: string | null;
   /** Syndicated from elsewhere (fd.sg etc.) rather than owned here. */
   synced: boolean;
 };
@@ -262,6 +264,7 @@ const featuredAdminSelect = {
   )`,
   externalUrl: listings.externalUrl,
   videoUrl: listings.featuredVideoUrl,
+  slideImageUrl: listings.featuredSlideImageUrl,
 };
 
 function toFeaturedAdminRow(r: {
@@ -272,6 +275,7 @@ function toFeaturedAdminRow(r: {
   imageUrl: string | null;
   externalUrl: string | null;
   videoUrl: string | null;
+  slideImageUrl: string | null;
 }): FeaturedAdminRow {
   return {
     id: r.id,
@@ -280,6 +284,7 @@ function toFeaturedAdminRow(r: {
     categoryName: r.categoryName,
     imageUrl: r.imageUrl,
     videoUrl: r.videoUrl,
+    slideImageUrl: r.slideImageUrl,
     synced: r.externalUrl !== null,
   };
 }

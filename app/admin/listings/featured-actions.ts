@@ -55,8 +55,38 @@ export async function addFeatured(formData: FormData) {
   done("Picked. Now upload its video so it shows in the slider.");
 }
 
+function readImageUrl(formData: FormData): string {
+  const imageUrl = String(formData.get("imageUrl") ?? "");
+  if (!isStoredFileUrl(imageUrl)) done("That image upload wasn't recognised — try again.");
+  return imageUrl;
+}
+
+/** Save an image or animated GIF as a picked listing's slide. Replaces any
+ *  video (a slide shows one or the other) and deletes the old files. */
+export async function setFeaturedImage(formData: FormData) {
+  await requireStaff();
+  const id = String(formData.get("id") ?? "");
+  if (!id) done("No listing selected.");
+  const imageUrl = readImageUrl(formData);
+
+  const [previous] = await db
+    .select({ videoUrl: listings.featuredVideoUrl, imageUrl: listings.featuredSlideImageUrl })
+    .from(listings)
+    .where(eq(listings.id, id));
+
+  await db
+    .update(listings)
+    .set({ featuredSlideImageUrl: imageUrl, featuredVideoUrl: null })
+    .where(and(eq(listings.id, id), eq(listings.homepageFeatured, true)));
+
+  await deleteVideoFile(previous?.videoUrl);
+  if (previous?.imageUrl !== imageUrl) await deleteFileByUrl(previous?.imageUrl);
+  refresh();
+  done("Image saved.");
+}
+
 /** Save the clip for a picked listing (first upload or a replacement). The
- *  video goes browser -> R2 first (see video-upload.tsx); its URL arrives
+ *  video goes browser -> R2 first (see featured/media-upload.tsx); its URL arrives
  *  here. */
 export async function setFeaturedVideo(formData: FormData) {
   await requireStaff();
@@ -65,16 +95,18 @@ export async function setFeaturedVideo(formData: FormData) {
   const videoUrl = readVideoUrl(formData);
 
   const [previous] = await db
-    .select({ videoUrl: listings.featuredVideoUrl })
+    .select({ videoUrl: listings.featuredVideoUrl, imageUrl: listings.featuredSlideImageUrl })
     .from(listings)
     .where(eq(listings.id, id));
 
+  // A slide shows a video or an image, not both: the new video replaces any image.
   await db
     .update(listings)
-    .set({ featuredVideoUrl: videoUrl })
+    .set({ featuredVideoUrl: videoUrl, featuredSlideImageUrl: null })
     .where(and(eq(listings.id, id), eq(listings.homepageFeatured, true)));
 
-  await deleteVideoFile(previous?.videoUrl);
+  if (previous?.videoUrl !== videoUrl) await deleteVideoFile(previous?.videoUrl);
+  await deleteFileByUrl(previous?.imageUrl);
   refresh();
   done("Video saved.");
 }
@@ -85,16 +117,17 @@ export async function removeFeatured(formData: FormData) {
   if (!id) done("No listing selected.");
 
   const [previous] = await db
-    .select({ videoUrl: listings.featuredVideoUrl })
+    .select({ videoUrl: listings.featuredVideoUrl, imageUrl: listings.featuredSlideImageUrl })
     .from(listings)
     .where(eq(listings.id, id));
 
   await db
     .update(listings)
-    .set({ homepageFeatured: false, homepageFeaturedOrder: 0, featuredVideoUrl: null })
+    .set({ homepageFeatured: false, homepageFeaturedOrder: 0, featuredVideoUrl: null, featuredSlideImageUrl: null })
     .where(eq(listings.id, id));
 
   await deleteVideoFile(previous?.videoUrl);
+  await deleteFileByUrl(previous?.imageUrl);
   refresh();
   done("Removed from the homepage slider.");
 }

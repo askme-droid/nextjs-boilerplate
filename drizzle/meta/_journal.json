@@ -78,6 +78,13 @@
       "when": 1792380145382,
       "tag": "0010_listing_social_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792381018712,
+      "tag": "0011_featured_slide_image",
+      "breakpoints": true
     }
   ]
 }

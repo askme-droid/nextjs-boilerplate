@@ -322,17 +322,20 @@ export type FeaturedVideoSlide = {
   /** Set when the client asked for a redirect to their own page. */
   redirectUrl: string | null;
   categoryName: string | null;
-  videoUrl: string;
-  /** The listing's photo, shown until the video has loaded; may be absent. */
+  /** "video" plays the clip; "image" shows an image or animated GIF. */
+  kind: "video" | "image";
+  /** The clip (kind "video") or the slide image/GIF (kind "image"). */
+  mediaUrl: string;
+  /** The listing's photo, shown until a video has loaded; may be absent. */
   posterUrl: string | null;
 };
 
 /**
- * Slides for the homepage "Featured listings" video slider: published
- * listings that staff picked (homepage_featured) *and* uploaded a video for,
- * in the order set on /admin/listings/featured. There is deliberately no
- * top-up with other listings — the slider is video-only, so a listing without
- * one has nothing to show.
+ * Slides for the homepage "Featured listings" slider: published listings
+ * that staff picked (homepage_featured) *and* gave a video or a slide image
+ * (still or animated GIF), in the order set on /admin/listings/featured.
+ * There is deliberately no top-up with other listings — a picked listing
+ * without either has nothing to show.
  */
 export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]> {
   const rows = await db
@@ -344,6 +347,7 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
       redirectUrl: listings.redirectUrl,
       categoryName: categories.name,
       videoUrl: listings.featuredVideoUrl,
+      slideImageUrl: listings.featuredSlideImageUrl,
       // Same photo choice as pickListingImage: the flagged one, else the first
       // by position, else the listing's own featured_image_url.
       posterUrl: sql<string | null>`coalesce(
@@ -360,13 +364,19 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
       and(
         eq(listings.status, "published"),
         eq(listings.homepageFeatured, true),
-        isNotNull(listings.featuredVideoUrl),
+        or(isNotNull(listings.featuredVideoUrl), isNotNull(listings.featuredSlideImageUrl)),
       ),
     )
     .orderBy(asc(listings.homepageFeaturedOrder), desc(listings.createdAt))
     .limit(limit);
 
-  return rows.flatMap((r) => (r.videoUrl ? [{ ...r, videoUrl: r.videoUrl }] : []));
+  return rows.flatMap(({ videoUrl, slideImageUrl, ...r }): FeaturedVideoSlide[] =>
+    videoUrl
+      ? [{ ...r, kind: "video", mediaUrl: videoUrl }]
+      : slideImageUrl
+        ? [{ ...r, kind: "image", mediaUrl: slideImageUrl }]
+        : [],
+  );
 }
 
 /**

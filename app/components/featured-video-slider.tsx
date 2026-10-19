@@ -11,6 +11,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { IMAGE_SLIDE_SECONDS } from "@/lib/listings/constants";
 import type { FeaturedVideoSlide } from "@/lib/listings/queries";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,8 @@ const roundButton =
   "flex size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur transition-colors hover:bg-black/75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-teal";
 
 /**
- * Homepage "Featured listings": one big 16:9 video at a time with the
+ * Homepage "Featured listings": one big 16:9 video (or image / animated GIF)
+ * at a time with the
  * previous/next ones peeking in at the sides (CSS scroll-snap, so swiping on a
  * phone is native).
  *
@@ -36,6 +38,10 @@ const roundButton =
  * still press play). There is always a pause button (WCAG 2.2.2: moving
  * content needs a way to stop it) and a sound toggle, since browsers only
  * autoplay muted video.
+ *
+ * Image slides (stills or animated GIFs, which animate by themselves) stay
+ * for IMAGE_SLIDE_SECONDS and then move on, under the same rules: only while
+ * on screen and not paused. The sound toggle only appears on video slides.
  */
 export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }) {
   const sectionRef = useRef<HTMLElement>(null);
@@ -125,6 +131,14 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
     });
   }, [active, inView, paused, muted]);
 
+  // Image slides have no "ended" event, so a timer moves them on.
+  const activeIsImage = slides[active]?.kind === "image";
+  useEffect(() => {
+    if (!activeIsImage || count < 2 || !inView || paused) return;
+    const timer = window.setTimeout(() => goTo((active + 1) % count), IMAGE_SLIDE_SECONDS * 1000);
+    return () => window.clearTimeout(timer);
+  }, [activeIsImage, active, count, inView, paused, goTo]);
+
   if (count === 0) return null;
 
   return (
@@ -185,42 +199,62 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
                 )}
               >
                 <div className="relative aspect-video overflow-hidden rounded-2xl bg-zinc-900 shadow-lg">
-                  <video
-                    ref={(el) => {
-                      videoRefs.current[index] = el;
-                    }}
-                    // #t=0.1 makes the browser paint a frame instead of a
-                    // black box when there is no poster photo.
-                    src={slide.posterUrl ? slide.videoUrl : `${slide.videoUrl}#t=0.1`}
-                    poster={slide.posterUrl ?? undefined}
-                    aria-label={slide.title}
-                    muted
-                    playsInline
-                    // A single slide has nothing to advance to, so it loops.
-                    loop={count === 1}
-                    preload={near ? "auto" : "metadata"}
-                    onEnded={() => {
-                      if (count > 1) goTo((index + 1) % count);
-                    }}
-                    className="size-full object-cover"
-                  />
+                  {slide.kind === "image" ? (
+                    // Plain <img>: next/image would freeze an animated GIF on
+                    // its first frame. Lazy-load the ones not near the centre.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={slide.mediaUrl}
+                      alt={slide.title}
+                      loading={near ? "eager" : "lazy"}
+                      decoding="async"
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <video
+                      ref={(el) => {
+                        videoRefs.current[index] = el;
+                      }}
+                      // #t=0.1 makes the browser paint a frame instead of a
+                      // black box when there is no poster photo.
+                      src={slide.posterUrl ? slide.mediaUrl : `${slide.mediaUrl}#t=0.1`}
+                      poster={slide.posterUrl ?? undefined}
+                      aria-label={slide.title}
+                      muted
+                      playsInline
+                      // A single slide has nothing to advance to, so it loops.
+                      loop={count === 1}
+                      preload={near ? "auto" : "metadata"}
+                      onEnded={() => {
+                        if (count > 1) goTo((index + 1) % count);
+                      }}
+                      className="size-full object-cover"
+                    />
+                  )}
 
-                  {isActive && (
+                  {/* A lone image slide has nothing to play or pause. */}
+                  {isActive && (slide.kind === "video" || count > 1) && (
                     <div className="absolute right-3 top-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMuted((m) => !m)}
-                        aria-pressed={!muted}
-                        aria-label={muted ? "Turn sound on" : "Turn sound off"}
-                        className={roundButton}
-                      >
-                        {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-                      </button>
+                      {slide.kind === "video" && (
+                        <button
+                          type="button"
+                          onClick={() => setMuted((m) => !m)}
+                          aria-pressed={!muted}
+                          aria-label={muted ? "Turn sound on" : "Turn sound off"}
+                          className={roundButton}
+                        >
+                          {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setUserPaused(!paused)}
                         aria-pressed={paused}
-                        aria-label={paused ? "Play video" : "Pause video"}
+                        aria-label={
+                          slide.kind === "video"
+                            ? paused ? "Play video" : "Pause video"
+                            : paused ? "Play slideshow" : "Pause slideshow"
+                        }
                         className={roundButton}
                       >
                         {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
@@ -272,7 +306,7 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
             <button
               type="button"
               onClick={() => goTo((active - 1 + count) % count)}
-              aria-label="Previous video"
+              aria-label="Previous slide"
               className={cn(roundButton, "absolute left-3 top-1/2 hidden -translate-y-1/2 md:flex")}
             >
               <ChevronLeft className="size-5" />
@@ -280,7 +314,7 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
             <button
               type="button"
               onClick={() => goTo((active + 1) % count)}
-              aria-label="Next video"
+              aria-label="Next slide"
               className={cn(roundButton, "absolute right-3 top-1/2 hidden -translate-y-1/2 md:flex")}
             >
               <ChevronRight className="size-5" />
@@ -296,7 +330,7 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
               key={slide.id}
               type="button"
               onClick={() => goTo(index)}
-              aria-label={`Go to video ${index + 1}: ${slide.title}`}
+              aria-label={`Go to slide ${index + 1}: ${slide.title}`}
               aria-current={index === active}
               className="group flex h-6 w-6 items-center justify-center"
             >

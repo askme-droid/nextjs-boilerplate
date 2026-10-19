@@ -61,6 +61,11 @@ export const listings = pgTable("listings", {
   // from /admin/listings/featured). The slider is video-only, so a picked
   // listing without one is simply not shown.
   featuredVideoUrl: text("featured_video_url"),
+  // Alternative to the video: an image or animated GIF for the homepage
+  // slider (R2 URL, uploaded from /admin/listings/featured). A slide has one
+  // or the other — setting one clears the other. Not to be confused with
+  // featured_image_url, the listing's own photo.
+  featuredSlideImageUrl: text("featured_slide_image_url"),
   // Set only for listings syndicated from elsewhere (e.g. fd.sg) that we show
   // in search/browse here but whose actual content stays at the source —
   // the card and the detail route both send visitors there instead of
