@@ -89,6 +89,7 @@ export default async function EditListingPage({
           description: listing.description ?? "",
           status: listing.status,
           expires_at: listing.expires_at ?? "",
+          view_count: String(listing.view_count),
           homepage_featured: listing.homepage_featured ? "1" : "",
         }}
         allTags={allTags}

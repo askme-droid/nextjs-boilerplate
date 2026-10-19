@@ -5,6 +5,7 @@ import { LISTING_STATUSES } from "@/lib/listings/constants";
 import type { ListingCategory, ListingTag } from "@/lib/listings/queries";
 import { publishListing, saveListing, type ListingFormState, type ListingFormValues } from "./actions";
 import { SeoPanel } from "./seo-panel";
+import { ExpiryField } from "@/app/components/expiry-field";
 
 const inputClass =
   "mt-1 block w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -32,6 +33,7 @@ const emptyValues: ListingFormValues = {
   description: "",
   status: "draft",
   expires_at: "",
+  view_count: "0",
   homepage_featured: "",
 };
 
@@ -274,14 +276,25 @@ export function ListingForm({
         }}
       />
 
+      <ExpiryField defaultValue={values.expires_at} inputClass={inputClass} labelClass={labelClass} />
+      {state.fieldErrors?.expires_at && <p className={errorClass}>{state.fieldErrors.expires_at}</p>}
+
       <label className={labelClass}>
-        Expires
+        Views
         <input
-          type="date"
-          name="expires_at"
-          defaultValue={values.expires_at}
-          className={inputClass}
+          type="number"
+          name="view_count"
+          min={0}
+          step={1}
+          defaultValue={values.view_count}
+          className={`${inputClass} max-w-40`}
         />
+        <input type="hidden" name="view_count_original" value={values.view_count} />
+        <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+          Counted automatically each time a visitor opens the listing. Change it only to correct it
+          (e.g. to carry over views from the old site) — leaving it as is keeps counting normally.
+        </span>
+        {state.fieldErrors?.view_count && <p className={errorClass}>{state.fieldErrors.view_count}</p>}
       </label>
 
       <label className="flex items-start gap-2 text-sm">

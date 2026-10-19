@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/require-user";
 import { getMyListings } from "@/lib/listings/user-queries";
 import { createMyListing, deleteMyListing } from "./actions";
+import { isExpired } from "@/lib/listings/expiry-dates";
+import { formatViews } from "@/lib/listings/views";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
@@ -73,6 +75,7 @@ export default async function MyListingsPage({
                 <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
                   {listing.categories?.name ?? "No category"}
                   {listing.location ? ` · ${listing.location}` : ""}
+                  {listing.status === "published" ? ` · ${formatViews(listing.view_count)}` : ""}
                 </p>
               </div>
               <div className="flex flex-none items-center gap-3">
@@ -83,6 +86,11 @@ export default async function MyListingsPage({
                 >
                   {listing.status}
                 </span>
+                {isExpired(listing.expires_at) && (
+                  <span className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    expired
+                  </span>
+                )}
                 <form action={deleteMyListing}>
                   <input type="hidden" name="id" value={listing.id} />
                   <button

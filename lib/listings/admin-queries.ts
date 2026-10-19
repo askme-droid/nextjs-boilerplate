@@ -26,6 +26,7 @@ export type AdminListingRow = {
   external_url: string | null;
   redirect_url: string | null;
   homepage_featured: boolean;
+  view_count: number;
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
@@ -54,6 +55,7 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
       homepage_featured: listings.homepageFeatured,
+      view_count: listings.viewCount,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -80,6 +82,7 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
     external_url: r.external_url,
     redirect_url: r.redirect_url,
     homepage_featured: r.homepage_featured,
+    view_count: r.view_count,
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
@@ -156,6 +159,7 @@ export async function getAdminListingById(
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
       homepage_featured: listings.homepageFeatured,
+      view_count: listings.viewCount,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -214,6 +218,7 @@ export async function getAdminListingById(
     external_url: row.external_url,
     redirect_url: row.redirect_url,
     homepage_featured: row.homepage_featured,
+    view_count: row.view_count,
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),

@@ -127,6 +127,7 @@ export function EditListingClient({
                 og_description: initialValues.og_description,
                 og_image_url: initialValues.og_image_url,
                 homepage_featured: initialValues.homepage_featured,
+                view_count: initialValues.view_count,
               }
             : initialValues
         }

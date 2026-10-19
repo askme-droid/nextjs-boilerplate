@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { after } from "next/server";
+import { isExpired } from "@/lib/listings/expiry-dates";
+import { formatViews, incrementViewsById, shouldCountView } from "@/lib/listings/views";
 import { socialLabel } from "@/lib/listings/contact-fields";
 import { pickListingImage } from "@/lib/listings/image";
 import { getListingBySlug, type ListingDetail } from "@/lib/listings/queries";
@@ -45,6 +49,9 @@ export async function generateMetadata({
     title: { absolute: title },
     description,
     alternates: { canonical: url },
+    // An expired offer stays reachable (old links, shares) but shouldn't
+    // be shown in search results any more.
+    ...(isExpired(listing.expires_at) ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       type: "website",
       siteName: SITE_NAME,
@@ -164,6 +171,13 @@ export default async function ListingDetailPage({
   // and the listing page should come straight back.
   if (listing.redirect_url) redirect(listing.redirect_url);
 
+  // Count the view once the page has been sent (lib/listings/views.ts).
+  if (shouldCountView(await headers())) {
+    const id = listing.id;
+    after(() => incrementViewsById(id));
+  }
+  const expired = isExpired(listing.expires_at);
+
   // Featured image first (matches the grid card's choice via
   // pickListingImage), then the rest in position order — every image
   // shown at full width, not a hero-plus-thumbnail-strip split.
@@ -182,12 +196,26 @@ export default async function ListingDetailPage({
         ← Back to listings
       </Link>
 
+      {expired && listing.expires_at && (
+        <p
+          role="status"
+          className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+        >
+          This offer ended on {formatDate(listing.expires_at)}.{" "}
+          <Link href="/" className="font-medium underline underline-offset-4">
+            See current deals
+          </Link>
+        </p>
+      )}
+
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-semibold tracking-tight">{listing.title}</h1>
 
-        {listing.location && (
-          <p className="text-zinc-500 dark:text-zinc-400">{listing.location}</p>
-        )}
+        <p className="flex flex-wrap gap-x-3 text-zinc-500 dark:text-zinc-400">
+          {listing.location && <span>{listing.location}</span>}
+          {/* The count shown is before this visit (it's added after the page is sent). */}
+          <span>{formatViews(listing.view_count)}</span>
+        </p>
       </div>
 
       {orderedImages.length > 0 ? (
@@ -289,7 +317,7 @@ export default async function ListingDetailPage({
           </section>
         )}
 
-        {listing.expires_at && (
+        {listing.expires_at && !expired && (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Available until {formatDate(listing.expires_at)}
           </p>

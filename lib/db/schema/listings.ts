@@ -97,7 +97,13 @@ export const listings = pgTable("listings", {
   // original listings_created_by_fkey, since that specific cascade was never
   // tested this session.
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  // Null = never expires. Otherwise shown through the end of this date in
+  // Singapore time, then hidden from the public site (lib/listings/expiry.ts).
   expiresAt: date("expires_at"),
+  // How many times the listing page (or its redirect) has been opened by a
+  // visitor, ACADP-style. Bots and link prefetches aren't counted. Staff can
+  // edit it in admin (e.g. to carry over counts from the old WordPress site).
+  viewCount: integer("view_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   // search_vector intentionally dropped: confirmed via exploration that no

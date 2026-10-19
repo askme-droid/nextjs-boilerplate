@@ -170,7 +170,9 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
         >
           {slides.map((slide, index) => {
             const isActive = index === active;
-            const outboundUrl = slide.externalUrl ?? slide.redirectUrl;
+            // Client redirects go via /listings/<slug> so the visit is counted
+            // (see listing-card.tsx); synced listings link to the source.
+            const outboundUrl = slide.externalUrl ?? (slide.redirectUrl ? `/listings/${slide.slug}` : null);
             const near = Math.abs(index - active) <= 1;
             const linkClass = cn(
               "inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-teal px-3 py-1.5 text-xs font-semibold text-zinc-950 sm:text-sm",

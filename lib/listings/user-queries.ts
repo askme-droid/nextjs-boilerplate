@@ -22,6 +22,7 @@ export type MyListingRow = {
   featured_image_url: string | null;
   created_by: string | null;
   expires_at: string | null;
+  view_count: number;
   created_at: string;
   updated_at: string;
   categories: ListingCategory | null;
@@ -42,6 +43,7 @@ export async function getMyListings(userId: string): Promise<MyListingRow[]> {
       featured_image_url: listings.featuredImageUrl,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
+      view_count: listings.viewCount,
       created_at: listings.createdAt,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
@@ -65,6 +67,7 @@ export async function getMyListings(userId: string): Promise<MyListingRow[]> {
     featured_image_url: r.featured_image_url,
     created_by: r.created_by,
     expires_at: r.expires_at,
+    view_count: r.view_count,
     created_at: r.created_at.toISOString(),
     updated_at: r.updated_at.toISOString(),
     categories: r.category_row_id

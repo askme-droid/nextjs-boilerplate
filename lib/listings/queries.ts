@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { notExpired } from "./expiry";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 
@@ -56,6 +57,7 @@ export type ListingDetail = Omit<ListingWithRelations, "listing_images"> & {
   og_title: string | null;
   og_description: string | null;
   og_image_url: string | null;
+  view_count: number;
 };
 
 export type ListingsResult = {
@@ -106,7 +108,8 @@ function escapeLikeTerm(term: string): string {
  * would otherwise read as "no listings" rather than "filter ignored".
  */
 function buildListingsWhere(filter: ListingsFilter): SQL {
-  const conditions: SQL[] = [eq(listings.status, "published")];
+  // Expired listings drop out of browse/search (see lib/listings/expiry.ts).
+  const conditions: SQL[] = [eq(listings.status, "published"), notExpired];
 
   const q = filter.q?.trim();
   if (q) {
@@ -283,7 +286,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
-    .where(and(inArray(listings.id, ids), eq(listings.status, "published")));
+    .where(and(inArray(listings.id, ids), eq(listings.status, "published"), notExpired));
 
   const imagesByListing = await attachImages(rows.map((r) => r.id));
   const rank = new Map(ids.map((id, i) => [id, i]));
@@ -363,6 +366,7 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
     .where(
       and(
         eq(listings.status, "published"),
+        notExpired,
         eq(listings.homepageFeatured, true),
         or(isNotNull(listings.featuredVideoUrl), isNotNull(listings.featuredSlideImageUrl)),
       ),
@@ -391,6 +395,7 @@ export async function getSitemapListings(): Promise<{ slug: string; updatedAt: D
     .where(
       and(
         eq(listings.status, "published"),
+        notExpired,
         isNull(listings.externalUrl),
         isNull(listings.redirectUrl),
       ),
@@ -427,6 +432,7 @@ export const getListingBySlug = cache(async (
       og_title: listings.ogTitle,
       og_description: listings.ogDescription,
       og_image_url: listings.ogImageUrl,
+      view_count: listings.viewCount,
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
@@ -484,6 +490,7 @@ export const getListingBySlug = cache(async (
     og_title: row.og_title,
     og_description: row.og_description,
     og_image_url: row.og_image_url,
+    view_count: row.view_count,
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,

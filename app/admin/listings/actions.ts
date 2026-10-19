@@ -47,6 +47,8 @@ export type ListingFormValues = {
   description: string;
   status: string;
   expires_at: string;
+  /** Editable view count (string from the number input). */
+  view_count: string;
   /** Checkbox: "1" when ticked, "" when not (an unticked box isn't sent at all). */
   homepage_featured: string;
 };
@@ -80,6 +82,7 @@ function readValues(formData: FormData): ListingFormValues {
     description: get("description"),
     status: get("status"),
     expires_at: get("expires_at"),
+    view_count: get("view_count") || "0",
     homepage_featured: formData.has("homepage_featured") ? "1" : "",
   };
 }
@@ -138,6 +141,17 @@ export async function saveListing(
     }
   }
 
+  // Only write the view count if staff actually changed it, so saving the
+  // form doesn't wipe out views counted while it was open.
+  const viewCountChanged = values.view_count !== String(formData.get("view_count_original") ?? values.view_count);
+  const viewCount = Number(values.view_count);
+  if (viewCountChanged && (!Number.isInteger(viewCount) || viewCount < 0 || viewCount > 2_000_000_000)) {
+    fieldErrors.view_count = "Views must be a whole number, 0 or more.";
+  }
+  if (values.expires_at && !/^\d{4}-\d{2}-\d{2}$/.test(values.expires_at)) {
+    fieldErrors.expires_at = "Enter a valid expiry date.";
+  }
+
   // Lengths past the recommended 60/160 are only warned about in the panel;
   // these hard caps just stop accidental pastes of whole documents.
   if (values.seo_title.length > SEO_TITLE_LIMIT) fieldErrors.seo_title = `Keep the SEO title under ${SEO_TITLE_LIMIT} characters.`;
@@ -187,6 +201,7 @@ export async function saveListing(
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
     expiresAt: values.expires_at || null,
+    ...(viewCountChanged ? { viewCount } : {}),
     homepageFeatured: values.homepage_featured === "1",
     // Unticking drops the listing out of the manual order too; ticking leaves
     // the stored position alone (the Featured page owns ordering).

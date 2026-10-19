@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import type { ListingCategory } from "@/lib/listings/queries";
 import { saveMyListing, type MyListingFormState, type MyListingFormValues } from "./actions";
+import { ExpiryField } from "@/app/components/expiry-field";
 
 const inputClass =
   "mt-1 block w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -204,15 +205,7 @@ export function MyListingForm({
         />
       </label>
 
-      <label className={labelClass}>
-        Expires
-        <input
-          type="date"
-          name="expires_at"
-          defaultValue={values.expires_at}
-          className={inputClass}
-        />
-      </label>
+      <ExpiryField defaultValue={values.expires_at} inputClass={inputClass} labelClass={labelClass} />
       </form>
 
       {children}

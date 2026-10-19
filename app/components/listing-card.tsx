@@ -7,7 +7,11 @@ import { pickListingImage } from "@/lib/listings/image";
 import type { ListingWithRelations } from "@/lib/listings/queries";
 
 export function ListingCard({ listing }: { listing: ListingWithRelations }) {
-  const outboundUrl = listing.external_url ?? listing.redirect_url;
+  // Client-redirected listings go through their own /listings/ page, which
+  // redirects instantly (proxy.ts) and counts the visit as a view. Synced
+  // fd.sg listings link straight to the source.
+  const outboundUrl =
+    listing.external_url ?? (listing.redirect_url ? `/listings/${listing.slug}` : null);
   const imageUrl = pickListingImage(listing);
   const isNew = isNewListing(listing.created_at);
   const endsSoon = endsSoonLabel(listing.expires_at);
