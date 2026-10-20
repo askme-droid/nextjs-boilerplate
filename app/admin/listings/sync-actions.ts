@@ -15,6 +15,7 @@ export async function refreshSyncedListings() {
   let remaining = 0;
   let datesUpdated = 0;
   let viewsUpdated = 0;
+  let imagesFixed = 0;
 
   try {
     const result = await syncFdsgListings();
@@ -22,6 +23,7 @@ export async function refreshSyncedListings() {
     remaining = result.remaining;
     datesUpdated = result.datesUpdated;
     viewsUpdated = result.viewsUpdated;
+    imagesFixed = result.imagesFixed;
   } catch (e) {
     // Computed outside the try below on purpose: redirect() throws
     // internally, and calling it inside this catch would just be caught
@@ -47,9 +49,14 @@ export async function refreshSyncedListings() {
       : "";
   const viewsMessage =
     viewsUpdated > 0 ? ` Updated view counts for ${viewsUpdated} listing${viewsUpdated === 1 ? "" : "s"} from fd.sg.` : "";
+  const imagesMessage =
+    imagesFixed > 0
+      ? ` Fixed the thumbnail of ${imagesFixed} listing${imagesFixed === 1 ? "" : "s"} (removed fd.sg's logo/banner images).`
+      : "";
   const message =
     (remaining > 0 ? `${addedMessage} ${remaining} more pending — click Refresh again to continue.` : addedMessage) +
     datesMessage +
-    viewsMessage;
+    viewsMessage +
+    imagesMessage;
   redirect(`/admin/listings/synced?refreshed=${encodeURIComponent(message)}`);
 }

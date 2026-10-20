@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { and, eq, isNotNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, listingImages, listings } from "@/lib/db/schema";
 import { embedImageUrl } from "./embeddings";
@@ -54,6 +54,18 @@ const LISTING_LINK = /\/acadp_listings\/[^/?#]+\/?$/;
 // repeatedly, so whatever's left over is picked up next click.
 const MAX_NEW_PER_RUN = 20;
 
+// fd.sg's own site images (header/footer logo, menu icon, homepage slider,
+// promo banners) appear on every listing page. Oct 2026: the logo was
+// renamed to plain "FDSG.png", which the old "fdsg-logo" filter missed —
+// so it became the first (= featured) image of newly imported listings and
+// their cards showed the FDSG logo instead of the flyer.
+const SITE_CHROME_IMAGE =
+  /fdsg-logo|social-media|\/ultimatemember\/|\/(?:FDSG|best-deals-small|slider\d*|slider-banner|imgpsh_fullsize_anim|new-flyer|boost-your-flyer|users-guide|be-a-distributor)(?:-\d+x\d+)?\.(?:png|jpe?g|gif|webp)$/i;
+
+export function isSiteChromeImage(url: string): boolean {
+  return SITE_CHROME_IMAGE.test(url);
+}
+
 export type SyncResult = {
   added: number;
   skipped: number;
@@ -63,6 +75,8 @@ export type SyncResult = {
   datesUpdated: number;
   /** Existing synced listings whose view count was updated from fd.sg. */
   viewsUpdated: number;
+  /** Synced listings whose wrongly imported fd.sg logo/banner images were removed. */
+  imagesFixed: number;
 };
 
 /** Normalised form of an fd.sg listing URL for matching (scheme, www,
@@ -286,17 +300,48 @@ async function scrapeListing(url: string): Promise<ScrapedListing | null> {
   // until it scrolls into view, so the real URL is in data-src. Not an
   // issue on digital.fd.sg (no lazy-loading there), which is why this was
   // missed until switching the sync target.
-  const rawImgs = $("img")
-    .map((_, el) => $(el).attr("data-src") || $(el).attr("src"))
-    .get()
-    .filter(
-      (src): src is string =>
-        !!src &&
-        src.includes("/wp-content/uploads/") &&
-        !/fdsg-logo|social-media|\/ultimatemember\//i.test(src),
-    );
+  const pickImgs = (scope: ReturnType<typeof $>) =>
+    scope
+      .find("img")
+      .map((_, el) => $(el).attr("data-src") || $(el).attr("src"))
+      .get()
+      .filter(
+        (src): src is string => !!src && src.includes("/wp-content/uploads/") && !isSiteChromeImage(src),
+      );
+  // The listing's own images live in the post body; fall back to the whole
+  // page (still minus the site's own images) if the theme ever changes that.
+  const inContent = pickImgs($(".entry-content").first());
+  const rawImgs = inContent.length > 0 ? inContent : pickImgs($("body"));
 
   return { title, sourceUrl: url, category, description, imgs: dedupeImages([...new Set(rawImgs)]) };
+}
+
+/** Removes fd.sg site images (logo, banners) that earlier syncs attached to
+ *  synced listings, and makes the first remaining image the featured one
+ *  where the featured image was removed. Returns how many listings changed. */
+async function removeSiteChromeImages(): Promise<number> {
+  const rows = await db
+    .select({ id: listingImages.id, listingId: listingImages.listingId, url: listingImages.url })
+    .from(listingImages)
+    .innerJoin(listings, eq(listings.id, listingImages.listingId))
+    .where(isNotNull(listings.externalUrl));
+  const bad = rows.filter((r) => isSiteChromeImage(r.url));
+  if (bad.length === 0) return 0;
+
+  const affected = new Set(bad.map((r) => r.listingId));
+  await db.delete(listingImages).where(inArray(listingImages.id, bad.map((r) => r.id)));
+
+  for (const listingId of affected) {
+    const remaining = await db
+      .select({ id: listingImages.id, isFeatured: listingImages.isFeatured })
+      .from(listingImages)
+      .where(eq(listingImages.listingId, listingId))
+      .orderBy(asc(listingImages.position));
+    if (remaining.length > 0 && !remaining.some((r) => r.isFeatured)) {
+      await db.update(listingImages).set({ isFeatured: true }).where(eq(listingImages.id, remaining[0].id));
+    }
+  }
+  return affected.size;
 }
 
 /** Fetches fd.sg's current listing URLs, imports whichever ones we don't
@@ -309,6 +354,7 @@ export async function syncFdsgListings(): Promise<SyncResult> {
   const sourceDates = await fetchSourceDates().catch(() => new Map<string, Date>());
   const datesUpdated = await backfillSourceDates(sourceDates);
   const viewsUpdated = await syncSourceViews(sourceViews);
+  const imagesFixed = await removeSiteChromeImages();
 
   const existingExternal = await db
     .select({ externalUrl: listings.externalUrl })
@@ -318,7 +364,7 @@ export async function syncFdsgListings(): Promise<SyncResult> {
 
   const allNewUrls = urls.filter((u) => !existingUrls.has(u));
   if (allNewUrls.length === 0) {
-    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0, datesUpdated, viewsUpdated };
+    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0, datesUpdated, viewsUpdated, imagesFixed };
   }
 
   const newUrls = allNewUrls.slice(0, MAX_NEW_PER_RUN);
@@ -397,5 +443,5 @@ export async function syncFdsgListings(): Promise<SyncResult> {
     added += 1;
   }
 
-  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining, datesUpdated, viewsUpdated };
+  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining, datesUpdated, viewsUpdated, imagesFixed };
 }
