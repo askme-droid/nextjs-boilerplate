@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { isVerifiedBusiness } from "@/lib/business/verify-listing";
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import { notExpired } from "./expiry";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
