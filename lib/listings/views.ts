@@ -48,7 +48,4 @@ export async function incrementViewsBySlug(slug: string): Promise<void> {
   }
 }
 
-/** "1 view", "1,234 views". */
-export function formatViews(count: number): string {
-  return `${count.toLocaleString("en-SG")} view${count === 1 ? "" : "s"}`;
-}
+export { formatViews } from "./format-views";

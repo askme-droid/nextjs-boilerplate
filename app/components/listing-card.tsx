@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { endsSoonLabel, isNewListing, isPopularListing } from "@/lib/listings/badges";
+import { formatViews } from "@/lib/listings/format-views";
 import { pickListingImage } from "@/lib/listings/image";
 import type { ListingWithRelations } from "@/lib/listings/queries";
 
@@ -108,8 +109,16 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
           </p>
         )}
 
-        <p className="mt-auto pt-1 text-xs text-zinc-400 dark:text-zinc-600">
-          Posted {formatRelativeTime(listing.created_at)}
+        <p className="mt-auto flex flex-wrap gap-x-1.5 pt-1 text-xs text-zinc-400 dark:text-zinc-600">
+          <span>Posted {formatRelativeTime(listing.created_at)}</span>
+          {/* Synced fd.sg listings aren't counted here (clicks go to fd.sg),
+              so only show a count once there is one. */}
+          {(!listing.external_url || listing.view_count > 0) && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{formatViews(listing.view_count)}</span>
+            </>
+          )}
         </p>
       </div>
     </>
