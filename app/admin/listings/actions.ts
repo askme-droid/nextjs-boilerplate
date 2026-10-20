@@ -203,6 +203,10 @@ export async function saveListing(
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
     expiresAt: values.expires_at || null,
+    // Set here rather than on every UPDATE: view counting also updates the
+    // row, and that shouldn't count as the listing changing (the sitemap's
+    // lastModified tells search engines when to re-read the page).
+    updatedAt: new Date(),
     ...(viewCountChanged ? { viewCount } : {}),
     homepageFeatured: values.homepage_featured === "1",
     // Unticking drops the listing out of the manual order too; ticking leaves

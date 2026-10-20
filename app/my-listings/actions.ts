@@ -130,6 +130,10 @@ export async function saveMyListing(
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
     expiresAt: values.expires_at || null,
+    // Set here rather than on every UPDATE: view counting also updates the
+    // row, and that shouldn't count as the listing changing (the sitemap's
+    // lastModified tells search engines when to re-read the page).
+    updatedAt: new Date(),
   };
 
   let savedId: string | undefined;
