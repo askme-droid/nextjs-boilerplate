@@ -39,8 +39,12 @@ const CATEGORY_ALIASES: Record<string, string> = {
 // The real fd.sg's own listing archive is its homepage, paginated
 // (/page/2/, /page/3/, ...) — not a separate landing page the way
 // digital.fd.sg had one.
-const ARCHIVE_BASE = "https://www.fd.sg/";
-const MAX_ARCHIVE_PAGES = 20; // safety cap against an infinite loop, not a real expected limit
+// Oct 2026: fd.sg's homepage became a marketing page with no listing cards;
+// the directory (and each card's view count) now lives on this page,
+// paginated the same way. The homepage stays as a fallback.
+const ARCHIVE_BASES = ["https://www.fd.sg/fdsg-digital-flyer-deals-e-vouchers/", "https://www.fd.sg/"];
+const MAX_ARCHIVE_PAGES = 30; // safety cap against an infinite loop, not a real expected limit
+const LISTING_LINK = /\/acadp_listings\/[^/?#]+\/?$/;
 
 // Each new listing now costs a scrape plus a CLIP embedding per image, not
 // just an HTTP fetch — expensive enough that importing a large batch of new
@@ -152,39 +156,56 @@ function parseViews(text: string): number | null {
  *  (handles both an empty last page and a theme that just re-serves the
  *  last valid page for an out-of-range page number). */
 async function fetchArchive(): Promise<{ urls: string[]; views: Map<string, number> }> {
+  for (const base of ARCHIVE_BASES) {
+    const result = await fetchArchiveFrom(base);
+    if (result.urls.length > 0) return result;
+  }
+  return { urls: [], views: new Map() };
+}
+
+async function fetchArchiveFrom(base: string): Promise<{ urls: string[]; views: Map<string, number> }> {
   const seen = new Set<string>();
   const views = new Map<string, number>();
 
   for (let page = 1; page <= MAX_ARCHIVE_PAGES; page++) {
-    const pageUrl = page === 1 ? ARCHIVE_BASE : `${ARCHIVE_BASE}page/${page}/`;
+    const pageUrl = page === 1 ? base : `${base}page/${page}/`;
     const res = await fetch(pageUrl);
     if (!res.ok) break;
 
-    const html = await res.text();
-    const $ = cheerio.load(html);
-    const links = $(".acadp-listings-title-block a")
-      .map((_, el) => $(el).attr("href"))
-      .get()
-      .filter((href): href is string => !!href);
+    const $ = cheerio.load(await res.text());
 
-    // The view count sits in the same card as the title. Walk up from each
-    // title to the largest ancestor that still holds only this one listing,
-    // and read "N views" from it.
-    $(".acadp-listings-title-block").each((_, block) => {
-      const href = $(block).find("a").first().attr("href");
-      if (!href) return;
-      let card = $(block);
-      for (let i = 0; i < 6; i++) {
+    // Every link to a listing detail page (title, image, "read more"),
+    // grouped by URL. Not tied to one theme class, so a layout change on
+    // fd.sg doesn't silently find nothing.
+    const anchorsByUrl = new Map<string, ReturnType<typeof $>>();
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href")!.split("#")[0];
+      if (!LISTING_LINK.test(href)) return;
+      if (!anchorsByUrl.has(href)) anchorsByUrl.set(href, $(el));
+    });
+
+    const before = seen.size;
+    for (const [href, anchor] of anchorsByUrl) {
+      seen.add(href);
+      // The view count ("… / 3346 views /") sits in the same card: walk up
+      // to the largest ancestor that still only links to this one listing.
+      let card = anchor;
+      for (let i = 0; i < 8; i++) {
         const parent = card.parent();
-        if (!parent.length || parent.find(".acadp-listings-title-block").length > 1) break;
+        if (!parent.length) break;
+        const otherListing = parent
+          .find("a[href]")
+          .toArray()
+          .some((el) => {
+            const h = ($(el).attr("href") ?? "").split("#")[0];
+            return LISTING_LINK.test(h) && h !== href;
+          });
+        if (otherListing) break;
         card = parent;
       }
       const count = parseViews(card.text());
       if (count !== null) views.set(normalizeSourceUrl(href), count);
-    });
-
-    const before = seen.size;
-    for (const link of links) seen.add(link);
+    }
     if (seen.size === before) break;
   }
 
