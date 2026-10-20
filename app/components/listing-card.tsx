@@ -12,7 +12,9 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
   // redirects instantly (proxy.ts) and counts the visit as a view. Synced
   // fd.sg listings link straight to the source.
   const outboundUrl =
-    listing.external_url ?? (listing.redirect_url ? `/listings/${listing.slug}` : null);
+    // A redirect set by staff wins over the fd.sg source link, so a synced
+    // listing can be pointed at the client's own page too.
+    listing.redirect_url ? `/listings/${listing.slug}` : listing.external_url;
   const imageUrl = pickListingImage(listing);
   const isNew = isNewListing(listing.created_at);
   const endsSoon = endsSoonLabel(listing.expires_at);

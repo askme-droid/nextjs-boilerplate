@@ -53,7 +53,7 @@ export default async function EditListingPage({
         </p>
       )}
 
-      {listing.redirect_url && !listing.external_url && (
+      {listing.redirect_url && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
           Visitors to this listing are redirected to{" "}
           <a href={listing.redirect_url} target="_blank" rel="noopener noreferrer nofollow" className="underline">

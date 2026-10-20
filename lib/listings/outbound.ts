@@ -21,9 +21,10 @@ export async function getListingOutboundUrl(
     .from(listings)
     .where(and(eq(listings.slug, slug), eq(listings.status, "published")))
     .limit(1);
-  if (row?.externalUrl) return { url: row.externalUrl, countsAsView: false };
-  // A client-redirected listing is still one of ours, so a visit through
-  // here counts as a view of it (lib/listings/views.ts).
+  // A redirect set by staff comes first — including on a synced listing,
+  // which otherwise goes to its fd.sg source. A visit through here counts as
+  // a view of the listing (lib/listings/views.ts).
   if (row?.redirectUrl) return { url: row.redirectUrl, countsAsView: true };
+  if (row?.externalUrl) return { url: row.externalUrl, countsAsView: false };
   return null;
 }

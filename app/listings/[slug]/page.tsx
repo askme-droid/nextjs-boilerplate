@@ -182,15 +182,12 @@ export default async function ListingDetailPage({
 
   if (!listing) notFound();
 
-  // Syndicated listing (e.g. from fd.sg) — the card already links straight
-  // there, but this covers anyone hitting the local URL directly (a bookmark,
-  // a shared link, a search engine result).
-  if (listing.external_url) redirect(listing.external_url);
-
-  // The client asked for this listing to go to their own landing page. A
-  // temporary (307) redirect, not permanent: staff can clear it at any time
-  // and the listing page should come straight back.
+  // Normally proxy.ts already redirected; this covers anything that reaches
+  // the page anyway. The client's own landing page (redirect_url, set by
+  // staff — also on synced listings) comes first, then a synced listing's
+  // fd.sg source. Temporary (307): clearing the field brings the page back.
   if (listing.redirect_url) redirect(listing.redirect_url);
+  if (listing.external_url) redirect(listing.external_url);
 
   // Count the view once the page has been sent (lib/listings/views.ts).
   if (shouldCountView(await headers())) {
