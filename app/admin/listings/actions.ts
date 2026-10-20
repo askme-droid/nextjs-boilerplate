@@ -261,7 +261,12 @@ export async function saveListing(
 
   revalidatePath("/");
   revalidatePath(`/listings/${slug}`);
-  redirect(`/admin/listings/${listingId}/edit?saved=1`);
+  // "Save & preview" button: same save, then the preview page.
+  redirect(
+    formData.get("intent") === "preview"
+      ? `/admin/listings/${listingId}/preview`
+      : `/admin/listings/${listingId}/edit?saved=1`,
+  );
 }
 
 /**

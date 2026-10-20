@@ -436,9 +436,18 @@ export async function getSitemapListings(): Promise<{ slug: string; updatedAt: D
  * its page component — both of which need this same row — share one query
  * per request instead of fetching it twice.
  */
-export const getListingBySlug = cache(async (
-  slug: string,
-): Promise<ListingDetail | null> => {
+export const getListingBySlug = cache(
+  (slug: string): Promise<ListingDetail | null> =>
+    loadListingDetail(and(eq(listings.slug, slug), eq(listings.status, "published"))!),
+);
+
+/** Any listing by id, whatever its status — for the staff preview
+ *  (app/admin/listings/[id]/preview). Callers must check staff access. */
+export function getListingForPreview(id: string): Promise<ListingDetail | null> {
+  return loadListingDetail(eq(listings.id, id));
+}
+
+async function loadListingDetail(where: SQL): Promise<ListingDetail | null> {
   const rows = await db
     .select({
       id: listings.id,
@@ -477,7 +486,7 @@ export const getListingBySlug = cache(async (
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
-    .where(and(eq(listings.slug, slug), eq(listings.status, "published")))
+    .where(where)
     .limit(1);
 
   const row = rows[0];
@@ -538,4 +547,4 @@ export const getListingBySlug = cache(async (
     listing_images: images,
     experience_tags: tags,
   };
-});
+}

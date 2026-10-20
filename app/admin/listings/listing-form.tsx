@@ -388,6 +388,21 @@ export function ListingForm({
         {pending ? "Saving…" : submitLabel}
       </button>
 
+      {/* Saves like the button above, then opens the listing page as
+          visitors will see it — works for drafts too (nothing is published). */}
+      {listingId && (
+        <button
+          type="submit"
+          form="listing-form"
+          name="intent"
+          value="preview"
+          disabled={pending}
+          className="w-fit rounded-md border border-zinc-300 px-4 py-2 font-medium hover:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        >
+          Save &amp; preview
+        </button>
+      )}
+
       {/* Quick one-click approve — bypasses the dropdown + full save below,
           for the common case of just approving a pending/draft listing.
           formAction overrides the form's own action for this button only,
