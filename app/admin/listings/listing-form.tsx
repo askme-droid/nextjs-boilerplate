@@ -355,6 +355,23 @@ export function ListingForm({
 
     {footer}
 
+    {/* The form is long, so a failed save would otherwise only show its error
+        next to a field far above the Save button (e.g. a missing category),
+        and it looks as if nothing happened. Repeat every problem here. */}
+    {(state.error || (state.fieldErrors && Object.values(state.fieldErrors).some(Boolean))) && (
+      <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+        <p className="font-medium">Not saved yet — please fix:</p>
+        <ul className="mt-1 list-disc pl-5">
+          {state.error && <li>{state.error}</li>}
+          {Object.values(state.fieldErrors ?? {})
+            .filter(Boolean)
+            .map((msg) => (
+              <li key={String(msg)}>{msg}</li>
+            ))}
+        </ul>
+      </div>
+    )}
+
     <div className="flex flex-wrap gap-3">
       <button
         type="submit"

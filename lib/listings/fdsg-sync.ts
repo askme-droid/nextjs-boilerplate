@@ -130,7 +130,9 @@ async function syncSourceViews(views: Map<string, number>): Promise<number> {
   let changed = 0;
   for (const row of synced) {
     const count = row.externalUrl ? views.get(normalizeSourceUrl(row.externalUrl)) : undefined;
-    if (count === undefined || count === row.viewCount) continue;
+    // Never lower a count: staff may have raised it by hand (admin "Views"
+    // field), and fd.sg's number only ever goes up on its own.
+    if (count === undefined || count <= row.viewCount) continue;
     await db.update(listings).set({ viewCount: count }).where(eq(listings.id, row.id));
     changed += 1;
   }
