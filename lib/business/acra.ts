@@ -46,7 +46,10 @@ const ACRA_DATASETS = [
 ];
 
 const ENDPOINT = "https://data.gov.sg/api/action/datastore_search";
-const BATCH_SIZE = 7;
+// Small batches: data.gov.sg rate-limits requests without an API key.
+const BATCH_SIZE = process.env.DATA_GOV_SG_API_KEY ? 9 : 3;
+const MAX_ATTEMPTS = 4;
+const RETRY_BASE_MS = 1000;
 const REQUEST_TIMEOUT_MS = 8000;
 
 export type AcraEntity = {
@@ -103,14 +106,26 @@ function toEntity(row: Row): AcraEntity {
   };
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function searchDataset(resourceId: string, uen: string): Promise<Row | null> {
   const url = `${ENDPOINT}?resource_id=${resourceId}&limit=5&filters=${encodeURIComponent(JSON.stringify({ uen }))}`;
   const headers: Record<string, string> = { accept: "application/json" };
   const key = process.env.DATA_GOV_SG_API_KEY;
   if (key) headers["x-api-key"] = key;
 
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`data.gov.sg ${res.status}`);
+  // Without an API key data.gov.sg allows only a few requests at a time and
+  // answers the rest with 429 "Too Many Requests" — wait and retry those.
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    if (res.status !== 429 && res.status < 500) break;
+    if (attempt < MAX_ATTEMPTS - 1) await sleep(RETRY_BASE_MS * 2 ** attempt + Math.random() * 300);
+  }
+  if (!res || !res.ok) {
+    console.error(`ACRA lookup: data.gov.sg answered ${res?.status} for ${resourceId}`);
+    throw new Error(`data.gov.sg ${res?.status}`);
+  }
   const json = (await res.json()) as { success?: boolean; result?: { records?: Row[] } };
   if (json.success === false) throw new Error("data.gov.sg refused the request");
   // Match on the exact UEN ourselves too, so a filter that's ignored for any
