@@ -14,12 +14,14 @@ export async function refreshSyncedListings() {
   let added = 0;
   let remaining = 0;
   let datesUpdated = 0;
+  let viewsUpdated = 0;
 
   try {
     const result = await syncFdsgListings();
     added = result.added;
     remaining = result.remaining;
     datesUpdated = result.datesUpdated;
+    viewsUpdated = result.viewsUpdated;
   } catch (e) {
     // Computed outside the try below on purpose: redirect() throws
     // internally, and calling it inside this catch would just be caught
@@ -43,8 +45,11 @@ export async function refreshSyncedListings() {
     datesUpdated > 0
       ? ` Updated the created date of ${datesUpdated} listing${datesUpdated === 1 ? "" : "s"} to match fd.sg.`
       : "";
+  const viewsMessage =
+    viewsUpdated > 0 ? ` Updated view counts for ${viewsUpdated} listing${viewsUpdated === 1 ? "" : "s"} from fd.sg.` : "";
   const message =
     (remaining > 0 ? `${addedMessage} ${remaining} more pending — click Refresh again to continue.` : addedMessage) +
-    datesMessage;
+    datesMessage +
+    viewsMessage;
   redirect(`/admin/listings/synced?refreshed=${encodeURIComponent(message)}`);
 }

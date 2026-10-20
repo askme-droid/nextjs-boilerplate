@@ -57,6 +57,8 @@ export type SyncResult = {
   remaining: number;
   /** Existing synced listings whose created date was corrected to fd.sg's. */
   datesUpdated: number;
+  /** Existing synced listings whose view count was updated from fd.sg. */
+  viewsUpdated: number;
 };
 
 /** Normalised form of an fd.sg listing URL for matching (scheme, www,
@@ -99,6 +101,24 @@ export async function fetchSourceDates(): Promise<Map<string, Date>> {
   return dates;
 }
 
+/** Copies fd.sg's view counts onto the synced listings (their clicks go to
+ *  fd.sg, so they're counted there, not here). Returns how many changed. */
+async function syncSourceViews(views: Map<string, number>): Promise<number> {
+  if (views.size === 0) return 0;
+  const synced = await db
+    .select({ id: listings.id, externalUrl: listings.externalUrl, viewCount: listings.viewCount })
+    .from(listings)
+    .where(isNotNull(listings.externalUrl));
+  let changed = 0;
+  for (const row of synced) {
+    const count = row.externalUrl ? views.get(normalizeSourceUrl(row.externalUrl)) : undefined;
+    if (count === undefined || count === row.viewCount) continue;
+    await db.update(listings).set({ viewCount: count }).where(eq(listings.id, row.id));
+    changed += 1;
+  }
+  return changed;
+}
+
 /** Sets created_at on already-imported synced listings to fd.sg's original
  *  publish date where it differs. Returns how many were changed. */
 async function backfillSourceDates(dates: Map<string, Date>): Promise<number> {
@@ -120,12 +140,20 @@ async function backfillSourceDates(dates: Map<string, Date>): Promise<number> {
   return changed;
 }
 
-/** All listing detail URLs currently on fd.sg's archive, across every page.
- *  Stops once a page adds no URLs we haven't already seen (handles both an
- *  empty last page and a theme that just re-serves the last valid page for
- *  an out-of-range page number). */
-async function fetchListingUrls(): Promise<string[]> {
+/** "3,346 views" → 3346, from the text of one archive card. */
+function parseViews(text: string): number | null {
+  const match = text.match(/(\d[\d,]*)\s+views?\b/i);
+  return match ? Number(match[1].replace(/,/g, "")) : null;
+}
+
+/** All listing detail URLs currently on fd.sg's archive, across every page,
+ *  plus each listing's view count as shown on its archive card ("… / 3346
+ *  views /"). Stops once a page adds no URLs we haven't already seen
+ *  (handles both an empty last page and a theme that just re-serves the
+ *  last valid page for an out-of-range page number). */
+async function fetchArchive(): Promise<{ urls: string[]; views: Map<string, number> }> {
   const seen = new Set<string>();
+  const views = new Map<string, number>();
 
   for (let page = 1; page <= MAX_ARCHIVE_PAGES; page++) {
     const pageUrl = page === 1 ? ARCHIVE_BASE : `${ARCHIVE_BASE}page/${page}/`;
@@ -139,12 +167,28 @@ async function fetchListingUrls(): Promise<string[]> {
       .get()
       .filter((href): href is string => !!href);
 
+    // The view count sits in the same card as the title. Walk up from each
+    // title to the largest ancestor that still holds only this one listing,
+    // and read "N views" from it.
+    $(".acadp-listings-title-block").each((_, block) => {
+      const href = $(block).find("a").first().attr("href");
+      if (!href) return;
+      let card = $(block);
+      for (let i = 0; i < 6; i++) {
+        const parent = card.parent();
+        if (!parent.length || parent.find(".acadp-listings-title-block").length > 1) break;
+        card = parent;
+      }
+      const count = parseViews(card.text());
+      if (count !== null) views.set(normalizeSourceUrl(href), count);
+    });
+
     const before = seen.size;
     for (const link of links) seen.add(link);
     if (seen.size === before) break;
   }
 
-  return [...seen];
+  return { urls: [...seen], views };
 }
 
 /** Strips WP's auto-generated resize suffix (e.g. "-1024x477") so the same
@@ -238,11 +282,12 @@ async function scrapeListing(url: string): Promise<ScrapedListing | null> {
  *  already have (matched by external_url), and leaves everything else
  *  untouched. Safe to call as often as wanted. */
 export async function syncFdsgListings(): Promise<SyncResult> {
-  const urls = await fetchListingUrls();
+  const { urls, views: sourceViews } = await fetchArchive();
   // Original publish dates from fd.sg's feed. Best-effort: if the feed can't
   // be read, new imports just get today's date as before.
   const sourceDates = await fetchSourceDates().catch(() => new Map<string, Date>());
   const datesUpdated = await backfillSourceDates(sourceDates);
+  const viewsUpdated = await syncSourceViews(sourceViews);
 
   const existingExternal = await db
     .select({ externalUrl: listings.externalUrl })
@@ -252,7 +297,7 @@ export async function syncFdsgListings(): Promise<SyncResult> {
 
   const allNewUrls = urls.filter((u) => !existingUrls.has(u));
   if (allNewUrls.length === 0) {
-    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0, datesUpdated };
+    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0, datesUpdated, viewsUpdated };
   }
 
   const newUrls = allNewUrls.slice(0, MAX_NEW_PER_RUN);
@@ -307,6 +352,7 @@ export async function syncFdsgListings(): Promise<SyncResult> {
         categoryId,
         status: "published",
         externalUrl: scraped.sourceUrl,
+        viewCount: sourceViews.get(normalizeSourceUrl(scraped.sourceUrl)) ?? 0,
         // Keep fd.sg's original posting date rather than the import time.
         ...(sourceDates.get(normalizeSourceUrl(scraped.sourceUrl))
           ? { createdAt: sourceDates.get(normalizeSourceUrl(scraped.sourceUrl)) }
@@ -330,5 +376,5 @@ export async function syncFdsgListings(): Promise<SyncResult> {
     added += 1;
   }
 
-  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining, datesUpdated };
+  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining, datesUpdated, viewsUpdated };
 }
