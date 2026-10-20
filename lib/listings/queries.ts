@@ -34,6 +34,8 @@ export type ListingWithRelations = {
   // page. Like external_url the card and detail route send visitors there,
   // but the listing is ours (see the schema comment on redirectUrl).
   redirect_url: string | null;
+  view_count: number;
+  homepage_featured: boolean;
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
@@ -211,6 +213,8 @@ export async function getListings(
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
+      view_count: listings.viewCount,
+      homepage_featured: listings.homepageFeatured,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -240,6 +244,8 @@ export async function getListings(
     featured_image_url: r.featured_image_url,
     external_url: r.external_url,
     redirect_url: r.redirect_url,
+    view_count: r.view_count,
+    homepage_featured: r.homepage_featured,
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
@@ -276,6 +282,8 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
+      view_count: listings.viewCount,
+      homepage_featured: listings.homepageFeatured,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -304,6 +312,8 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       featured_image_url: r.featured_image_url,
       external_url: r.external_url,
       redirect_url: r.redirect_url,
+      view_count: r.view_count,
+      homepage_featured: r.homepage_featured,
       created_by: r.created_by,
       expires_at: r.expires_at,
       created_at: r.created_at.toISOString(),
@@ -432,12 +442,13 @@ export const getListingBySlug = cache(async (
       og_title: listings.ogTitle,
       og_description: listings.ogDescription,
       og_image_url: listings.ogImageUrl,
-      view_count: listings.viewCount,
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
+      view_count: listings.viewCount,
+      homepage_featured: listings.homepageFeatured,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -496,6 +507,7 @@ export const getListingBySlug = cache(async (
     featured_image_url: row.featured_image_url,
     external_url: row.external_url,
     redirect_url: row.redirect_url,
+    homepage_featured: row.homepage_featured,
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),

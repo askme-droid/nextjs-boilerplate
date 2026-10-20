@@ -4,6 +4,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { after } from "next/server";
+import { isPopularListing } from "@/lib/listings/badges";
 import { isExpired } from "@/lib/listings/expiry-dates";
 import { formatViews, incrementViewsById, shouldCountView } from "@/lib/listings/views";
 import { socialLabel } from "@/lib/listings/contact-fields";
@@ -211,10 +212,16 @@ export default async function ListingDetailPage({
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-semibold tracking-tight">{listing.title}</h1>
 
-        <p className="flex flex-wrap gap-x-3 text-zinc-500 dark:text-zinc-400">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-zinc-500 dark:text-zinc-400">
           {listing.location && <span>{listing.location}</span>}
           {/* The count shown is before this visit (it's added after the page is sent). */}
           <span>{formatViews(listing.view_count)}</span>
+          {isPopularListing(listing.view_count) && (
+            <span className="rounded-full bg-emerald-700 px-2.5 py-0.5 text-xs font-semibold text-white">Popular</span>
+          )}
+          {listing.homepage_featured && (
+            <span className="rounded-full bg-brand-orange px-2.5 py-0.5 text-xs font-semibold text-zinc-950">Featured</span>
+          )}
         </p>
       </div>
 

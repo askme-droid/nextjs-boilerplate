@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { endsSoonLabel, isNewListing } from "@/lib/listings/badges";
+import { endsSoonLabel, isNewListing, isPopularListing } from "@/lib/listings/badges";
 import { pickListingImage } from "@/lib/listings/image";
 import type { ListingWithRelations } from "@/lib/listings/queries";
 
@@ -15,6 +15,11 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
   const imageUrl = pickListingImage(listing);
   const isNew = isNewListing(listing.created_at);
   const endsSoon = endsSoonLabel(listing.expires_at);
+  // fd.sg-style badges: Popular at 1,000+ views, Featured for listings
+  // picked for the homepage slider.
+  const isPopular = isPopularListing(listing.view_count);
+  const isFeatured = listing.homepage_featured;
+  const hasLeftBadges = isNew || isPopular || isFeatured;
 
   const body = (
     <>
@@ -38,17 +43,31 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
           </div>
         )}
 
-        {(isNew || endsSoon) && (
+        {(hasLeftBadges || endsSoon) && (
           <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-2">
-            {isNew ? (
-              <span className="rounded-full bg-brand-teal px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
-                New
-              </span>
+            {hasLeftBadges ? (
+              <div className="flex flex-wrap gap-1.5">
+                {isNew && (
+                  <span className="rounded-full bg-brand-teal px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
+                    New
+                  </span>
+                )}
+                {isPopular && (
+                  <span className="rounded-full bg-emerald-700 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm">
+                    Popular
+                  </span>
+                )}
+                {isFeatured && (
+                  <span className="rounded-full bg-brand-orange px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
+                    Featured
+                  </span>
+                )}
+              </div>
             ) : (
               <span />
             )}
             {endsSoon && (
-              <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
+              <span className="shrink-0 whitespace-nowrap rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
                 {endsSoon}
               </span>
             )}

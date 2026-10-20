@@ -5,6 +5,13 @@ export const NEW_WITHIN_DAYS = 14;
 /** How close to its expiry date a listing starts showing "Ends in …". */
 export const ENDS_SOON_WITHIN_DAYS = 14;
 
+/** Views at which a listing earns the "Popular" badge (like fd.sg). */
+export const POPULAR_MIN_VIEWS = 1000;
+
+export function isPopularListing(viewCount: number): boolean {
+  return viewCount >= POPULAR_MIN_VIEWS;
+}
+
 export function isNewListing(createdAt: string): boolean {
   return Date.now() - new Date(createdAt).getTime() < NEW_WITHIN_DAYS * DAY_MS;
 }
