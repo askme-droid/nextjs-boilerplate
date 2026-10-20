@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { endsSoonLabel, isNewListing, isPopularListing } from "@/lib/listings/badges";
 import { formatViews } from "@/lib/listings/format-views";
@@ -20,7 +20,9 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
   // picked for the homepage slider.
   const isPopular = isPopularListing(listing.view_count);
   const isFeatured = listing.homepage_featured;
-  const hasLeftBadges = isNew || isPopular || isFeatured;
+  // UEN checked against ACRA's register and the business is live.
+  const isVerified = listing.verified_business;
+  const hasLeftBadges = isNew || isPopular || isFeatured || isVerified;
 
   const body = (
     <>
@@ -61,6 +63,15 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
                 {isFeatured && (
                   <span className="rounded-full bg-brand-orange px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
                     Featured
+                  </span>
+                )}
+                {isVerified && (
+                  <span
+                    title="Business registration (UEN) checked with ACRA"
+                    className="inline-flex items-center gap-1 rounded-full bg-sky-700 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm"
+                  >
+                    <Check aria-hidden className="size-3.5" strokeWidth={3} />
+                    Verified
                   </span>
                 )}
               </div>

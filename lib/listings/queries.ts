@@ -7,6 +7,11 @@ import { categories, experienceTags, listingExperienceTags, listingImages, listi
 
 export const PAGE_SIZE = 12;
 
+// Same rule as isVerifiedBusiness (lib/business/verify-listing.ts), in SQL
+// for the listing grids: the saved UEN is the one checked against ACRA, and
+// ACRA lists the business as live ("Live", "Live Company", "Registered").
+const verifiedBusinessSql = sql<boolean>`coalesce(${listings.companyUen} = ${listings.uenVerifiedUen} and (lower(${listings.uenVerifiedStatus}) like 'live%' or lower(${listings.uenVerifiedStatus}) = 'registered'), false)`;
+
 export type ListingCategory = { id: string; name: string; slug: string };
 
 export type ListingImage = {
@@ -37,6 +42,8 @@ export type ListingWithRelations = {
   redirect_url: string | null;
   view_count: number;
   homepage_featured: boolean;
+  /** UEN checked against ACRA and the business is live (Verified badge). */
+  verified_business: boolean;
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
@@ -221,6 +228,7 @@ export async function getListings(
       redirect_url: listings.redirectUrl,
       view_count: listings.viewCount,
       homepage_featured: listings.homepageFeatured,
+      verified_business: verifiedBusinessSql,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -252,6 +260,7 @@ export async function getListings(
     redirect_url: r.redirect_url,
     view_count: r.view_count,
     homepage_featured: r.homepage_featured,
+    verified_business: r.verified_business,
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
@@ -290,6 +299,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       redirect_url: listings.redirectUrl,
       view_count: listings.viewCount,
       homepage_featured: listings.homepageFeatured,
+      verified_business: verifiedBusinessSql,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
@@ -320,6 +330,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       redirect_url: r.redirect_url,
       view_count: r.view_count,
       homepage_featured: r.homepage_featured,
+      verified_business: r.verified_business,
       created_by: r.created_by,
       expires_at: r.expires_at,
       created_at: r.created_at.toISOString(),
