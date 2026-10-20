@@ -4,7 +4,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { after } from "next/server";
-import { isPopularListing } from "@/lib/listings/badges";
+import { isPopularListing, isTrendingListing } from "@/lib/listings/badges";
 import { isExpired } from "@/lib/listings/expiry-dates";
 import { formatViews, incrementViewsById, shouldCountView } from "@/lib/listings/views";
 import { socialLabel } from "@/lib/listings/contact-fields";
@@ -233,6 +233,9 @@ export default async function ListingDetailPage({
           {listing.location && <span>{listing.location}</span>}
           {/* The count shown is before this visit (it's added after the page is sent). */}
           <span>{formatViews(listing.view_count)}</span>
+          {isTrendingListing(listing.view_count) && (
+            <span className="rounded-full bg-rose-600 px-2.5 py-0.5 text-xs font-semibold text-white">Trending</span>
+          )}
           {isPopularListing(listing.view_count) && (
             <span className="rounded-full bg-emerald-700 px-2.5 py-0.5 text-xs font-semibold text-white">Popular</span>
           )}

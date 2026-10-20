@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, Check } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { endsSoonLabel, isNewListing, isPopularListing } from "@/lib/listings/badges";
+import { endsSoonLabel, isNewListing, isPopularListing, isTrendingListing } from "@/lib/listings/badges";
 import { formatViews } from "@/lib/listings/format-views";
 import { pickListingImage } from "@/lib/listings/image";
 import type { ListingWithRelations } from "@/lib/listings/queries";
@@ -21,10 +21,12 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
   // fd.sg-style badges: Popular at 1,000+ views, Featured for listings
   // picked for the homepage slider.
   const isPopular = isPopularListing(listing.view_count);
+  // 500–999 views; Popular takes over from 1,000.
+  const isTrending = isTrendingListing(listing.view_count);
   const isFeatured = listing.homepage_featured;
   // UEN checked against ACRA's register and the business is live.
   const isVerified = listing.verified_business;
-  const hasLeftBadges = isNew || isPopular || isFeatured || isVerified;
+  const hasLeftBadges = isNew || isTrending || isPopular || isFeatured || isVerified;
 
   const body = (
     <>
@@ -55,6 +57,11 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
                 {isNew && (
                   <span className="rounded-full bg-brand-teal px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
                     New
+                  </span>
+                )}
+                {isTrending && (
+                  <span className="rounded-full bg-rose-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm">
+                    Trending
                   </span>
                 )}
                 {isPopular && (

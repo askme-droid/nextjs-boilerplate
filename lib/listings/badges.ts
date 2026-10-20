@@ -8,8 +8,16 @@ export const ENDS_SOON_WITHIN_DAYS = 14;
 /** Views at which a listing earns the "Popular" badge (like fd.sg). */
 export const POPULAR_MIN_VIEWS = 1000;
 
+/** Views at which a listing shows "Trending" (until it reaches Popular). */
+export const TRENDING_MIN_VIEWS = 500;
+
 export function isPopularListing(viewCount: number): boolean {
   return viewCount >= POPULAR_MIN_VIEWS;
+}
+
+/** 500–999 views. A listing shows one view badge: Popular replaces Trending. */
+export function isTrendingListing(viewCount: number): boolean {
+  return viewCount >= TRENDING_MIN_VIEWS && viewCount < POPULAR_MIN_VIEWS;
 }
 
 export function isNewListing(createdAt: string): boolean {
