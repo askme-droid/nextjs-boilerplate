@@ -92,6 +92,13 @@
       "when": 1792383428268,
       "tag": "0012_listing_view_count",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792469243499,
+      "tag": "0013_listing_uen_verification",
+      "breakpoints": true
     }
   ]
 }

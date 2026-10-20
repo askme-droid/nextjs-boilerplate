@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
 import { redirect } from "next/navigation";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
@@ -243,6 +245,14 @@ export async function saveListing(
         values: { ...values, slug },
       };
     }
+  }
+
+  // A UEN that hasn't been checked yet is looked up in ACRA's register once
+  // the response is sent (lib/business/verify-listing.ts).
+  const uenToCheck = contact.parsed.companyUen;
+  if (uenToCheck) {
+    const savedId = listingId;
+    after(() => verifyListingBusinessIfChanged(savedId, uenToCheck));
   }
 
   revalidatePath("/");

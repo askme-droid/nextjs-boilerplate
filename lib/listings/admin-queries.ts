@@ -123,8 +123,17 @@ export type AdminListingDetail = AdminListingRow & {
   og_title: string | null;
   og_description: string | null;
   og_image_url: string | null;
+  uen_verification: UenVerification | null;
   listing_images: ListingImage[];
   tagIds: string[];
+};
+
+/** Last ACRA check of the listing's UEN (see lib/business/acra.ts). */
+export type UenVerification = {
+  uen: string;
+  name: string | null;
+  status: string;
+  verified_at: string;
 };
 
 /** One listing by id (any status), with its images and linked tag ids. */
@@ -153,6 +162,10 @@ export async function getAdminListingById(
       og_title: listings.ogTitle,
       og_description: listings.ogDescription,
       og_image_url: listings.ogImageUrl,
+      uen_verified_uen: listings.uenVerifiedUen,
+      uen_verified_name: listings.uenVerifiedName,
+      uen_verified_status: listings.uenVerifiedStatus,
+      uen_verified_at: listings.uenVerifiedAt,
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
@@ -212,6 +225,15 @@ export async function getAdminListingById(
     og_title: row.og_title,
     og_description: row.og_description,
     og_image_url: row.og_image_url,
+    uen_verification:
+      row.uen_verified_uen && row.uen_verified_status && row.uen_verified_at
+        ? {
+            uen: row.uen_verified_uen,
+            name: row.uen_verified_name,
+            status: row.uen_verified_status,
+            verified_at: row.uen_verified_at.toISOString(),
+          }
+        : null,
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,

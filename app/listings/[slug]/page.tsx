@@ -144,6 +144,26 @@ function listingJsonLd(listing: ListingDetail) {
   return { "@context": "https://schema.org", "@graph": [page, business, breadcrumb] };
 }
 
+/** Shown when the listing's UEN was checked against ACRA's register and the
+ *  business is live (see lib/business/verify-listing.ts). */
+function VerifiedBusinessBadge() {
+  return (
+    <span
+      title="This business's UEN was checked against ACRA's register of businesses and companies."
+      className="inline-flex items-center gap-1 rounded-full bg-sky-700 px-2.5 py-0.5 text-xs font-semibold text-white"
+    >
+      <svg aria-hidden viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
+        <path
+          fillRule="evenodd"
+          d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z"
+          clipRule="evenodd"
+        />
+      </svg>
+      Verified business
+    </span>
+  );
+}
+
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-SG", {
     year: "numeric",
@@ -222,6 +242,7 @@ export default async function ListingDetailPage({
           {listing.homepage_featured && (
             <span className="rounded-full bg-brand-orange px-2.5 py-0.5 text-xs font-semibold text-zinc-950">Featured</span>
           )}
+          {listing.verified_business && <VerifiedBusinessBadge />}
         </p>
       </div>
 
@@ -299,6 +320,18 @@ export default async function ListingDetailPage({
           <section className="mt-2 flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             {listing.company_name && (
               <p className="font-medium">{listing.company_name}</p>
+            )}
+            {listing.verified_business && (
+              <p className="flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <VerifiedBusinessBadge />
+                <span>
+                  Registered with ACRA
+                  {listing.verified_business_name &&
+                  listing.verified_business_name.toUpperCase() !== (listing.company_name ?? "").toUpperCase()
+                    ? ` as ${listing.verified_business_name}`
+                    : ""}
+                </span>
+              </p>
             )}
             {listing.company_uen && (
               <p className="text-sm text-zinc-500 dark:text-zinc-400">

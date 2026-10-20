@@ -6,6 +6,8 @@ import type { ListingCategory, ListingTag } from "@/lib/listings/queries";
 import { publishListing, saveListing, type ListingFormState, type ListingFormValues } from "./actions";
 import { SeoPanel } from "./seo-panel";
 import { ExpiryField } from "@/app/components/expiry-field";
+import type { UenVerification } from "@/lib/listings/admin-queries";
+import { UenCheck } from "./uen-check";
 
 const inputClass =
   "mt-1 block w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -47,6 +49,7 @@ export function ListingForm({
   images,
   children,
   footer,
+  uenVerification,
 }: {
   /** Present when editing; omitted when creating. */
   listingId?: string;
@@ -71,6 +74,8 @@ export function ListingForm({
   /** Rendered after the SEO panel, just above the Save button — the delete
    *  box on the edit page. */
   footer?: React.ReactNode;
+  /** Last ACRA check of the UEN (edit form only). */
+  uenVerification?: UenVerification | null;
 }) {
   const initialState: ListingFormState = { values: initialValues ?? emptyValues };
   const [state, formAction, pending] = useActionState(saveListing, initialState);
@@ -178,6 +183,7 @@ export function ListingForm({
           <p className={errorClass}>{state.fieldErrors.company_uen}</p>
         )}
       </label>
+      {listingId && <UenCheck listingId={listingId} saved={uenVerification ?? null} />}
 
       <label className={labelClass}>
         Social links

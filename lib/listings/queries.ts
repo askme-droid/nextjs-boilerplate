@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { isVerifiedBusiness } from "@/lib/business/verify-listing";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { notExpired } from "./expiry";
 import { db } from "@/lib/db/client";
@@ -60,6 +61,11 @@ export type ListingDetail = Omit<ListingWithRelations, "listing_images"> & {
   og_description: string | null;
   og_image_url: string | null;
   view_count: number;
+  /** The listing's UEN was checked against ACRA and the business is live
+   *  (lib/business/verify-listing.ts) — shows the "Verified business" badge. */
+  verified_business: boolean;
+  /** ACRA's registered name for the UEN, when verified. */
+  verified_business_name: string | null;
 };
 
 export type ListingsResult = {
@@ -442,6 +448,9 @@ export const getListingBySlug = cache(async (
       og_title: listings.ogTitle,
       og_description: listings.ogDescription,
       og_image_url: listings.ogImageUrl,
+      uen_verified_uen: listings.uenVerifiedUen,
+      uen_verified_name: listings.uenVerifiedName,
+      uen_verified_status: listings.uenVerifiedStatus,
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
@@ -502,6 +511,8 @@ export const getListingBySlug = cache(async (
     og_description: row.og_description,
     og_image_url: row.og_image_url,
     view_count: row.view_count,
+    verified_business: isVerifiedBusiness(row),
+    verified_business_name: isVerifiedBusiness(row) ? row.uen_verified_name : null,
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,

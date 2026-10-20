@@ -6,6 +6,7 @@ import type { ListingFormValues } from "../actions";
 import { ListingForm } from "../listing-form";
 import { generateListing, type GenerateState } from "../generate-actions";
 import { FlyerReader } from "./flyer-reader";
+import type { UenVerification } from "@/lib/listings/admin-queries";
 
 const fieldClass =
   "rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -19,8 +20,10 @@ export function EditListingClient({
   images,
   children,
   footer,
+  uenVerification,
 }: {
   listingId: string;
+  uenVerification?: UenVerification | null;
   /** Listing photos, offered as social share images in the SEO panel. */
   images?: { url: string; is_featured: boolean; position: number }[];
   initialValues: ListingFormValues;
@@ -137,6 +140,7 @@ export function EditListingClient({
         allTags={allTags}
         selectedTagIds={selectedTagIds}
         footer={footer}
+        uenVerification={uenVerification}
       >
         {children}
       </ListingForm>

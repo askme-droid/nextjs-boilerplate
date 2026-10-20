@@ -104,6 +104,15 @@ export const listings = pgTable("listings", {
   // visitor, ACADP-style. Bots and link prefetches aren't counted. Staff can
   // edit it in admin (e.g. to carry over counts from the old WordPress site).
   viewCount: integer("view_count").notNull().default(0),
+  // Last check of company_uen against ACRA's register (data.gov.sg, see
+  // lib/business/acra.ts). uen_verified_uen is the UEN that was checked, so
+  // changing company_uen afterwards hides the "Verified business" badge until
+  // it's checked again. Status is ACRA's own wording ("Live", "Live Company",
+  // "Struck Off", ...) or "Not found".
+  uenVerifiedUen: text("uen_verified_uen"),
+  uenVerifiedName: text("uen_verified_name"),
+  uenVerifiedStatus: text("uen_verified_status"),
+  uenVerifiedAt: timestamp("uen_verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   // search_vector intentionally dropped: confirmed via exploration that no

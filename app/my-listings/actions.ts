@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
 import { makeKey, putFile } from "@/lib/storage/r2";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
@@ -130,11 +132,17 @@ export async function saveMyListing(
     expiresAt: values.expires_at || null,
   };
 
+  let savedId: string | undefined;
   try {
     if (id) {
       await db.update(listings).set(row).where(eq(listings.id, id));
+      savedId = id;
     } else {
-      await db.insert(listings).values({ ...row, createdBy: user.id });
+      const [created] = await db
+        .insert(listings)
+        .values({ ...row, createdBy: user.id })
+        .returning({ id: listings.id });
+      savedId = created?.id;
     }
   } catch (e) {
     const code = pgErrorCode(e);
@@ -148,6 +156,13 @@ export async function saveMyListing(
       return { fieldErrors: { category_id: "Invalid category selected." }, values };
     }
     return { error: e instanceof Error ? e.message : "Could not save listing.", values };
+  }
+
+  // Check a newly entered UEN against ACRA once the response is sent.
+  const uenToCheck = contact.parsed.companyUen;
+  if (savedId && uenToCheck) {
+    const listingId = savedId;
+    after(() => verifyListingBusinessIfChanged(listingId, uenToCheck));
   }
 
   revalidatePath("/my-listings");
