@@ -411,9 +411,9 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
 }
 
 /**
- * Every published listing that has its own page, for the sitemap. Syndicated
- * listings (with an external_url) and listings a client asked to redirect
- * (redirect_url) are left out: their page just redirects.
+ * Every published, unexpired listing, for the sitemap — including synced
+ * fd.sg listings and client-redirected ones (staff asked for all listings to
+ * be listed), even though those pages forward visitors elsewhere.
  */
 export async function getSitemapListings(): Promise<{ slug: string; updatedAt: Date }[]> {
   return db
@@ -423,8 +423,6 @@ export async function getSitemapListings(): Promise<{ slug: string; updatedAt: D
       and(
         eq(listings.status, "published"),
         notExpired,
-        isNull(listings.externalUrl),
-        isNull(listings.redirectUrl),
       ),
     )
     .orderBy(desc(listings.updatedAt));
