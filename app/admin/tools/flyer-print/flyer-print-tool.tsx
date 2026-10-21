@@ -29,6 +29,7 @@ import {
   type EnhanceResult,
 } from "@/lib/flyer-print/enhance";
 import { renderPrintFiles, type BleedMode, type PrintSource } from "@/lib/flyer-print/render";
+import { cropBorder, describeBorder, detectWhiteBorder, hasBorder, type Border } from "@/lib/flyer-print/borders";
 import {
   PdfProblem,
   type OpenedPdf,
@@ -113,6 +114,10 @@ export function FlyerPrintTool() {
   const [useEnhanced, setUseEnhanced] = useState(true);
   const [enhancing, setEnhancing] = useState<EnhanceProgress | null>(null);
   const [gpu, setGpu] = useState<boolean | null>(null);
+  // A plain white margin found around an image flyer, and whether to cut it
+  // off before printing (lib/flyer-print/borders.ts).
+  const [border, setBorder] = useState<{ bitmap: ImageBitmap; border: Border } | null>(null);
+  const [removeBorder, setRemoveBorder] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const enhancedRef = useRef<Enhanced | null>(null);
   const enhanceCount = useRef(0);
@@ -146,6 +151,26 @@ export function FlyerPrintTool() {
     };
   }, []);
 
+  // Look for a white margin whenever a new image flyer is chosen. (A PDF page
+  // is drawn as vector artwork, so it's left as it is.)
+  useEffect(() => {
+    if (!source || source.pdf) return;
+    const bitmap = source.bitmap;
+    const id = requestAnimationFrame(() => {
+      try {
+        setBorder({ bitmap, border: detectWhiteBorder(bitmap) });
+      } catch {
+        setBorder(null);
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [source]);
+  const foundBorder = source && !source.pdf && border?.bitmap === source.bitmap && hasBorder(border.border) ? border.border : null;
+  const trimBorder = !!foundBorder && removeBorder;
+  // Size of the flyer once its margin is cut off, for the dpi and crop notes.
+  const srcW = source ? source.bitmap.width - (trimBorder ? foundBorder.left + foundBorder.right : 0) : 0;
+  const srcH = source ? source.bitmap.height - (trimBorder ? foundBorder.top + foundBorder.bottom : 0) : 0;
+
   const orientationFromChoice: Orientation =
     orientationChoice === "auto"
       ? source
@@ -176,11 +201,11 @@ export function FlyerPrintTool() {
   const enhancedInUse = !!enhanced && useEnhanced;
   const activeSource: PrintSource | null = source ? (enhancedInUse ? enhanced.canvas : source.bitmap) : null;
 
-  const dpi = source && !source.pdf ? effectiveDpi(source.bitmap.width, source.bitmap.height, plan, fit) : null;
+  const dpi = source && !source.pdf ? effectiveDpi(srcW, srcH, plan, fit) : null;
   const verdict = dpi === null ? null : judgeDpi(dpi);
   const reference = enhanced?.reference ?? source?.bitmap ?? null;
   const printScale = reference ? placement(reference.width, reference.height, plan, fit).scale : 1;
-  const cropped = source && fit === "fill" ? croppedShare(source.bitmap.width, source.bitmap.height, plan) : 0;
+  const cropped = source && fit === "fill" ? croppedShare(srcW || source.bitmap.width, srcH || source.bitmap.height, plan) : 0;
 
   // The downloads belong to the settings they were made with.
   const settingsKey = JSON.stringify([
@@ -198,6 +223,7 @@ export function FlyerPrintTool() {
     marks,
     cmyk,
     enhancedInUse ? enhanced.id : 0,
+    trimBorder,
   ]);
   const current = result && result.key === settingsKey ? result : null;
 
@@ -377,7 +403,20 @@ export function FlyerPrintTool() {
         setWorking("Drawing the PDF page…");
         trim = await renderPdfToTrim(source.pdf.page, plan, fit);
       }
-      const made = await renderPrintFiles(activeSource, { plan, fit, bleedMode, title, trim, cmyk }, setWorking);
+      // Cut off a white margin first, so the artwork (not the margin) reaches
+      // the trim line and the bleed. The enhanced copy is 4x the original.
+      let printSource: PrintSource = activeSource;
+      let croppedCopy: HTMLCanvasElement | null = null;
+      if (!trim && trimBorder && foundBorder) {
+        setWorking("Removing the white border…");
+        croppedCopy = cropBorder(activeSource, foundBorder, activeSource.width / source.bitmap.width);
+        printSource = croppedCopy;
+      }
+      const made = await renderPrintFiles(printSource, { plan, fit, bleedMode, title, trim, cmyk }, setWorking);
+      if (croppedCopy) {
+        croppedCopy.width = 0;
+        croppedCopy.height = 0;
+      }
       setResult({
         key: settingsKey,
         baseName,
@@ -673,6 +712,25 @@ export function FlyerPrintTool() {
               <option value="fit">Fit inside (leaves white margins)</option>
             </select>
           </label>
+
+          {foundBorder && (
+            <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+              <input
+                type="checkbox"
+                checked={removeBorder}
+                onChange={(e) => setRemoveBorder(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium">Remove the white border around the flyer</span>
+                <span className={`${hintClass} block`}>
+                  This flyer has a plain white margin ({describeBorder(foundBorder)}). Left in, it prints as a
+                  white band where the artwork should reach the edge — and mirrored bleed copies it too. Untick
+                  only if the white is part of the design.
+                </span>
+              </span>
+            </label>
+          )}
 
           <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
             <label className="flex items-start gap-2 text-sm">
