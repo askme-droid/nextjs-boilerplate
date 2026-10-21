@@ -106,6 +106,10 @@ export function FlyerPrintTool() {
   const [marks, setMarks] = useState(true);
   const [cmyk, setCmyk] = useState(true);
   const [showProof, setShowProof] = useState(false);
+  // Preview "as cut" (the finished piece) by default: the full page also shows
+  // the bleed and the white crop-mark border, which looks like a fault at the
+  // edges even though the printer cuts it all away.
+  const [showFullPage, setShowFullPage] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -954,17 +958,88 @@ export function FlyerPrintTool() {
               </div>
             )}
 
+            {(plan.bleed > 0 || plan.marks) && (
+              <div role="group" aria-label="Preview area" className="flex flex-wrap items-center gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowFullPage(false)}
+                  aria-pressed={!showFullPage}
+                  className={`rounded-full border px-3 py-1 ${!showFullPage ? "border-foreground bg-foreground text-background" : "border-zinc-300 dark:border-zinc-700"}`}
+                >
+                  After cutting
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFullPage(true)}
+                  aria-pressed={showFullPage}
+                  className={`rounded-full border px-3 py-1 ${showFullPage ? "border-foreground bg-foreground text-background" : "border-zinc-300 dark:border-zinc-700"}`}
+                >
+                  Whole page (bleed &amp; marks)
+                </button>
+                <span className={hintClass}>
+                  {showFullPage
+                    ? "Everything outside the dashed line is cut off by the printer."
+                    : "The finished flyer at its trimmed size."}
+                </span>
+              </div>
+            )}
+
             <div className="rounded-lg border border-zinc-200 bg-zinc-100 p-3 dark:border-zinc-800 dark:bg-zinc-900">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview */}
-              <img
-                src={showProof && current.proofUrl ? current.proofUrl : current.previewUrl}
-                alt={
+              {(() => {
+                const src = showProof && current.proofUrl ? current.proofUrl : current.previewUrl;
+                const alt =
                   showProof && current.proofUrl
                     ? "Preview of the finished print page as it would look printed in CMYK"
-                    : "Preview of the finished print page, with crop marks if selected"
+                    : "Preview of the finished print page, with crop marks if selected";
+                const offX = (plan.pageW - plan.trimW) / 2;
+                const offY = (plan.pageH - plan.trimH) / 2;
+                if (!showFullPage && (offX > 0 || offY > 0)) {
+                  // The trim area only: the page image, enlarged and shifted
+                  // so the cut lines meet the frame's edges.
+                  return (
+                    <div
+                      className="relative mx-auto max-w-full overflow-hidden shadow-md"
+                      // Width-led so the frame keeps the trim's shape at any screen
+                      // width, never taller than 36rem.
+                      style={{
+                        aspectRatio: `${plan.trimW} / ${plan.trimH}`,
+                        width: `min(100%, ${(36 * plan.trimW) / plan.trimH}rem)`,
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview */}
+                      <img
+                        src={src}
+                        alt={alt}
+                        className="absolute max-w-none"
+                        style={{
+                          width: `${(plan.pageW / plan.trimW) * 100}%`,
+                          height: `${(plan.pageH / plan.trimH) * 100}%`,
+                          left: `${(-offX / plan.trimW) * 100}%`,
+                          top: `${(-offY / plan.trimH) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  );
                 }
-                className="mx-auto max-h-[36rem] w-auto max-w-full shadow-md"
-              />
+                return (
+                  <div className="relative mx-auto w-fit max-w-full shadow-md">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview */}
+                    <img src={src} alt={alt} className="block max-h-[36rem] w-auto max-w-full" />
+                    {(offX > 0 || offY > 0) && (
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute border border-dashed border-red-500"
+                        style={{
+                          left: `${(offX / plan.pageW) * 100}%`,
+                          right: `${(offX / plan.pageW) * 100}%`,
+                          top: `${(offY / plan.pageH) * 100}%`,
+                          bottom: `${(offY / plan.pageH) * 100}%`,
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-400">
