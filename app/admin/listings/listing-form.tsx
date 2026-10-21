@@ -307,23 +307,6 @@ export function ListingForm({
         {state.fieldErrors?.view_count && <p className={errorClass}>{state.fieldErrors.view_count}</p>}
       </label>
 
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          name="homepage_featured"
-          defaultChecked={values.homepage_featured === "1"}
-          className="mt-0.5"
-        />
-        <span>
-          <span className="font-medium">Feature on the homepage</span>
-          <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
-            Puts this listing in the homepage slider (up to 6). It only shows once a video or
-            image/GIF is uploaded — do that, and set the order, on the Featured listings page
-            (Admin → Listings → Featured listings).
-          </span>
-        </span>
-      </label>
-
       {allTags && (
         <div className="flex flex-col gap-2">
           <input type="hidden" name="tagsIncluded" value="1" />

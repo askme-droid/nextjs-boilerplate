@@ -287,10 +287,9 @@ export async function saveListing(
       : status === "published"
         ? { publishedAt: id ? sql`coalesce(${listings.publishedAt}, now())` : new Date() }
         : {}),
-    homepageFeatured: values.homepage_featured === "1",
-    // Unticking drops the listing out of the manual order too; ticking leaves
-    // the stored position alone (the Featured page owns ordering).
-    ...(values.homepage_featured === "1" ? {} : { homepageFeaturedOrder: 0 }),
+    // Homepage featuring isn't set here any more: it's managed only on the
+    // Featured listings page (featured-actions.ts), so saving a listing
+    // leaves homepage_featured and its order untouched.
   };
 
   let listingId: string;
