@@ -10,6 +10,7 @@ import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema"
 import { requireStaff } from "@/lib/auth/require-staff";
 import { isStoredFileUrl, makeKey, putFile } from "@/lib/storage/r2";
 import { normalizeHttpUrl, parseContactFields } from "@/lib/listings/contact-fields";
+import { todayInSingapore } from "@/lib/listings/expiry-dates";
 import {
   OFFER_DISCOUNT_MAX,
   QUICK_ANSWER_MAX,
@@ -65,6 +66,8 @@ export type ListingFormValues = {
   expires_at: string;
   /** Editable view count (string from the number input). */
   view_count: string;
+  /** Published date (YYYY-MM-DD, Singapore) = created_at; "" on create. */
+  published_date: string;
   /** Checkbox: "1" when ticked, "" when not (an unticked box isn't sent at all). */
   homepage_featured: string;
 };
@@ -104,6 +107,7 @@ function readValues(formData: FormData): ListingFormValues {
     status: get("status"),
     expires_at: get("expires_at"),
     view_count: get("view_count") || "0",
+    published_date: get("published_date"),
     homepage_featured: formData.has("homepage_featured") ? "1" : "",
   };
 }
@@ -168,6 +172,25 @@ export async function saveListing(
   const viewCount = Number(values.view_count);
   if (viewCountChanged && (!Number.isInteger(viewCount) || viewCount < 0 || viewCount > 2_000_000_000)) {
     fieldErrors.view_count = "Views must be a whole number, 0 or more.";
+  }
+  // Published date: only written when staff changed it (like the view count),
+  // so saving never shifts it. Today = now; another day = midday that day.
+  const publishedDateChanged =
+    !!values.published_date &&
+    values.published_date !== String(formData.get("published_date_original") ?? values.published_date);
+  let publishedAt: Date | null = null;
+  if (publishedDateChanged) {
+    const valid = /^\d{4}-\d{2}-\d{2}$/.test(values.published_date);
+    publishedAt = !valid
+      ? null
+      : values.published_date === todayInSingapore()
+        ? new Date()
+        : new Date(`${values.published_date}T12:00:00+08:00`);
+    if (!publishedAt || Number.isNaN(publishedAt.getTime())) {
+      fieldErrors.published_date = "Enter a valid published date.";
+    } else if (values.published_date > todayInSingapore()) {
+      fieldErrors.published_date = "The published date can't be in the future.";
+    }
   }
   if (values.expires_at && !/^\d{4}-\d{2}-\d{2}$/.test(values.expires_at)) {
     fieldErrors.expires_at = "Enter a valid expiry date.";
@@ -245,6 +268,7 @@ export async function saveListing(
     // lastModified tells search engines when to re-read the page).
     updatedAt: new Date(),
     ...(viewCountChanged ? { viewCount } : {}),
+    ...(publishedDateChanged && publishedAt ? { createdAt: publishedAt, publishedDateLocked: true } : {}),
     homepageFeatured: values.homepage_featured === "1",
     // Unticking drops the listing out of the manual order too; ticking leaves
     // the stored position alone (the Featured page owns ordering).

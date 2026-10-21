@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { todayInSingapore } from "@/lib/listings/expiry-dates";
 import { isVerifiedBusiness } from "@/lib/business/verify-listing";
 import {
   getAdminListingById,
@@ -96,6 +97,7 @@ export default async function EditListingPage({
           status: listing.status,
           expires_at: listing.expires_at ?? "",
           view_count: String(listing.view_count),
+          published_date: todayInSingapore(new Date(listing.created_at)),
           homepage_featured: listing.homepage_featured ? "1" : "",
         }}
         allTags={allTags}

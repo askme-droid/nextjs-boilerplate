@@ -124,6 +124,10 @@ export const listings = pgTable("listings", {
   uenVerifiedName: text("uen_verified_name"),
   uenVerifiedStatus: text("uen_verified_status"),
   uenVerifiedAt: timestamp("uen_verified_at", { withTimezone: true }),
+  // created_at is the listing's published date ("Posted 2 days ago", newest
+  // first). Staff can change it in the editor; doing so sets this flag so
+  // "Refresh from fd.sg" stops copying fd.sg's date over a synced listing.
+  publishedDateLocked: boolean("published_date_locked").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   // search_vector intentionally dropped: confirmed via exploration that no

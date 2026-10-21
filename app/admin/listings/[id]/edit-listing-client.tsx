@@ -141,6 +141,7 @@ export function EditListingClient({
                 redemption_info: initialValues.redemption_info,
                 homepage_featured: initialValues.homepage_featured,
                 view_count: initialValues.view_count,
+                published_date: initialValues.published_date,
               }
             : initialValues
         }

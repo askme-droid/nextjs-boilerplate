@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import type { ListingCategory, ListingTag } from "@/lib/listings/queries";
 import { publishListing, saveListing, type ListingFormState, type ListingFormValues } from "./actions";
 import { SeoPanel } from "./seo-panel";
 import { ExpiryField } from "@/app/components/expiry-field";
+import { todayInSingapore } from "@/lib/listings/expiry-dates";
 import type { UenVerification } from "@/lib/listings/admin-queries";
 import { UenCheck } from "./uen-check";
 import { AeoPanel } from "./aeo-panel";
@@ -42,6 +43,7 @@ const emptyValues: ListingFormValues = {
   status: "draft",
   expires_at: "",
   view_count: "0",
+  published_date: "",
   homepage_featured: "",
 };
 
@@ -274,6 +276,14 @@ export function ListingForm({
         />
       </label>
 
+      {listingId && values.published_date && (
+        <PublishedDateField
+          defaultValue={values.published_date}
+          original={initialValues?.published_date ?? values.published_date}
+          error={state.fieldErrors?.published_date}
+        />
+      )}
+
       <ExpiryField defaultValue={values.expires_at} inputClass={inputClass} labelClass={labelClass} />
       {state.fieldErrors?.expires_at && <p className={errorClass}>{state.fieldErrors.expires_at}</p>}
 
@@ -449,5 +459,59 @@ export function ListingForm({
       )}
     </div>
     </>
+  );
+}
+
+/** "Published date" — the listing's created_at, shown as "Posted 3 days ago"
+ *  on its card and used for the newest-first order. */
+function PublishedDateField({
+  defaultValue,
+  original,
+  error,
+}: {
+  defaultValue: string;
+  /** Saved value, so the save action only writes the date if it changed. */
+  original: string;
+  error?: string;
+}) {
+  const [value, setValue] = useState(defaultValue);
+  const today = todayInSingapore();
+  return (
+    <div className={labelClass}>
+      <label htmlFor="published_date">Published date</label>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <input
+          id="published_date"
+          type="date"
+          name="published_date"
+          value={value}
+          max={today}
+          onChange={(e) => setValue(e.target.value)}
+          className={`${inputClass} mt-0 max-w-48`}
+        />
+        <button
+          type="button"
+          onClick={() => setValue(today)}
+          className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        >
+          Today
+        </button>
+        {value !== original && (
+          <button
+            type="button"
+            onClick={() => setValue(original)}
+            className="text-sm text-zinc-500 underline-offset-4 hover:underline"
+          >
+            Undo
+          </button>
+        )}
+      </div>
+      <input type="hidden" name="published_date_original" value={original} />
+      <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+        Shown as &quot;Posted …&quot; on the listing card; listings are ordered newest first, so setting it to today
+        moves the listing to the top. For listings synced from fd.sg, a date set here is kept on the next refresh.
+      </span>
+      {error && <p className={errorClass}>{error}</p>}
+    </div>
   );
 }

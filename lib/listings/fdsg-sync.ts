@@ -146,7 +146,8 @@ async function backfillSourceDates(dates: Map<string, Date>): Promise<number> {
   const synced = await db
     .select({ id: listings.id, externalUrl: listings.externalUrl, createdAt: listings.createdAt })
     .from(listings)
-    .where(isNotNull(listings.externalUrl));
+    // Skip listings whose published date staff set by hand.
+    .where(and(isNotNull(listings.externalUrl), eq(listings.publishedDateLocked, false)));
   let changed = 0;
   for (const row of synced) {
     const source = row.externalUrl ? dates.get(normalizeSourceUrl(row.externalUrl)) : undefined;
