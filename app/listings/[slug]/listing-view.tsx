@@ -93,7 +93,10 @@ export function ListingView({ listing, banner }: { listing: ListingDetail; banne
                 alt={image.alt_text ?? listing.title}
                 fill
                 unoptimized
-                priority={index === 0}
+                // First photo is above the fold: load it straight away. The
+                // rest load lazily as the visitor scrolls down to them.
+                loading={index === 0 ? "eager" : "lazy"}
+                fetchPriority={index === 0 ? "high" : "auto"}
                 sizes="(min-width: 1024px) 896px, 100vw"
                 className="object-cover"
               />

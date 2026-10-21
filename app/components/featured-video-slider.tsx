@@ -52,6 +52,9 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
 
   const [active, setActive] = useState(0);
   const [inView, setInView] = useState(false);
+  // Lazy loading: nothing heavy is fetched until the slider is about to
+  // scroll into view (a screen's height away). Latches on once reached.
+  const [approached, setApproached] = useState(false);
   // null = the visitor hasn't touched the button, so follow their motion setting.
   const [userPaused, setUserPaused] = useState<boolean | null>(null);
   const [muted, setMuted] = useState(true);
@@ -71,7 +74,20 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
       threshold: 0.35,
     });
     observer.observe(section);
-    return () => observer.disconnect();
+    const ahead = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setApproached(true);
+          ahead.disconnect();
+        }
+      },
+      { rootMargin: "100% 0px" },
+    );
+    ahead.observe(section);
+    return () => {
+      observer.disconnect();
+      ahead.disconnect();
+    };
   }, []);
 
   // Which slide is centred follows the scroll position, so swipes, arrows,
@@ -173,7 +189,9 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
             // Client redirects go via /listings/<slug> so the visit is counted
             // (see listing-card.tsx); synced listings link to the source.
             const outboundUrl = slide.externalUrl ?? (slide.redirectUrl ? `/listings/${slide.slug}` : null);
-            const near = Math.abs(index - active) <= 1;
+            // Only the centred slide and its neighbours load in full, and only
+            // once the slider is close to the screen.
+            const near = approached && Math.abs(index - active) <= 1;
             const linkClass = cn(
               "inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-teal px-3 py-1.5 text-xs font-semibold text-zinc-950 sm:text-sm",
               !isActive && "pointer-events-none",
@@ -226,7 +244,9 @@ export function FeaturedVideoSlider({ slides }: { slides: FeaturedVideoSlide[] }
                       playsInline
                       // A single slide has nothing to advance to, so it loops.
                       loop={count === 1}
-                      preload={near ? "auto" : "metadata"}
+                      // "none" until needed when a poster photo covers the
+                      // frame; otherwise just enough to paint the first frame.
+                      preload={near ? "auto" : slide.posterUrl || !approached ? "none" : "metadata"}
                       onEnded={() => {
                         if (count > 1) goTo((index + 1) % count);
                       }}

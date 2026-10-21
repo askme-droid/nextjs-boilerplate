@@ -41,6 +41,9 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
             alt={listing.title}
             fill
             unoptimized
+            // Cards sit below the hero, so each photo loads only as it nears
+            // the screen.
+            loading="lazy"
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
             className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none"
           />

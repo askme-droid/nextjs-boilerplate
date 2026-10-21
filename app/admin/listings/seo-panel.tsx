@@ -397,7 +397,7 @@ export function SeoPanel({
                   title={i === 0 ? "Featured photo (default)" : "Use this photo"}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.url} alt="" className="size-full object-cover" />
+                  <img src={photo.url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
                   {i === 0 && (
                     <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-center text-[10px] text-white">
                       Default

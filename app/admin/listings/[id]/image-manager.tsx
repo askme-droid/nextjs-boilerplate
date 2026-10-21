@@ -41,6 +41,8 @@ export function ImageManager({
                 <img
                   src={image.url}
                   alt={image.alt_text ?? ""}
+                  loading="lazy"
+                  decoding="async"
                   className="h-16 w-16 flex-none rounded object-cover"
                 />
 

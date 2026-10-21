@@ -19,7 +19,7 @@ function Thumb({ row }: { row: FeaturedAdminRow }) {
       {row.slideImageUrl ? (
         // Plain <img> so an animated GIF slide animates in the preview too.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={row.slideImageUrl} alt="" className="size-full object-cover" />
+        <img src={row.slideImageUrl} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
       ) : row.videoUrl ? (
         // #t=0.1 makes the browser paint a frame instead of a black box.
         <video
