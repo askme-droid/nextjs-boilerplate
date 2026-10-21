@@ -68,37 +68,6 @@ export function ListingView({ listing, banner }: { listing: ListingDetail; banne
         </p>
       </div>
 
-      {/* The short factual summary answer engines quote (AEO). */}
-      {listing.quick_answer && (
-        <p
-          id="quick-answer"
-          className="rounded-lg border-l-4 border-brand-teal bg-zinc-50 px-4 py-3 text-lg leading-relaxed text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-        >
-          {listing.quick_answer}
-        </p>
-      )}
-
-      {(listing.audience || listing.key_points.length > 0) && (
-        <section aria-label="At a glance" className="flex flex-col gap-3">
-          {listing.audience && (
-            <p className="text-zinc-700 dark:text-zinc-300">
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100">Who it&apos;s for: </span>
-              {listing.audience}
-            </p>
-          )}
-          {listing.key_points.length > 0 && (
-            <ul id="key-points" className="flex flex-col gap-1.5">
-              {listing.key_points.map((point, i) => (
-                <li key={i} className="flex items-start gap-2 text-zinc-700 dark:text-zinc-300">
-                  <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-teal" />
-                  <span>{point}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
       {orderedImages.length > 0 ? (
         <div className="flex flex-col gap-3">
           {orderedImages.map((image, index) => (
@@ -157,6 +126,38 @@ export function ListingView({ listing, banner }: { listing: ListingDetail; banne
           <p className="whitespace-pre-line leading-relaxed text-zinc-700 dark:text-zinc-300">
             {listing.description}
           </p>
+        )}
+
+        {/* Answer-engine block (AEO/GEO): quick summary, who it's for, key
+            points — after the description, before the offer details. */}
+        {listing.quick_answer && (
+          <p
+            id="quick-answer"
+            className="rounded-lg border-l-4 border-brand-teal bg-zinc-50 px-4 py-3 text-lg leading-relaxed text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+          >
+            {listing.quick_answer}
+          </p>
+        )}
+
+        {(listing.audience || listing.key_points.length > 0) && (
+          <section aria-label="At a glance" className="flex flex-col gap-3">
+            {listing.audience && (
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">Who it&apos;s for: </span>
+                {listing.audience}
+              </p>
+            )}
+            {listing.key_points.length > 0 && (
+              <ul id="key-points" className="flex flex-col gap-1.5">
+                {listing.key_points.map((point, i) => (
+                  <li key={i} className="flex items-start gap-2 text-zinc-700 dark:text-zinc-300">
+                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-teal" />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
 
         {hasOfferDetails && (
