@@ -53,7 +53,9 @@ export default async function MyListingsPage({
       )}
 
       {listings.length === 0 ? (
-        <p className="text-zinc-500 dark:text-zinc-400">
+        // A <div>, not a <p>: a <form> isn't allowed inside a paragraph
+        // (React reports it as a hydration error).
+        <div className="text-zinc-500 dark:text-zinc-400">
           You haven&apos;t created any listings yet.{" "}
           <form action={createMyListing} className="inline">
             <button type="submit" className="underline underline-offset-4">
@@ -61,7 +63,7 @@ export default async function MyListingsPage({
             </button>
           </form>
           .
-        </p>
+        </div>
       ) : (
         <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
           {listings.map((listing) => (

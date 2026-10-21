@@ -35,7 +35,13 @@ function config(): R2Config {
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
   const bucket = process.env.R2_BUCKET;
   const publicUrl = process.env.R2_PUBLIC_URL?.replace(/\/+$/, "");
-  if (!endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicUrl) {
+  // .env.local.example ships "your-..." / "pub-xxxxxxxx" placeholders; treat
+  // those as not set, so the error says what's wrong instead of "fetch failed".
+  const isPlaceholder = (v: string | undefined) => !v || /your-|xxxxxxxx/i.test(v);
+  if (
+    !endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicUrl ||
+    [endpoint, accessKeyId, secretAccessKey, publicUrl].some(isPlaceholder)
+  ) {
     throw new Error(
       "File storage isn't configured: set R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET and R2_PUBLIC_URL.",
     );
@@ -47,6 +53,17 @@ function config(): R2Config {
     client: new AwsClient({ accessKeyId, secretAccessKey, service: "s3", region: "auto" }),
   };
   return cached;
+}
+
+/** client.fetch, but a network failure (wrong endpoint, offline) gives a
+ *  readable message instead of Node's bare "fetch failed". */
+async function r2Fetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await config().client.fetch(url, init);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("File storage isn't configured")) throw e;
+    throw new Error("Couldn't reach file storage (Cloudflare R2). Check R2_ENDPOINT and the internet connection.");
+  }
 }
 
 /** Encodes each path segment but keeps the slashes. */
@@ -86,7 +103,7 @@ export async function putFile(
   body: ArrayBuffer | Uint8Array | Blob,
   contentType: string,
 ): Promise<string> {
-  const res = await config().client.fetch(objectUrl(key), {
+  const res = await r2Fetch(objectUrl(key), {
     method: "PUT",
     body: body as BodyInit,
     headers: {
