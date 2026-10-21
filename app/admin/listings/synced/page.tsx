@@ -101,8 +101,10 @@ export default async function SyncedListingsPage({
                 </div>
                 <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
                   {listing.categories?.name ?? "No category"}
-                  {/* fd.sg's original posting date (from its RSS feed), set on Refresh. */}
-                  {` · posted on fd.sg ${formatListingDate(listing.created_at)}`}
+                  {/* Published = fd.sg's original posting date (from its RSS feed,
+                      set on Refresh) unless edited; created = when it was imported. */}
+                  {listing.published_at ? ` · published ${formatListingDate(listing.published_at)}` : ""}
+                  {` · imported ${formatListingDate(listing.created_at)}`}
                 </p>
                 {listing.external_url && (
                   <a

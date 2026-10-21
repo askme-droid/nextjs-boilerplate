@@ -87,11 +87,16 @@ export default async function AdminListingsPage({
                 >
                   {listing.title}
                 </Link>
-                <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   {listing.categories?.name ?? "No category"}
                   {listing.location ? ` · ${listing.location}` : ""}
                   {` · ${formatViews(listing.view_count)}`}
+                  {/* Created = when the entry was made (fixed); published = the
+                      date visitors see (editable on the listing). */}
                   {` · created ${formatListingDate(listing.created_at)}`}
+                  {listing.published_at
+                    ? ` · published ${formatListingDate(listing.published_at)}`
+                    : " · not published yet"}
                   {listing.expires_at
                     ? isExpired(listing.expires_at)
                       ? ""

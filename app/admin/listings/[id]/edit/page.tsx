@@ -97,7 +97,7 @@ export default async function EditListingPage({
           status: listing.status,
           expires_at: listing.expires_at ?? "",
           view_count: String(listing.view_count),
-          published_date: todayInSingapore(new Date(listing.created_at)),
+          published_date: listing.published_at ? todayInSingapore(new Date(listing.published_at)) : "",
           homepage_featured: listing.homepage_featured ? "1" : "",
         }}
         allTags={allTags}

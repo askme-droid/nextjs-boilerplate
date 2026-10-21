@@ -276,7 +276,7 @@ export function ListingForm({
         />
       </label>
 
-      {listingId && values.published_date && (
+      {listingId && (
         <PublishedDateField
           defaultValue={values.published_date}
           original={initialValues?.published_date ?? values.published_date}
@@ -462,8 +462,9 @@ export function ListingForm({
   );
 }
 
-/** "Published date" — the listing's created_at, shown as "Posted 3 days ago"
- *  on its card and used for the newest-first order. */
+/** "Published date" — the listing's published_at, shown as "Posted 3 days
+ *  ago" on its card and used for the newest-first order. Separate from the
+ *  created date (when the entry was made), which never changes. */
 function PublishedDateField({
   defaultValue,
   original,
@@ -508,8 +509,9 @@ function PublishedDateField({
       </div>
       <input type="hidden" name="published_date_original" value={original} />
       <span className="mt-1 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
-        Shown as &quot;Posted …&quot; on the listing card; listings are ordered newest first, so setting it to today
-        moves the listing to the top. For listings synced from fd.sg, a date set here is kept on the next refresh.
+        {original
+          ? "Shown as “Posted …” on the listing card; listings are ordered newest first, so setting it to today moves the listing to the top. For listings synced from fd.sg, a date set here is kept on the next refresh."
+          : "Not published yet — it's set automatically when the listing is first published, or pick a date now."}
       </span>
       {error && <p className={errorClass}>{error}</p>}
     </div>

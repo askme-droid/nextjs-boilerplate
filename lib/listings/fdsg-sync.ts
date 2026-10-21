@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { and, asc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, listingImages, listings } from "@/lib/db/schema";
 import { embedImageUrl } from "./embeddings";
@@ -139,23 +139,20 @@ async function syncSourceViews(views: Map<string, number>): Promise<number> {
   return changed;
 }
 
-/** Sets created_at on already-imported synced listings to fd.sg's original
- *  publish date where it differs. Returns how many were changed. */
+/** Sets published_at on already-imported synced listings to fd.sg's original
+ *  posting date where it differs (created_at stays the import time). Skips
+ *  listings whose published date staff set by hand. Returns how many changed. */
 async function backfillSourceDates(dates: Map<string, Date>): Promise<number> {
   if (dates.size === 0) return 0;
   const synced = await db
-    .select({ id: listings.id, externalUrl: listings.externalUrl, createdAt: listings.createdAt })
+    .select({ id: listings.id, externalUrl: listings.externalUrl, publishedAt: listings.publishedAt })
     .from(listings)
-    // Skip listings whose published date staff set by hand.
     .where(and(isNotNull(listings.externalUrl), eq(listings.publishedDateLocked, false)));
   let changed = 0;
   for (const row of synced) {
     const source = row.externalUrl ? dates.get(normalizeSourceUrl(row.externalUrl)) : undefined;
-    if (!source || source.getTime() === row.createdAt.getTime()) continue;
-    await db
-      .update(listings)
-      .set({ createdAt: source })
-      .where(and(eq(listings.id, row.id), ne(listings.createdAt, source)));
+    if (!source || source.getTime() === row.publishedAt?.getTime()) continue;
+    await db.update(listings).set({ publishedAt: source }).where(eq(listings.id, row.id));
     changed += 1;
   }
   return changed;
@@ -423,10 +420,9 @@ export async function syncFdsgListings(): Promise<SyncResult> {
         status: "published",
         externalUrl: scraped.sourceUrl,
         viewCount: sourceViews.get(normalizeSourceUrl(scraped.sourceUrl)) ?? 0,
-        // Keep fd.sg's original posting date rather than the import time.
-        ...(sourceDates.get(normalizeSourceUrl(scraped.sourceUrl))
-          ? { createdAt: sourceDates.get(normalizeSourceUrl(scraped.sourceUrl)) }
-          : {}),
+        // Published date = fd.sg's original posting date (created_at stays the
+        // import time); today if the feed didn't have it.
+        publishedAt: sourceDates.get(normalizeSourceUrl(scraped.sourceUrl)) ?? new Date(),
       })
       .returning({ id: listings.id });
 

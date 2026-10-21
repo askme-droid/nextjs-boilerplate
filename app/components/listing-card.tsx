@@ -16,7 +16,7 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
     // listing can be pointed at the client's own page too.
     listing.redirect_url ? `/listings/${listing.slug}` : listing.external_url;
   const imageUrl = pickListingImage(listing);
-  const isNew = isNewListing(listing.created_at);
+  const isNew = isNewListing(listing.published_at);
   const endsSoon = endsSoonLabel(listing.expires_at);
   // fd.sg-style badges: Popular at 1,000+ views, Featured for listings
   // picked for the homepage slider.
@@ -133,7 +133,7 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
         )}
 
         <p className="mt-auto flex flex-wrap gap-x-1.5 pt-1 text-xs text-zinc-400 dark:text-zinc-600">
-          <span>Posted {formatRelativeTime(listing.created_at)}</span>
+          <span>Posted {formatRelativeTime(listing.published_at)}</span>
           {/* Synced fd.sg listings aren't counted here (clicks go to fd.sg),
               so only show a count once there is one. */}
           {(!listing.external_url || listing.view_count > 0) && (

@@ -145,6 +145,7 @@ function listingJsonLd(listing: ListingDetail) {
       ? { "@type": "SpeakableSpecification", cssSelector: ["#quick-answer"] }
       : undefined,
     primaryImageOfPage: images[0],
+    datePublished: listing.published_at,
     dateModified: listing.updated_at,
   });
 

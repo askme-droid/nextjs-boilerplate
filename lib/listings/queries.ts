@@ -8,6 +8,9 @@ import { categories, experienceTags, listingExperienceTags, listingImages, listi
 
 export const PAGE_SIZE = 12;
 
+// The date visitors see and the newest-first order (see the schema comment).
+const publishedAtSql = sql<Date>`coalesce(${listings.publishedAt}, ${listings.createdAt})`;
+
 // Same rule as isVerifiedBusiness (lib/business/verify-listing.ts), in SQL
 // for the listing grids: the saved UEN is the one checked against ACRA, and
 // ACRA lists the business as live ("Live", "Live Company", "Registered").
@@ -48,6 +51,9 @@ export type ListingWithRelations = {
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
+  /** Date shown to visitors ("Posted …", New badge): published_at, or
+   *  created_at for a listing that was never published. */
+  published_at: string;
   updated_at: string;
   categories: ListingCategory | null;
   listing_images: Pick<ListingImage, "id" | "url" | "is_featured" | "position">[];
@@ -248,6 +254,7 @@ export async function getListings(
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: publishedAtSql,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
@@ -256,7 +263,7 @@ export async function getListings(
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
     .where(where)
-    .orderBy(desc(listings.createdAt))
+    .orderBy(desc(publishedAtSql), desc(listings.createdAt))
     .limit(PAGE_SIZE)
     .offset(offset);
 
@@ -280,6 +287,7 @@ export async function getListings(
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
+    published_at: new Date(r.published_at).toISOString(),
     updated_at: r.updated_at.toISOString(),
     categories: r.category_row_id
       ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
@@ -319,6 +327,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: publishedAtSql,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
@@ -350,6 +359,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       created_by: r.created_by,
       expires_at: r.expires_at,
       created_at: r.created_at.toISOString(),
+      published_at: new Date(r.published_at).toISOString(),
       updated_at: r.updated_at.toISOString(),
       categories: r.category_row_id
         ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
@@ -530,6 +540,7 @@ async function loadListingDetail(where: SQL): Promise<ListingDetail | null> {
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: publishedAtSql,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
@@ -596,6 +607,7 @@ async function loadListingDetail(where: SQL): Promise<ListingDetail | null> {
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),
+    published_at: new Date(row.published_at).toISOString(),
     updated_at: row.updated_at.toISOString(),
     categories: row.category_row_id
       ? { id: row.category_row_id, name: row.category_name!, slug: row.category_slug! }

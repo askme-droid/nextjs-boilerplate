@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
 import { redirect } from "next/navigation";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
@@ -66,7 +66,7 @@ export type ListingFormValues = {
   expires_at: string;
   /** Editable view count (string from the number input). */
   view_count: string;
-  /** Published date (YYYY-MM-DD, Singapore) = created_at; "" on create. */
+  /** Published date (YYYY-MM-DD, Singapore) = published_at; "" if never published. */
   published_date: string;
   /** Checkbox: "1" when ticked, "" when not (an unticked box isn't sent at all). */
   homepage_featured: string;
@@ -268,7 +268,13 @@ export async function saveListing(
     // lastModified tells search engines when to re-read the page).
     updatedAt: new Date(),
     ...(viewCountChanged ? { viewCount } : {}),
-    ...(publishedDateChanged && publishedAt ? { createdAt: publishedAt, publishedDateLocked: true } : {}),
+    // Published date: a date staff typed wins; otherwise publishing for the
+    // first time stamps it with now (an existing date is kept).
+    ...(publishedDateChanged && publishedAt
+      ? { publishedAt, publishedDateLocked: true }
+      : status === "published"
+        ? { publishedAt: id ? sql`coalesce(${listings.publishedAt}, now())` : new Date() }
+        : {}),
     homepageFeatured: values.homepage_featured === "1",
     // Unticking drops the listing out of the manual order too; ticking leaves
     // the stored position alone (the Featured page owns ordering).
@@ -412,7 +418,11 @@ export async function publishListing(formData: FormData) {
   if (!id) redirect("/admin/listings");
 
   try {
-    await db.update(listings).set({ status: "published" }).where(eq(listings.id, id));
+    await db
+      .update(listings)
+      // First publish stamps the published date; a re-publish keeps it.
+      .set({ status: "published", publishedAt: sql`coalesce(${listings.publishedAt}, now())` })
+      .where(eq(listings.id, id));
   } catch (e) {
     redirect(editUrl(id, e instanceof Error ? e.message : "Could not publish listing."));
   }

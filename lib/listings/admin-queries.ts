@@ -30,6 +30,8 @@ export type AdminListingRow = {
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
+  /** When it was (first) published; null if it never has been. Editable. */
+  published_at: string | null;
   updated_at: string;
   categories: ListingCategory | null;
 };
@@ -59,6 +61,7 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: listings.publishedAt,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
@@ -86,6 +89,7 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
+    published_at: r.published_at?.toISOString() ?? null,
     updated_at: r.updated_at.toISOString(),
     categories: r.category_row_id
       ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
@@ -186,6 +190,7 @@ export async function getAdminListingById(
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: listings.publishedAt,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
@@ -259,6 +264,7 @@ export async function getAdminListingById(
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),
+    published_at: row.published_at?.toISOString() ?? null,
     updated_at: row.updated_at.toISOString(),
     categories: row.category_row_id
       ? { id: row.category_row_id, name: row.category_name!, slug: row.category_slug! }

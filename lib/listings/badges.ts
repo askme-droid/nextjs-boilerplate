@@ -20,8 +20,9 @@ export function isTrendingListing(viewCount: number): boolean {
   return viewCount >= TRENDING_MIN_VIEWS && viewCount < POPULAR_MIN_VIEWS;
 }
 
-export function isNewListing(createdAt: string): boolean {
-  return Date.now() - new Date(createdAt).getTime() < NEW_WITHIN_DAYS * DAY_MS;
+/** `publishedAt` = the listing's published date (published_at). */
+export function isNewListing(publishedAt: string): boolean {
+  return Date.now() - new Date(publishedAt).getTime() < NEW_WITHIN_DAYS * DAY_MS;
 }
 
 /**
