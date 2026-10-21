@@ -46,3 +46,18 @@ export function endsSoonLabel(expiresAt: string | null): string | null {
   if (days === 1) return "Ends tomorrow";
   return `Ends in ${days} days`;
 }
+
+/** The homepage "Show" filter (search box): listings carrying a given badge.
+ *  Value = the `show` URL parameter. */
+export const SHOW_FILTERS = [
+  { value: "featured", label: "Featured" },
+  { value: "trending", label: `Trending (${TRENDING_MIN_VIEWS}+ views)` },
+  { value: "popular", label: `Popular (${POPULAR_MIN_VIEWS.toLocaleString("en-SG")}+ views)` },
+  { value: "verified", label: "Verified business" },
+] as const;
+
+export type ShowFilter = (typeof SHOW_FILTERS)[number]["value"];
+
+export function parseShowFilter(value: string): ShowFilter | "" {
+  return SHOW_FILTERS.some((f) => f.value === value) ? (value as ShowFilter) : "";
+}

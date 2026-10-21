@@ -9,6 +9,7 @@ import type { CategoryChip } from "@/app/components/listings-search-form";
 import { getCategoriesWithCounts } from "@/lib/categories/queries";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
+import { parseShowFilter } from "@/lib/listings/badges";
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/queries";
 import {
@@ -63,6 +64,8 @@ type PageData = {
   category: string;
   location: string;
   experience: string;
+  /** Badge filter ("Show" dropdown); "" = all listings. */
+  show: string;
   isImageSearch: boolean;
   categories: ListingCategory[];
   /** Quick-filter pills: categories that have something to show. */
@@ -114,6 +117,7 @@ async function loadPageData(
           category: "",
           location: "",
           experience: "",
+          show: "",
           isImageSearch: true,
           categories,
           chips,
@@ -130,6 +134,7 @@ async function loadPageData(
     const requestedCategory = firstValue(params.category).trim();
     const location = firstValue(params.location).trim();
     const requestedExperience = firstValue(params.experience).trim();
+    const show = parseShowFilter(firstValue(params.show).trim());
 
     // Validate both slugs against real rows rather than passing an arbitrary
     // URL value into an inner-join/subquery filter: an unknown slug would
@@ -141,10 +146,10 @@ async function loadPageData(
       ? requestedExperience
       : "";
 
-    const isDefaultView = !q && !category && !location && !experience && page === 1;
+    const isDefaultView = !q && !category && !location && !experience && !show && page === 1;
 
     const [{ listings, page: currentPage, totalPages }, featured] = await Promise.all([
-      getListings({ q, category, location, experience, page }),
+      getListings({ q, category, location, experience, show, page }),
       // Decorative extra: a failure here must not take the whole page down
       // into the error state, so it degrades to "no featured section".
       isDefaultView ? getFeaturedVideos(FEATURED_SLOTS).catch(() => []) : Promise.resolve([]),
@@ -157,6 +162,7 @@ async function loadPageData(
         category,
         location,
         experience,
+        show,
         isImageSearch: false,
         categories,
         chips,
@@ -214,6 +220,7 @@ export default async function Home({
     firstValue(params.category),
     firstValue(params.location),
     firstValue(params.experience),
+    firstValue(params.show),
     firstValue(params.imageMatch),
     firstValue(params.page),
   ].join("|");
@@ -246,6 +253,7 @@ export default async function Home({
                 category={result.data.category}
                 location={result.data.location}
                 experience={result.data.experience}
+                show={result.data.show}
                 hasImageMatch={result.data.isImageSearch}
                 categories={result.data.categories}
                 chips={result.data.chips}
@@ -266,7 +274,8 @@ export default async function Home({
                   : result.data.q ||
                       result.data.category ||
                       result.data.location ||
-                      result.data.experience
+                      result.data.experience ||
+                      result.data.show
                     ? "No listings match your search."
                     : "No listings have been published yet."}
               </p>
@@ -294,6 +303,7 @@ export default async function Home({
                 category={result.data.category}
                 location={result.data.location}
                 experience={result.data.experience}
+                show={result.data.show}
               />
             )}
           </>

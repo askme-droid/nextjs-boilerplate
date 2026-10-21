@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { isVerifiedBusiness } from "@/lib/business/verify-listing";
-import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { POPULAR_MIN_VIEWS, TRENDING_MIN_VIEWS, type ShowFilter } from "./badges";
 import { notExpired } from "./expiry";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
@@ -99,6 +100,8 @@ export type ListingsFilter = {
   location?: string;
   /** Experience tag slug, as it appears in the URL. */
   experience?: string;
+  /** Badge filter ("Show" dropdown): featured / trending / popular / verified. */
+  show?: ShowFilter | "";
   /** 1-based page number. */
   page?: number;
 };
@@ -168,6 +171,13 @@ function buildListingsWhere(filter: ListingsFilter): SQL {
       ),
     );
   }
+
+  // Same thresholds as the card badges (lib/listings/badges.ts).
+  if (filter.show === "featured") conditions.push(eq(listings.homepageFeatured, true));
+  if (filter.show === "trending")
+    conditions.push(and(gte(listings.viewCount, TRENDING_MIN_VIEWS), lt(listings.viewCount, POPULAR_MIN_VIEWS))!);
+  if (filter.show === "popular") conditions.push(gte(listings.viewCount, POPULAR_MIN_VIEWS));
+  if (filter.show === "verified") conditions.push(sql`${verifiedBusinessSql}`);
 
   return and(...conditions)!;
 }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import type { ListingTag } from "@/lib/experience-tags/queries";
+import { SHOW_FILTERS } from "@/lib/listings/badges";
 import type { ListingCategory } from "@/lib/listings/queries";
 import { cn } from "@/lib/utils";
 import { ImageSearchButton } from "./image-search-button";
@@ -27,11 +28,11 @@ const fieldClass =
 /** Results refresh this long after the visitor stops typing. */
 const LIVE_SEARCH_DELAY_MS = 450;
 
-type Filters = { q: string; category: string; location: string; experience: string };
+type Filters = { q: string; category: string; location: string; experience: string; show: string };
 
 export type CategoryChip = { slug: string; name: string; count: number };
 
-const keyOf = (f: Filters) => JSON.stringify([f.q, f.category, f.location, f.experience]);
+const keyOf = (f: Filters) => JSON.stringify([f.q, f.category, f.location, f.experience, f.show]);
 
 function Chip({
   active,
@@ -64,6 +65,7 @@ export function ListingsSearchForm({
   category,
   location,
   experience,
+  show = "",
   hasImageMatch = false,
   categories,
   experiences,
@@ -73,6 +75,7 @@ export function ListingsSearchForm({
   category: string;
   location: string;
   experience: string;
+  show?: string;
   hasImageMatch?: boolean;
   categories: ListingCategory[];
   experiences: ListingTag[];
@@ -93,15 +96,15 @@ export function ListingsSearchForm({
   // *we* started, they don't, or characters typed while the results were
   // loading would be overwritten. `inFlight` lists the searches we started
   // that haven't landed yet.
-  const propsKey = keyOf({ q, category, location, experience });
-  const [values, setValues] = useState<Filters>({ q, category, location, experience });
+  const propsKey = keyOf({ q, category, location, experience, show });
+  const [values, setValues] = useState<Filters>({ q, category, location, experience, show });
   const [seenKey, setSeenKey] = useState(propsKey);
   const [inFlight, setInFlight] = useState<string[]>([]);
   if (seenKey !== propsKey) {
     setSeenKey(propsKey);
     const index = inFlight.indexOf(propsKey);
     if (index === -1) {
-      setValues({ q, category, location, experience });
+      setValues({ q, category, location, experience, show });
       setInFlight([]);
     } else {
       setInFlight(inFlight.slice(index + 1));
@@ -156,6 +159,7 @@ export function ListingsSearchForm({
       category: next.category,
       location: next.location.trim(),
       experience: next.experience,
+      show: next.show,
     };
     const params = new URLSearchParams();
     for (const [name, value] of Object.entries(trimmed)) {
@@ -194,7 +198,7 @@ export function ListingsSearchForm({
     }, LIVE_SEARCH_DELAY_MS);
   }
 
-  function changeChoice(field: "category" | "experience", value: string) {
+  function changeChoice(field: "category" | "experience" | "show", value: string) {
     const next = { ...values, [field]: value };
     setValues(next);
     cancelLiveSearch();
@@ -209,7 +213,8 @@ export function ListingsSearchForm({
     navigate(values, { kind: "submit", scroll: true, replace: false });
   }
 
-  const hasFilters = q !== "" || category !== "" || location !== "" || experience !== "" || hasImageMatch;
+  const hasFilters =
+    q !== "" || category !== "" || location !== "" || experience !== "" || show !== "" || hasImageMatch;
   const showSearchingCard = isPending && pendingKind === "submit";
   const liveSearching = isPending && pendingKind === "live";
 
@@ -278,6 +283,21 @@ export function ListingsSearchForm({
           {experiences.map((tag) => (
             <option key={tag.id} value={tag.slug}>
               {tag.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          name="show"
+          value={values.show}
+          onChange={(e) => changeChoice("show", e.target.value)}
+          aria-label="Show only featured, trending, popular or verified listings"
+          className={fieldClass}
+        >
+          <option value="">All listings</option>
+          {SHOW_FILTERS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
             </option>
           ))}
         </select>
