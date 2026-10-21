@@ -28,7 +28,7 @@ import {
   type EnhanceProgress,
   type EnhanceResult,
 } from "@/lib/flyer-print/enhance";
-import { renderPrintFiles, type BleedMode, type PrintSource } from "@/lib/flyer-print/render";
+import { normalizeHexColor, renderPrintFiles, type BleedMode, type PrintSource } from "@/lib/flyer-print/render";
 import { cropBorder, describeBorder, detectWhiteBorder, hasBorder, type Border } from "@/lib/flyer-print/borders";
 import {
   PdfProblem,
@@ -103,6 +103,7 @@ export function FlyerPrintTool() {
   const [addBleed, setAddBleed] = useState(true);
   const [bleedInput, setBleedInput] = useState(String(DEFAULT_BLEED_MM));
   const [bleedMode, setBleedMode] = useState<BleedMode>("mirror");
+  const [bleedColorInput, setBleedColorInput] = useState("#ffffff");
   const [marks, setMarks] = useState(true);
   const [cmyk, setCmyk] = useState(true);
   const [showProof, setShowProof] = useState(false);
@@ -193,6 +194,10 @@ export function FlyerPrintTool() {
       : "portrait"
     : orientationFromChoice;
   const plan = planPrint({ paper: paper === "custom" ? (customPaper ?? "A4") : paper, orientation, bleedMm, marks });
+  // A solid-colour bleed needs a valid HEX code before anything is created.
+  const bleedColor = normalizeHexColor(bleedColorInput);
+  const colorProblem =
+    bleedMm > 0 && bleedMode === "color" && !bleedColor ? "Enter the bleed colour as a HEX code, e.g. #1A9FB0." : null;
   const sizeProblem =
     custom?.problem ??
     (plan.pageW * plan.pageH > MAX_PAGE_PIXELS
@@ -224,6 +229,7 @@ export function FlyerPrintTool() {
     fit,
     bleedMm,
     bleedMode,
+    bleedMode === "color" ? bleedColor : "",
     marks,
     cmyk,
     enhancedInUse ? enhanced.id : 0,
@@ -416,7 +422,7 @@ export function FlyerPrintTool() {
         croppedCopy = cropBorder(activeSource, foundBorder, activeSource.width / source.bitmap.width);
         printSource = croppedCopy;
       }
-      const made = await renderPrintFiles(printSource, { plan, fit, bleedMode, title, trim, cmyk }, setWorking);
+      const made = await renderPrintFiles(printSource, { plan, fit, bleedMode, bleedColor: bleedColor ?? undefined, title, trim, cmyk }, setWorking);
       if (croppedCopy) {
         croppedCopy.width = 0;
         croppedCopy.height = 0;
@@ -776,8 +782,43 @@ export function FlyerPrintTool() {
                   >
                     <option value="mirror">Mirror the edges</option>
                     <option value="stretch">Stretch edge colour</option>
+                    <option value="color">Solid colour</option>
                   </select>
                 </label>
+              </div>
+            )}
+
+            {addBleed && bleedMode === "color" && (
+              <div className={labelClass}>
+                <label htmlFor="bleed-color">Bleed colour</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label="Pick the bleed colour"
+                    value={bleedColor ?? "#ffffff"}
+                    onChange={(e) => setBleedColorInput(e.target.value)}
+                    className="h-10 w-12 cursor-pointer rounded-md border border-zinc-300 bg-transparent p-1 dark:border-zinc-700"
+                  />
+                  <input
+                    id="bleed-color"
+                    type="text"
+                    value={bleedColorInput}
+                    onChange={(e) => setBleedColorInput(e.target.value)}
+                    placeholder="#1A9FB0"
+                    maxLength={7}
+                    spellCheck={false}
+                    className={`${fieldClass} mt-0 w-32 font-mono uppercase`}
+                  />
+                </div>
+                <p className={hintClass}>
+                  Fills the bleed with one solid colour — use the colour along the flyer&apos;s edge (from the
+                  designer, or a colour picker). Type a HEX code or pick it.
+                </p>
+                {colorProblem && (
+                  <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+                    {colorProblem}
+                  </p>
+                )}
               </div>
             )}
 
@@ -887,7 +928,7 @@ export function FlyerPrintTool() {
             <button
               type="button"
               onClick={create}
-              disabled={!source || working !== null || sizeProblem !== null}
+              disabled={!source || working !== null || sizeProblem !== null || colorProblem !== null}
               className={`${downloadClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {working ? working : current ? "Create again" : "Create print files"}
