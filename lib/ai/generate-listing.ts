@@ -119,6 +119,8 @@ export async function generateListingDraft({
     offer_price: "",
     offer_discount: "",
     redemption_info: "",
+    audience: "",
+    key_points_json: "",
     published_date: "",
     // SEO fields are kept from the saved listing (edit-listing-client.tsx).
     seo_title: "",

@@ -120,6 +120,13 @@
       "when": 1792557177673,
       "tag": "0016_listing_published_at",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792557967644,
+      "tag": "0017_listing_audience_key_points",
+      "breakpoints": true
     }
   ]
 }

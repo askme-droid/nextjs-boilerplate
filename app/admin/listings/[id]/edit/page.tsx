@@ -92,6 +92,8 @@ export default async function EditListingPage({
           offer_price: listing.offer_price ?? "",
           offer_discount: listing.offer_discount ?? "",
           redemption_info: listing.redemption_info ?? "",
+          audience: listing.audience ?? "",
+          key_points_json: listing.key_points.length > 0 ? JSON.stringify(listing.key_points) : "",
           keywords: (listing.keywords ?? []).join(", "),
           description: listing.description ?? "",
           status: listing.status,

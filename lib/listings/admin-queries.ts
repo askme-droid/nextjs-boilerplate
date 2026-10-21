@@ -133,6 +133,8 @@ export type AdminListingDetail = AdminListingRow & {
   offer_price: string | null;
   offer_discount: string | null;
   redemption_info: string | null;
+  audience: string | null;
+  key_points: string[];
   listing_images: ListingImage[];
   tagIds: string[];
 };
@@ -176,6 +178,8 @@ export async function getAdminListingById(
       offer_price: listings.offerPrice,
       offer_discount: listings.offerDiscount,
       redemption_info: listings.redemptionInfo,
+      audience: listings.audience,
+      key_points: listings.keyPoints,
       uen_verified_uen: listings.uenVerifiedUen,
       uen_verified_name: listings.uenVerifiedName,
       uen_verified_status: listings.uenVerifiedStatus,
@@ -245,6 +249,8 @@ export async function getAdminListingById(
     offer_price: row.offer_price,
     offer_discount: row.offer_discount,
     redemption_info: row.redemption_info,
+    audience: row.audience,
+    key_points: row.key_points ?? [],
     uen_verification:
       row.uen_verified_uen && row.uen_verified_status && row.uen_verified_at
         ? {

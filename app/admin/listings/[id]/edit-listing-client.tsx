@@ -139,6 +139,8 @@ export function EditListingClient({
                 offer_price: initialValues.offer_price,
                 offer_discount: initialValues.offer_discount,
                 redemption_info: initialValues.redemption_info,
+                audience: initialValues.audience,
+                key_points_json: initialValues.key_points_json,
                 homepage_featured: initialValues.homepage_featured,
                 view_count: initialValues.view_count,
                 published_date: initialValues.published_date,

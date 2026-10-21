@@ -86,6 +86,8 @@ export type ListingDetail = Omit<ListingWithRelations, "listing_images"> & {
   offer_price: string | null;
   offer_discount: string | null;
   redemption_info: string | null;
+  audience: string | null;
+  key_points: string[];
 };
 
 export type ListingsResult = {
@@ -461,6 +463,7 @@ export async function getLlmsListings(): Promise<
     title: string;
     slug: string;
     quickAnswer: string | null;
+    audience: string | null;
     description: string | null;
     location: string | null;
     category: string | null;
@@ -472,6 +475,7 @@ export async function getLlmsListings(): Promise<
       title: listings.title,
       slug: listings.slug,
       quickAnswer: listings.quickAnswer,
+      audience: listings.audience,
       description: listings.description,
       location: listings.location,
       category: categories.name,
@@ -527,6 +531,8 @@ async function loadListingDetail(where: SQL): Promise<ListingDetail | null> {
       offer_price: listings.offerPrice,
       offer_discount: listings.offerDiscount,
       redemption_info: listings.redemptionInfo,
+      audience: listings.audience,
+      key_points: listings.keyPoints,
       uen_verified_uen: listings.uenVerifiedUen,
       uen_verified_name: listings.uenVerifiedName,
       uen_verified_status: listings.uenVerifiedStatus,
@@ -598,6 +604,8 @@ async function loadListingDetail(where: SQL): Promise<ListingDetail | null> {
     offer_price: row.offer_price,
     offer_discount: row.offer_discount,
     redemption_info: row.redemption_info,
+    audience: row.audience,
+    key_points: row.key_points ?? [],
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,

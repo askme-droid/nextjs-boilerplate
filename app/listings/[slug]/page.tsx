@@ -107,6 +107,7 @@ function listingJsonLd(listing: ListingDetail) {
       priceCurrency: listing.offer_price ? "SGD" : undefined,
       disambiguatingDescription: listing.offer_discount || undefined,
       areaServed: listing.location ? { "@type": "Place", name: listing.location } : undefined,
+      audience: listing.audience ? { "@type": "Audience", audienceType: listing.audience } : undefined,
     }),
   });
 
@@ -141,8 +142,17 @@ function listingJsonLd(listing: ListingDetail) {
     breadcrumb: { "@id": `${pageUrl}#breadcrumb` },
     // The listing's quick answer: the summary AI assistants should quote.
     abstract: listing.quick_answer || undefined,
+    // Key points, so answer engines can list them as-is.
+    mainEntity:
+      listing.key_points.length > 0
+        ? {
+            "@type": "ItemList",
+            name: "Key points",
+            itemListElement: listing.key_points.map((point, i) => ({ "@type": "ListItem", position: i + 1, name: point })),
+          }
+        : undefined,
     speakable: listing.quick_answer
-      ? { "@type": "SpeakableSpecification", cssSelector: ["#quick-answer"] }
+      ? { "@type": "SpeakableSpecification", cssSelector: ["#quick-answer", "#key-points"] }
       : undefined,
     primaryImageOfPage: images[0],
     datePublished: listing.published_at,

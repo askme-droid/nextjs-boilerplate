@@ -53,7 +53,8 @@ export async function GET() {
         l.expiresAt ? `until ${formatDate(l.expiresAt)}` : null,
       ].filter(Boolean);
       const meta = facts.length > 0 ? ` (${facts.join(" · ")})` : "";
-      return `- [${oneLine(l.title, 120)}](${SITE_URL}/listings/${l.slug})${meta}${summary ? `: ${oneLine(summary, 300)}` : ""}`;
+      const forWhom = l.audience ? ` For: ${oneLine(l.audience, 160)}.` : "";
+      return `- [${oneLine(l.title, 120)}](${SITE_URL}/listings/${l.slug})${meta}${summary ? `: ${oneLine(summary, 300)}` : ""}${forWhom}`;
     }),
     "",
   ];

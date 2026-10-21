@@ -11,6 +11,28 @@ export const FAQ_QUESTION_MAX = 200;
 export const FAQ_ANSWER_MAX = 1000;
 export const OFFER_DISCOUNT_MAX = 80;
 export const REDEMPTION_MAX = 600;
+export const AUDIENCE_MAX = 200;
+export const KEY_POINTS_MAX = 8;
+export const KEY_POINT_MAX = 160;
+
+/** The editor's hidden JSON list of bullet points → clean strings. */
+export function parseKeyPoints(json: string): { points: string[]; error?: string } {
+  if (!json.trim()) return { points: [] };
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return { points: [], error: "The key points couldn't be read — please re-enter them." };
+  }
+  if (!Array.isArray(raw)) return { points: [] };
+  const points = raw
+    .map((p) => (typeof p === "string" ? p.replace(/\s+/g, " ").trim().replace(/^[•\-*]\s*/, "") : ""))
+    .filter(Boolean);
+  if (points.length > KEY_POINTS_MAX) return { points, error: `Add at most ${KEY_POINTS_MAX} key points.` };
+  if (points.some((p) => p.length > KEY_POINT_MAX))
+    return { points, error: `Keep each key point under ${KEY_POINT_MAX} characters.` };
+  return { points };
+}
 
 /** Parses the editor's hidden JSON field into clean Q&A pairs, dropping
  *  blank rows. Returns an error message instead when a row is half-filled
@@ -50,6 +72,8 @@ export type AeoCheck = { id: string; ok: boolean; warn?: boolean; message: strin
 
 export type AeoInput = {
   quickAnswer: string;
+  audience: string;
+  keyPoints: string[];
   faqs: Faq[];
   description: string;
   location: string;
@@ -69,15 +93,21 @@ export function runAeoChecks(f: AeoInput): AeoCheck[] {
   const hasNumber = /\d/.test(qa);
   return [
     !qa
-      ? { id: "qa", ok: false, message: "Add a quick answer — the 1–2 sentences AI assistants quote first." }
+      ? { id: "qa", ok: false, message: "Add a quick summary — the 1–2 sentences AI assistants quote first." }
       : qa.length < QUICK_ANSWER_MIN
-        ? { id: "qa", ok: false, warn: true, message: `Quick answer is short (${qa.length} characters) — say who, what, where and until when.` }
+        ? { id: "qa", ok: false, warn: true, message: `Quick summary is short (${qa.length} characters) — say who, what, where and until when.` }
         : qa.length > QUICK_ANSWER_MAX
-          ? { id: "qa", ok: false, message: `Quick answer is too long — keep it under ${QUICK_ANSWER_MAX} characters.` }
-          : { id: "qa", ok: true, message: "Quick answer is a good length." },
+          ? { id: "qa", ok: false, message: `Quick summary is too long — keep it under ${QUICK_ANSWER_MAX} characters.` }
+          : { id: "qa", ok: true, message: "Quick summary is a good length." },
     qa && hasNumber
-      ? { id: "qa-facts", ok: true, message: "Quick answer includes concrete details (price, %, date or count)." }
-      : { id: "qa-facts", ok: false, warn: true, message: "Put a concrete detail in the quick answer (price, % off, end date, outlets)." },
+      ? { id: "qa-facts", ok: true, message: "Quick summary includes concrete details (price, %, date or count)." }
+      : { id: "qa-facts", ok: false, warn: true, message: "Put a concrete detail in the quick summary (price, % off, end date, outlets)." },
+    f.audience.trim()
+      ? { id: "audience", ok: true, message: "Says who it's for — answers \"is this for me?\" questions." }
+      : { id: "audience", ok: false, warn: true, message: "Say who this is for (e.g. parents of primary school kids, office workers in the CBD)." },
+    f.keyPoints.length >= 3
+      ? { id: "points", ok: true, message: `${f.keyPoints.length} key points — easy for AI tools to list.` }
+      : { id: "points", ok: false, warn: true, message: "Add 3–6 short key points (what's included, highlights, conditions)." },
     f.faqs.length >= 2
       ? { id: "faqs", ok: true, message: `${f.faqs.length} questions & answers — marked up as an FAQ for answer engines.` }
       : f.faqs.length === 1

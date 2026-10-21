@@ -101,6 +101,11 @@ export const listings = pgTable("listings", {
   offerPrice: numeric("offer_price", { precision: 10, scale: 2 }),
   offerDiscount: text("offer_discount"),
   redemptionInfo: text("redemption_info"),
+  // "Who is this for" (one line, e.g. "Parents of P1–Sec 4 students in Bukit
+  // Batok") and up to 8 short "key points" bullets — both shown on the page
+  // and read by answer engines.
+  audience: text("audience"),
+  keyPoints: jsonb("key_points").$type<string[]>(),
   // Was uuid FK -> profiles.id under Supabase; Better-Auth's user.id is text,
   // so this column's type changed too (see migration plan). ON DELETE
   // behavior is an assumption (SET NULL — a user's historical listings

@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  AUDIENCE_MAX,
+  KEY_POINT_MAX,
+  KEY_POINTS_MAX,
   FAQ_ANSWER_MAX,
   FAQ_MAX,
   FAQ_QUESTION_MAX,
@@ -77,15 +80,34 @@ function Counter({ length, min, max }: { length: number; min: number; max: numbe
   );
 }
 
-/** "Answer engines (AEO / GEO)" section of the listing editor: a quick-answer
- *  summary, offer details, Q&A pairs and a checklist. */
+/** "Answer engines (AEO / GEO)" section of the listing editor: quick summary,
+ *  who it's for, key points, offer details, Q&A pairs and a checklist. */
 export function AeoPanel({
   initial,
   errors,
   verified,
 }: {
-  initial: { quick_answer: string; faqs_json: string; offer_price: string; offer_discount: string; redemption_info: string };
-  errors?: Partial<Record<"quick_answer" | "faqs_json" | "offer_price" | "offer_discount" | "redemption_info", string>>;
+  initial: {
+    quick_answer: string;
+    faqs_json: string;
+    offer_price: string;
+    offer_discount: string;
+    redemption_info: string;
+    audience: string;
+    key_points_json: string;
+  };
+  errors?: Partial<
+    Record<
+      | "quick_answer"
+      | "faqs_json"
+      | "offer_price"
+      | "offer_discount"
+      | "redemption_info"
+      | "audience"
+      | "key_points_json",
+      string
+    >
+  >;
   /** Saved UEN is ACRA-verified and live. */
   verified: boolean;
 }) {
@@ -95,6 +117,15 @@ export function AeoPanel({
   const [offerPrice, setOfferPrice] = useState(initial.offer_price);
   const [offerDiscount, setOfferDiscount] = useState(initial.offer_discount);
   const [redemption, setRedemption] = useState(initial.redemption_info);
+  const [audience, setAudience] = useState(initial.audience);
+  const [points, setPoints] = useState<string[]>(() => {
+    try {
+      const parsed = JSON.parse(initial.key_points_json || "[]");
+      return Array.isArray(parsed) ? parsed.map((p) => String(p ?? "")) : [];
+    } catch {
+      return [];
+    }
+  });
   const [faqs, setFaqs] = useState<Faq[]>(() => {
     try {
       const parsed = JSON.parse(initial.faqs_json || "[]");
@@ -107,6 +138,8 @@ export function AeoPanel({
   const filledFaqs = faqs.filter((f) => f.q.trim() && f.a.trim());
   const checks = runAeoChecks({
     quickAnswer,
+    audience,
+    keyPoints: points.map((p) => p.trim()).filter(Boolean),
     faqs: filledFaqs,
     description: form.description,
     location: form.location,
@@ -142,7 +175,7 @@ export function AeoPanel({
       </p>
 
       <label className="text-sm font-medium">
-        Quick answer
+        Listing quick summary
         <textarea
           name="quick_answer"
           form="listing-form"
@@ -160,6 +193,73 @@ export function AeoPanel({
         </span>
         {errors?.quick_answer && <p className={errorClass}>{errors.quick_answer}</p>}
       </label>
+
+      <label className="text-sm font-medium">
+        Who is this for
+        <input
+          type="text"
+          name="audience"
+          form="listing-form"
+          maxLength={AUDIENCE_MAX}
+          value={audience}
+          onChange={(e) => setAudience(e.target.value)}
+          placeholder="e.g. Parents of Primary 1 – Secondary 4 students in Bukit Batok and the west"
+          className={inputClass}
+        />
+        <span className={hintClass}>One line on the customers this offer suits. Shown on the listing page.</span>
+        {errors?.audience && <p className={errorClass}>{errors.audience}</p>}
+      </label>
+
+      <div className="flex flex-col gap-2">
+        <div>
+          <p className="text-sm font-semibold">Key points</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            3–6 short bullet points: what&apos;s included, highlights, conditions. Shown as a list on the listing page.
+          </p>
+        </div>
+        <input type="hidden" name="key_points_json" form="listing-form" value={JSON.stringify(points)} />
+        {points.map((point, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span aria-hidden className="text-zinc-400">
+              •
+            </span>
+            <input
+              type="text"
+              aria-label={`Key point ${i + 1}`}
+              value={point}
+              maxLength={KEY_POINT_MAX}
+              onChange={(e) => setPoints((list) => list.map((p, j) => (j === i ? e.target.value : p)))}
+              onKeyDown={(e) => {
+                // Enter adds the next bullet instead of submitting the form.
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (points.length < KEY_POINTS_MAX) setPoints((list) => [...list.slice(0, i + 1), "", ...list.slice(i + 1)]);
+                }
+              }}
+              placeholder={i === 0 ? "e.g. Small classes of up to 8 students" : ""}
+              className={`${inputClass} mt-0`}
+            />
+            <button
+              type="button"
+              onClick={() => setPoints((list) => list.filter((_, j) => j !== i))}
+              aria-label={`Remove key point ${i + 1}`}
+              className="shrink-0 rounded-md px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        {points.length < KEY_POINTS_MAX && (
+          <button
+            type="button"
+            onClick={() => setPoints((list) => [...list, ""])}
+            className="w-fit rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            + Add a key point
+          </button>
+        )}
+        {errors?.key_points_json && <p className={errorClass}>{errors.key_points_json}</p>}
+      </div>
 
       <div className="flex flex-col gap-3">
         <p className="text-sm font-semibold">Offer details</p>

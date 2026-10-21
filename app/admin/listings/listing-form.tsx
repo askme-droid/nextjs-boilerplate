@@ -38,6 +38,8 @@ const emptyValues: ListingFormValues = {
   offer_price: "",
   offer_discount: "",
   redemption_info: "",
+  audience: "",
+  key_points_json: "",
   keywords: "",
   description: "",
   status: "draft",
@@ -385,6 +387,8 @@ export function ListingForm({
         offer_price: values.offer_price,
         offer_discount: values.offer_discount,
         redemption_info: values.redemption_info,
+        audience: values.audience,
+        key_points_json: values.key_points_json,
       }}
       errors={{
         quick_answer: state.fieldErrors?.quick_answer,
@@ -392,6 +396,8 @@ export function ListingForm({
         offer_price: state.fieldErrors?.offer_price,
         offer_discount: state.fieldErrors?.offer_discount,
         redemption_info: state.fieldErrors?.redemption_info,
+        audience: state.fieldErrors?.audience,
+        key_points_json: state.fieldErrors?.key_points_json,
       }}
       verified={verifiedBusiness}
     />

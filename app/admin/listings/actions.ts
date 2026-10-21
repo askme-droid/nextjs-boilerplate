@@ -12,6 +12,8 @@ import { isStoredFileUrl, makeKey, putFile } from "@/lib/storage/r2";
 import { normalizeHttpUrl, parseContactFields } from "@/lib/listings/contact-fields";
 import { todayInSingapore } from "@/lib/listings/expiry-dates";
 import {
+  AUDIENCE_MAX,
+  parseKeyPoints,
   OFFER_DISCOUNT_MAX,
   QUICK_ANSWER_MAX,
   REDEMPTION_MAX,
@@ -60,6 +62,8 @@ export type ListingFormValues = {
   offer_price: string;
   offer_discount: string;
   redemption_info: string;
+  audience: string;
+  key_points_json: string;
   keywords: string;
   description: string;
   status: string;
@@ -102,6 +106,8 @@ function readValues(formData: FormData): ListingFormValues {
     offer_price: get("offer_price"),
     offer_discount: get("offer_discount"),
     redemption_info: get("redemption_info"),
+    audience: get("audience"),
+    key_points_json: get("key_points_json"),
     keywords: get("keywords"),
     description: get("description"),
     status: get("status"),
@@ -225,6 +231,10 @@ export async function saveListing(
   if (offerPrice === undefined) fieldErrors.offer_price = "Enter the price as a number, e.g. 25.90";
   if (values.offer_discount.length > OFFER_DISCOUNT_MAX)
     fieldErrors.offer_discount = `Keep the discount under ${OFFER_DISCOUNT_MAX} characters.`;
+  if (values.audience.length > AUDIENCE_MAX)
+    fieldErrors.audience = `Keep "who is this for" under ${AUDIENCE_MAX} characters.`;
+  const keyPointResult = parseKeyPoints(values.key_points_json);
+  if (keyPointResult.error) fieldErrors.key_points_json = keyPointResult.error;
   if (values.redemption_info.length > REDEMPTION_MAX)
     fieldErrors.redemption_info = `Keep "how to redeem" under ${REDEMPTION_MAX} characters.`;
 
@@ -259,6 +269,8 @@ export async function saveListing(
     offerPrice: offerPrice ?? null,
     offerDiscount: values.offer_discount.replace(/\s+/g, " ").trim() || null,
     redemptionInfo: values.redemption_info || null,
+    audience: values.audience.replace(/\s+/g, " ").trim() || null,
+    keyPoints: keyPointResult.points.length > 0 ? keyPointResult.points : null,
     keywords,
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
