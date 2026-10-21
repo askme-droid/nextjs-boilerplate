@@ -2,6 +2,8 @@ import {
   boolean,
   date,
   integer,
+  jsonb,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -90,6 +92,15 @@ export const listings = pgTable("listings", {
   ogTitle: text("og_title"),
   ogDescription: text("og_description"),
   ogImageUrl: text("og_image_url"),
+  // AEO/GEO (answer engines and AI assistants; admin editor's "Answer engines"
+  // panel). quick_answer is a 1–2 sentence factual summary shown at the top of
+  // the page; faqs are question/answer pairs shown on the page and marked up
+  // as schema.org FAQPage; the offer fields feed the page and the Offer markup.
+  quickAnswer: text("quick_answer"),
+  faqs: jsonb("faqs").$type<{ q: string; a: string }[]>(),
+  offerPrice: numeric("offer_price", { precision: 10, scale: 2 }),
+  offerDiscount: text("offer_discount"),
+  redemptionInfo: text("redemption_info"),
   // Was uuid FK -> profiles.id under Supabase; Better-Auth's user.id is text,
   // so this column's type changed too (see migration plan). ON DELETE
   // behavior is an assumption (SET NULL — a user's historical listings

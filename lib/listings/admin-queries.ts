@@ -124,6 +124,11 @@ export type AdminListingDetail = AdminListingRow & {
   og_description: string | null;
   og_image_url: string | null;
   uen_verification: UenVerification | null;
+  quick_answer: string | null;
+  faqs: { q: string; a: string }[];
+  offer_price: string | null;
+  offer_discount: string | null;
+  redemption_info: string | null;
   listing_images: ListingImage[];
   tagIds: string[];
 };
@@ -162,6 +167,11 @@ export async function getAdminListingById(
       og_title: listings.ogTitle,
       og_description: listings.ogDescription,
       og_image_url: listings.ogImageUrl,
+      quick_answer: listings.quickAnswer,
+      faqs: listings.faqs,
+      offer_price: listings.offerPrice,
+      offer_discount: listings.offerDiscount,
+      redemption_info: listings.redemptionInfo,
       uen_verified_uen: listings.uenVerifiedUen,
       uen_verified_name: listings.uenVerifiedName,
       uen_verified_status: listings.uenVerifiedStatus,
@@ -225,6 +235,11 @@ export async function getAdminListingById(
     og_title: row.og_title,
     og_description: row.og_description,
     og_image_url: row.og_image_url,
+    quick_answer: row.quick_answer,
+    faqs: row.faqs ?? [],
+    offer_price: row.offer_price,
+    offer_discount: row.offer_discount,
+    redemption_info: row.redemption_info,
     uen_verification:
       row.uen_verified_uen && row.uen_verified_status && row.uen_verified_at
         ? {

@@ -73,6 +73,12 @@ export type ListingDetail = Omit<ListingWithRelations, "listing_images"> & {
   verified_business: boolean;
   /** ACRA's registered name for the UEN, when verified. */
   verified_business_name: string | null;
+  /** AEO/GEO fields (lib/seo/aeo.ts). offer_price is a "25.90" string. */
+  quick_answer: string | null;
+  faqs: { q: string; a: string }[];
+  offer_price: string | null;
+  offer_discount: string | null;
+  redemption_info: string | null;
 };
 
 export type ListingsResult = {
@@ -428,6 +434,36 @@ export async function getSitemapListings(): Promise<{ slug: string; updatedAt: D
     .orderBy(desc(listings.updatedAt));
 }
 
+/** Published, unexpired listings with the short facts an AI tool needs, for
+ *  /llms.txt (app/llms.txt/route.ts). Most recently updated first. */
+export async function getLlmsListings(): Promise<
+  {
+    title: string;
+    slug: string;
+    quickAnswer: string | null;
+    description: string | null;
+    location: string | null;
+    category: string | null;
+    expiresAt: string | null;
+  }[]
+> {
+  return db
+    .select({
+      title: listings.title,
+      slug: listings.slug,
+      quickAnswer: listings.quickAnswer,
+      description: listings.description,
+      location: listings.location,
+      category: categories.name,
+      expiresAt: listings.expiresAt,
+    })
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(and(eq(listings.status, "published"), notExpired))
+    .orderBy(desc(listings.updatedAt))
+    .limit(500);
+}
+
 /**
  * A single published listing by slug, with all its images and experience
  * tags, or `null` if it doesn't exist or isn't published.
@@ -466,6 +502,11 @@ async function loadListingDetail(where: SQL): Promise<ListingDetail | null> {
       og_title: listings.ogTitle,
       og_description: listings.ogDescription,
       og_image_url: listings.ogImageUrl,
+      quick_answer: listings.quickAnswer,
+      faqs: listings.faqs,
+      offer_price: listings.offerPrice,
+      offer_discount: listings.offerDiscount,
+      redemption_info: listings.redemptionInfo,
       uen_verified_uen: listings.uenVerifiedUen,
       uen_verified_name: listings.uenVerifiedName,
       uen_verified_status: listings.uenVerifiedStatus,
@@ -531,6 +572,11 @@ async function loadListingDetail(where: SQL): Promise<ListingDetail | null> {
     view_count: row.view_count,
     verified_business: isVerifiedBusiness(row),
     verified_business_name: isVerifiedBusiness(row) ? row.uen_verified_name : null,
+    quick_answer: row.quick_answer,
+    faqs: row.faqs ?? [],
+    offer_price: row.offer_price,
+    offer_discount: row.offer_discount,
+    redemption_info: row.redemption_info,
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,

@@ -10,6 +10,13 @@ import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema"
 import { requireStaff } from "@/lib/auth/require-staff";
 import { isStoredFileUrl, makeKey, putFile } from "@/lib/storage/r2";
 import { normalizeHttpUrl, parseContactFields } from "@/lib/listings/contact-fields";
+import {
+  OFFER_DISCOUNT_MAX,
+  QUICK_ANSWER_MAX,
+  REDEMPTION_MAX,
+  normalizePrice,
+  parseFaqs,
+} from "@/lib/seo/aeo";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import { embedImage, embedImageUrl } from "@/lib/listings/embeddings";
 import { isPlaceholderSlug, slugify } from "@/lib/listings/slug";
@@ -45,6 +52,13 @@ export type ListingFormValues = {
   og_title: string;
   og_description: string;
   og_image_url: string;
+  /** "Answer engines" panel (AEO/GEO, see lib/seo/aeo.ts). faqs_json is the
+   *  panel's hidden JSON list of {q, a}. */
+  quick_answer: string;
+  faqs_json: string;
+  offer_price: string;
+  offer_discount: string;
+  redemption_info: string;
   keywords: string;
   description: string;
   status: string;
@@ -80,6 +94,11 @@ function readValues(formData: FormData): ListingFormValues {
     og_title: get("og_title"),
     og_description: get("og_description"),
     og_image_url: get("og_image_url"),
+    quick_answer: get("quick_answer"),
+    faqs_json: get("faqs_json"),
+    offer_price: get("offer_price"),
+    offer_discount: get("offer_discount"),
+    redemption_info: get("redemption_info"),
     keywords: get("keywords"),
     description: get("description"),
     status: get("status"),
@@ -173,6 +192,19 @@ export async function saveListing(
     : null;
   if (values.og_image_url && !ogImageUrl) fieldErrors.og_image_url = "That social image address isn't valid — pick or upload the image again.";
 
+  // Answer engines panel. Hard caps only; the panel's checks give the advice.
+  const quickAnswer = values.quick_answer.replace(/\s+/g, " ").trim();
+  if (quickAnswer.length > QUICK_ANSWER_MAX + 100)
+    fieldErrors.quick_answer = `Keep the quick answer under ${QUICK_ANSWER_MAX} characters.`;
+  const faqResult = parseFaqs(values.faqs_json);
+  if (faqResult.error) fieldErrors.faqs_json = faqResult.error;
+  const offerPrice = normalizePrice(values.offer_price);
+  if (offerPrice === undefined) fieldErrors.offer_price = "Enter the price as a number, e.g. 25.90";
+  if (values.offer_discount.length > OFFER_DISCOUNT_MAX)
+    fieldErrors.offer_discount = `Keep the discount under ${OFFER_DISCOUNT_MAX} characters.`;
+  if (values.redemption_info.length > REDEMPTION_MAX)
+    fieldErrors.redemption_info = `Keep "how to redeem" under ${REDEMPTION_MAX} characters.`;
+
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors, values };
   }
@@ -199,6 +231,11 @@ export async function saveListing(
     ogTitle: values.og_title.replace(/\s+/g, " ").trim() || null,
     ogDescription: values.og_description.replace(/\s+/g, " ").trim() || null,
     ogImageUrl,
+    quickAnswer: quickAnswer || null,
+    faqs: faqResult.faqs.length > 0 ? faqResult.faqs : null,
+    offerPrice: offerPrice ?? null,
+    offerDiscount: values.offer_discount.replace(/\s+/g, " ").trim() || null,
+    redemptionInfo: values.redemption_info || null,
     keywords,
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],

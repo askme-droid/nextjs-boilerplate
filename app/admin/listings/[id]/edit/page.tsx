@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { isVerifiedBusiness } from "@/lib/business/verify-listing";
 import {
   getAdminListingById,
   getExperienceTags,
@@ -85,6 +86,11 @@ export default async function EditListingPage({
           og_title: listing.og_title ?? "",
           og_description: listing.og_description ?? "",
           og_image_url: listing.og_image_url ?? "",
+          quick_answer: listing.quick_answer ?? "",
+          faqs_json: listing.faqs.length > 0 ? JSON.stringify(listing.faqs) : "",
+          offer_price: listing.offer_price ?? "",
+          offer_discount: listing.offer_discount ?? "",
+          redemption_info: listing.redemption_info ?? "",
           keywords: (listing.keywords ?? []).join(", "),
           description: listing.description ?? "",
           status: listing.status,
@@ -95,6 +101,11 @@ export default async function EditListingPage({
         allTags={allTags}
         selectedTagIds={listing.tagIds}
         uenVerification={listing.uen_verification}
+        verifiedBusiness={isVerifiedBusiness({
+          company_uen: listing.company_uen,
+          uen_verified_uen: listing.uen_verification?.uen ?? null,
+          uen_verified_status: listing.uen_verification?.status ?? null,
+        })}
         footer={
             <section className="flex flex-col gap-2 rounded-lg border border-red-200 p-4 dark:border-red-900/50">
               <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete listing</h2>

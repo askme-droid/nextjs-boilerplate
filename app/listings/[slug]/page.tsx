@@ -102,6 +102,11 @@ function listingJsonLd(listing: ListingDetail) {
       url: listing.cta_url || pageUrl,
       validThrough: listing.expires_at || undefined,
       category: listing.categories?.name,
+      // AEO offer details (Answer engines panel).
+      price: listing.offer_price || undefined,
+      priceCurrency: listing.offer_price ? "SGD" : undefined,
+      disambiguatingDescription: listing.offer_discount || undefined,
+      areaServed: listing.location ? { "@type": "Place", name: listing.location } : undefined,
     }),
   });
 
@@ -134,11 +139,33 @@ function listingJsonLd(listing: ListingDetail) {
     isPartOf: { "@type": "WebSite", "@id": `${SITE_URL}/#website`, name: SITE_NAME, url: SITE_URL },
     about: { "@id": `${pageUrl}#business` },
     breadcrumb: { "@id": `${pageUrl}#breadcrumb` },
+    // The listing's quick answer: the summary AI assistants should quote.
+    abstract: listing.quick_answer || undefined,
+    speakable: listing.quick_answer
+      ? { "@type": "SpeakableSpecification", cssSelector: ["#quick-answer"] }
+      : undefined,
     primaryImageOfPage: images[0],
     dateModified: listing.updated_at,
   });
 
-  return { "@context": "https://schema.org", "@graph": [page, business, breadcrumb] };
+  // Questions & answers (Answer engines panel) as a schema.org FAQPage.
+  const faq =
+    listing.faqs.length > 0
+      ? {
+          "@type": "FAQPage",
+          "@id": `${pageUrl}#faq`,
+          mainEntity: listing.faqs.map((f) => ({
+            "@type": "Question",
+            name: f.q,
+            acceptedAnswer: { "@type": "Answer", text: f.a },
+          })),
+        }
+      : null;
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [page, business, breadcrumb, ...(faq ? [faq] : [])],
+  };
 }
 
 export default async function ListingDetailPage({

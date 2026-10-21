@@ -21,9 +21,11 @@ export function EditListingClient({
   children,
   footer,
   uenVerification,
+  verifiedBusiness,
 }: {
   listingId: string;
   uenVerification?: UenVerification | null;
+  verifiedBusiness?: boolean;
   /** Listing photos, offered as social share images in the SEO panel. */
   images?: { url: string; is_featured: boolean; position: number }[];
   initialValues: ListingFormValues;
@@ -132,6 +134,11 @@ export function EditListingClient({
                 og_title: initialValues.og_title,
                 og_description: initialValues.og_description,
                 og_image_url: initialValues.og_image_url,
+                quick_answer: initialValues.quick_answer,
+                faqs_json: initialValues.faqs_json,
+                offer_price: initialValues.offer_price,
+                offer_discount: initialValues.offer_discount,
+                redemption_info: initialValues.redemption_info,
                 homepage_featured: initialValues.homepage_featured,
                 view_count: initialValues.view_count,
               }
@@ -141,6 +148,7 @@ export function EditListingClient({
         selectedTagIds={selectedTagIds}
         footer={footer}
         uenVerification={uenVerification}
+        verifiedBusiness={verifiedBusiness}
       >
         {children}
       </ListingForm>

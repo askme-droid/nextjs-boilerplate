@@ -15,6 +15,8 @@ import type { ListingDetail } from "@/lib/listings/queries";
  */
 export function ListingView({ listing, banner }: { listing: ListingDetail; banner?: ReactNode }) {
   const expired = isExpired(listing.expires_at);
+  // Shown as its own box once there's anything beyond the plain end date.
+  const hasOfferDetails = !!(listing.offer_price || listing.offer_discount || listing.redemption_info);
 
   // Featured image first (matches the grid card's choice via
   // pickListingImage), then the rest in position order — every image
@@ -65,6 +67,16 @@ export function ListingView({ listing, banner }: { listing: ListingDetail; banne
           {listing.verified_business && <VerifiedBusinessBadge />}
         </p>
       </div>
+
+      {/* The short factual summary answer engines quote (AEO). */}
+      {listing.quick_answer && (
+        <p
+          id="quick-answer"
+          className="rounded-lg border-l-4 border-brand-teal bg-zinc-50 px-4 py-3 text-lg leading-relaxed text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+        >
+          {listing.quick_answer}
+        </p>
+      )}
 
       {orderedImages.length > 0 ? (
         <div className="flex flex-col gap-3">
@@ -123,6 +135,46 @@ export function ListingView({ listing, banner }: { listing: ListingDetail; banne
           </p>
         )}
 
+        {hasOfferDetails && (
+          <section aria-labelledby="offer-details" className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <h2 id="offer-details" className="mb-2 text-base font-semibold">
+              Offer details
+            </h2>
+            <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
+              {listing.offer_discount && (
+                <>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Offer</dt>
+                  <dd className="font-medium">{listing.offer_discount}</dd>
+                </>
+              )}
+              {listing.offer_price && (
+                <>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Price</dt>
+                  <dd className="font-medium">S${formatPrice(listing.offer_price)}</dd>
+                </>
+              )}
+              {listing.expires_at && (
+                <>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Valid until</dt>
+                  <dd className="font-medium">{formatDate(listing.expires_at)}</dd>
+                </>
+              )}
+              {listing.location && (
+                <>
+                  <dt className="text-zinc-500 dark:text-zinc-400">Where</dt>
+                  <dd className="font-medium">{listing.location}</dd>
+                </>
+              )}
+              {listing.redemption_info && (
+                <>
+                  <dt className="text-zinc-500 dark:text-zinc-400">How to redeem</dt>
+                  <dd className="whitespace-pre-line">{listing.redemption_info}</dd>
+                </>
+              )}
+            </dl>
+          </section>
+        )}
+
         {listing.cta_url && (
           <a
             href={listing.cta_url}
@@ -177,10 +229,28 @@ export function ListingView({ listing, banner }: { listing: ListingDetail; banne
           </section>
         )}
 
-        {listing.expires_at && !expired && (
+        {listing.expires_at && !expired && !hasOfferDetails && (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Available until {formatDate(listing.expires_at)}
           </p>
+        )}
+
+        {listing.faqs.length > 0 && (
+          <section aria-labelledby="faq" className="mt-2 flex flex-col gap-2">
+            <h2 id="faq" className="text-lg font-semibold">
+              Questions &amp; answers
+            </h2>
+            {listing.faqs.map((faq, i) => (
+              <details
+                key={i}
+                open={i === 0}
+                className="group rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800"
+              >
+                <summary className="cursor-pointer font-medium marker:text-zinc-400">{faq.q}</summary>
+                <p className="mt-2 whitespace-pre-line text-zinc-700 dark:text-zinc-300">{faq.a}</p>
+              </details>
+            ))}
+          </section>
         )}
       </div>
     </main>
@@ -205,6 +275,11 @@ function VerifiedBusinessBadge() {
       Verified business
     </span>
   );
+}
+
+function formatPrice(value: string) {
+  const n = Number(value);
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 function formatDate(value: string) {

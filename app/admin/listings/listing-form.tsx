@@ -8,6 +8,7 @@ import { SeoPanel } from "./seo-panel";
 import { ExpiryField } from "@/app/components/expiry-field";
 import type { UenVerification } from "@/lib/listings/admin-queries";
 import { UenCheck } from "./uen-check";
+import { AeoPanel } from "./aeo-panel";
 
 const inputClass =
   "mt-1 block w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -31,6 +32,11 @@ const emptyValues: ListingFormValues = {
   og_title: "",
   og_description: "",
   og_image_url: "",
+  quick_answer: "",
+  faqs_json: "",
+  offer_price: "",
+  offer_discount: "",
+  redemption_info: "",
   keywords: "",
   description: "",
   status: "draft",
@@ -50,6 +56,7 @@ export function ListingForm({
   children,
   footer,
   uenVerification,
+  verifiedBusiness = false,
 }: {
   /** Present when editing; omitted when creating. */
   listingId?: string;
@@ -76,6 +83,8 @@ export function ListingForm({
   footer?: React.ReactNode;
   /** Last ACRA check of the UEN (edit form only). */
   uenVerification?: UenVerification | null;
+  /** Saved UEN is ACRA-verified and live (for the answer-engine checks). */
+  verifiedBusiness?: boolean;
 }) {
   const initialState: ListingFormState = { values: initialValues ?? emptyValues };
   const [state, formAction, pending] = useActionState(saveListing, initialState);
@@ -357,6 +366,24 @@ export function ListingForm({
         og_description: state.fieldErrors?.og_description,
         og_image_url: state.fieldErrors?.og_image_url,
       }}
+    />
+
+    <AeoPanel
+      initial={{
+        quick_answer: values.quick_answer,
+        faqs_json: values.faqs_json,
+        offer_price: values.offer_price,
+        offer_discount: values.offer_discount,
+        redemption_info: values.redemption_info,
+      }}
+      errors={{
+        quick_answer: state.fieldErrors?.quick_answer,
+        faqs_json: state.fieldErrors?.faqs_json,
+        offer_price: state.fieldErrors?.offer_price,
+        offer_discount: state.fieldErrors?.offer_discount,
+        redemption_info: state.fieldErrors?.redemption_info,
+      }}
+      verified={verifiedBusiness}
     />
 
     {footer}

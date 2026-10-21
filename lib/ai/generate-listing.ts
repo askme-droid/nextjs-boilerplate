@@ -113,6 +113,12 @@ export async function generateListingDraft({
     // Set by staff on a client's request, never the model's; kept from the
     // saved listing by edit-listing-client.tsx like homepage_featured.
     redirect_url: "",
+    // AEO fields are written by staff; kept from the saved listing.
+    quick_answer: "",
+    faqs_json: "",
+    offer_price: "",
+    offer_discount: "",
+    redemption_info: "",
     // SEO fields are kept from the saved listing (edit-listing-client.tsx).
     seo_title: "",
     seo_description: "",
