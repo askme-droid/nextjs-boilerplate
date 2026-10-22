@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { parseSort, sortListings } from "./sort";
 import { ListingsTable } from "./listings-table";
 import { getAdminListings } from "@/lib/listings/admin-queries";
 import { createListing } from "./actions";
@@ -8,11 +9,13 @@ import { createListing } from "./actions";
 export default async function AdminListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ published?: string; deleted?: string; error?: string }>;
+  searchParams: Promise<{ published?: string; deleted?: string; error?: string; sort?: string; dir?: string }>;
 }) {
   const { role } = await requireStaff();
   const { published, deleted, error } = await searchParams;
-  const listings = await getAdminListings(role);
+  const { sort: sortParam, dir } = await searchParams;
+  const sort = parseSort(sortParam, dir);
+  const listings = sortListings(await getAdminListings(role), sort);
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,7 +72,7 @@ export default async function AdminListingsPage({
           .
         </p>
       ) : (
-        <ListingsTable listings={listings} returnTo="list" />
+        <ListingsTable listings={listings} returnTo="list" sort={sort} />
       )}
     </div>
   );

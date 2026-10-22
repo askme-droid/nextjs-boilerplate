@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { parseSort, sortListings } from "../sort";
 import { ListingsTable } from "../listings-table";
 import { getSyndicatedListings } from "@/lib/listings/admin-queries";
 import { refreshSyncedListings } from "../sync-actions";
@@ -24,11 +25,13 @@ export const maxDuration = 300;
 export default async function SyncedListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ published?: string; deleted?: string; refreshed?: string; error?: string }>;
+  searchParams: Promise<{ published?: string; deleted?: string; refreshed?: string; error?: string; sort?: string; dir?: string }>;
 }) {
   const { role } = await requireStaff();
   const { published, deleted, refreshed, error } = await searchParams;
-  const listings = await getSyndicatedListings(role);
+  const { sort: sortParam, dir } = await searchParams;
+  const sort = parseSort(sortParam, dir);
+  const listings = sortListings(await getSyndicatedListings(role), sort);
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,7 +85,7 @@ export default async function SyncedListingsPage({
       {listings.length === 0 ? (
         <p className="text-zinc-500 dark:text-zinc-400">No synced listings.</p>
       ) : (
-        <ListingsTable listings={listings} returnTo="synced" synced />
+        <ListingsTable listings={listings} returnTo="synced" synced sort={sort} />
       )}
     </div>
   );

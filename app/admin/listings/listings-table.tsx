@@ -4,6 +4,7 @@ import { formatListingDate } from "@/lib/listings/dates";
 import { isExpired } from "@/lib/listings/expiry-dates";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { deleteListing, publishListing } from "./actions";
+import type { Sort, SortKey } from "./sort";
 
 const statusClass: Record<string, string> = {
   published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
@@ -14,6 +15,50 @@ const statusClass: Record<string, string> = {
 
 const th = "px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400";
 const td = "px-3 py-3 align-top";
+
+/** A column heading that sorts the table: first click A→Z / smallest first,
+ *  second click reverses. ▲▼ shows the current order. */
+function SortHeader({
+  sortKey,
+  label,
+  sort,
+  path,
+  right = false,
+  title,
+  className = "",
+}: {
+  sortKey: SortKey;
+  label: string;
+  sort: Sort;
+  path: string;
+  right?: boolean;
+  title?: string;
+  className?: string;
+}) {
+  const active = sort?.key === sortKey;
+  const nextDir = active && sort.dir === "asc" ? "desc" : "asc";
+  return (
+    <th
+      className={`${th} ${right ? "text-right" : ""} ${className}`}
+      title={title}
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <Link
+        href={`${path}?sort=${sortKey}&dir=${nextDir}`}
+        scroll={false}
+        className={`group inline-flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 ${
+          active ? "text-zinc-900 dark:text-zinc-100" : ""
+        }`}
+      >
+        {label}
+        <span aria-hidden className="flex flex-col text-[8px] leading-[7px]">
+          <span className={active && sort.dir === "asc" ? "text-brand-teal" : "opacity-40 group-hover:opacity-70"}>▲</span>
+          <span className={active && sort.dir === "desc" ? "text-brand-teal" : "opacity-40 group-hover:opacity-70"}>▼</span>
+        </span>
+      </Link>
+    </th>
+  );
+}
 
 /** "22 Oct 2026" with "3 days ago" under it, like the WordPress list. */
 function DateCell({ iso, empty }: { iso: string | null; empty: string }) {
@@ -35,27 +80,33 @@ export function ListingsTable({
   listings,
   returnTo,
   synced = false,
+  sort = null,
 }: {
   listings: AdminListingRow[];
   returnTo: "list" | "synced";
   synced?: boolean;
+  sort?: Sort;
 }) {
+  const path = returnTo === "synced" ? "/admin/listings/synced" : "/admin/listings";
+  // Kept by Publish/Delete so the list comes back in the same order.
+  const back = sort ? `sort=${sort.key}&dir=${sort.dir}` : "";
+  const head = (key: SortKey, label: string, opts: { right?: boolean; title?: string; className?: string } = {}) => (
+    <SortHeader key={key} sortKey={key} label={label} sort={sort} path={path} {...opts} />
+  );
   return (
     <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
       <table className="w-full min-w-[860px] border-collapse rounded-lg border border-zinc-200 text-sm dark:border-zinc-800">
         <thead className="bg-zinc-50 dark:bg-zinc-900">
           <tr className="border-b border-zinc-200 dark:border-zinc-800">
-            <th className={`${th} w-[34%]`}>Title</th>
-            <th className={th}>Author</th>
-            <th className={th}>Category</th>
-            <th className={`${th} text-right`}>Views</th>
-            <th className={th} title={synced ? "When it was copied in from fd.sg" : "When the entry was made"}>
-              {synced ? "Imported" : "Created"}
-            </th>
-            <th className={th} title="The date visitors see (“Posted …”). Editable on the listing.">
-              Posted
-            </th>
-            <th className={th}>Expires</th>
+            {head("title", "Title", { className: "w-[34%]" })}
+            {head("author", "Author")}
+            {head("category", "Category")}
+            {head("views", "Views", { right: true })}
+            {head("created", synced ? "Imported" : "Created", {
+              title: synced ? "When it was copied in from fd.sg" : "When the entry was made",
+            })}
+            {head("posted", "Posted", { title: "The date visitors see (“Posted …”). Editable on the listing." })}
+            {head("expires", "Expires")}
           </tr>
         </thead>
         <tbody>
@@ -124,6 +175,7 @@ export function ListingsTable({
                       <form action={publishListing}>
                         <input type="hidden" name="id" value={listing.id} />
                         <input type="hidden" name="returnTo" value={returnTo} />
+                        <input type="hidden" name="back" value={back} />
                         <button type="submit" className="font-medium text-emerald-600 hover:underline dark:text-emerald-400">
                           Publish
                         </button>
@@ -132,6 +184,7 @@ export function ListingsTable({
                     <form action={deleteListing}>
                       <input type="hidden" name="id" value={listing.id} />
                       {returnTo === "synced" && <input type="hidden" name="returnTo" value="synced" />}
+                      <input type="hidden" name="back" value={back} />
                       <button type="submit" className="text-red-600 hover:underline dark:text-red-400">
                         Delete
                       </button>
