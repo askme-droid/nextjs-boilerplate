@@ -102,7 +102,7 @@ export function BrowsePills({
   return (
     <div role="group" aria-label="Browse" className="relative">
       <div className="-mx-1 flex items-center gap-2 overflow-x-auto pb-1 pl-1 pr-8 [scrollbar-width:none] sm:flex-wrap sm:justify-center sm:overflow-visible sm:pr-1 [&::-webkit-scrollbar]:hidden">
-        <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-white/90">
           Browse
         </span>
         {pills.map((f, i) => {
@@ -149,7 +149,7 @@ export function BrowsePills({
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent sm:hidden dark:from-zinc-900"
+        className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-(--hero-surface) to-transparent sm:hidden"
       />
     </div>
   );
@@ -192,7 +192,7 @@ export function ResultSummary({
   if (filters.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
-      <span className="font-medium text-zinc-700 dark:text-zinc-300">
+      <span className="font-medium text-white">
         <span className="tabular-nums">{shown}</span> {total === 1 ? "deal" : "deals"} found
       </span>
       {filters.map((f) => (
@@ -201,7 +201,7 @@ export function ResultSummary({
           type="button"
           onClick={() => onRemove(f.key)}
           aria-label={`Remove filter: ${f.label}`}
-          className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-0.5 text-brand-teal transition-colors motion-safe:animate-pop-in hover:bg-brand-teal/20"
+          className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-white transition-colors motion-safe:animate-pop-in hover:bg-white/30"
         >
           {f.label}
           <X aria-hidden className="size-3.5" />

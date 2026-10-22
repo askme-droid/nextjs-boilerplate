@@ -24,7 +24,7 @@ import {
 import { SearchingCard } from "./searching-card";
 
 const fieldClass =
-  "rounded-md border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900 outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+  "rounded-md border border-white/60 bg-white px-3 py-2 text-base text-zinc-900 outline-none focus:border-brand-orange focus:ring-2 focus:ring-white/70 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
 
 /** Results refresh this long after the visitor stops typing. */
 const LIVE_SEARCH_DELAY_MS = 450;
@@ -256,7 +256,7 @@ export function ListingsSearchForm({
     <div className="flex flex-col gap-4">
     {/* The search card: lifts and glows while the visitor is using it. */}
     {/* Animated border light: .search-card-animated in globals.css. */}
-    <div className="search-card-animated flex flex-col gap-3 rounded-xl p-4 shadow-lg transition-[box-shadow,transform] duration-300 focus-within:shadow-xl focus-within:shadow-brand-teal/20 motion-safe:focus-within:-translate-y-0.5 sm:p-5">
+    <div className="search-card-animated flex flex-col gap-3 rounded-xl p-4 shadow-lg transition-[box-shadow,transform] duration-300 focus-within:shadow-xl focus-within:shadow-brand-teal/40 motion-safe:focus-within:-translate-y-0.5 sm:p-5">
       {/* A GET form: submitting re-navigates to "/" with these fields as the
           full search params (any not listed here, like `page`, are dropped —
           a new search should start back on page 1). Works with JS disabled. */}
@@ -386,7 +386,7 @@ export function ListingsSearchForm({
       {hasFilters && (
         <Link
           href="/"
-          className="w-fit text-sm text-brand-teal underline-offset-4 hover:underline"
+          className="w-fit text-sm font-medium text-white underline underline-offset-4 hover:no-underline"
         >
           Clear all
         </Link>
