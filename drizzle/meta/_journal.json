@@ -127,6 +127,13 @@
       "when": 1792557967644,
       "tag": "0017_listing_audience_key_points",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792630972583,
+      "tag": "0018_hero_slides",
+      "breakpoints": true
     }
   ]
 }

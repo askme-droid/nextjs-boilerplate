@@ -9,6 +9,7 @@ import type { CategoryChip } from "@/app/components/listings-search-form";
 import { getCategoriesWithCounts } from "@/lib/categories/queries";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
+import { getActiveHeroSlides } from "@/lib/hero/queries";
 import { parseShowFilter } from "@/lib/listings/badges";
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/queries";
@@ -24,7 +25,9 @@ import {
 
 // Promo banners for the homepage hero slider — swap these out (or wire up
 // an admin-managed source later) whenever the current promotions change.
-const HERO_SLIDES: HeroSlide[] = [
+// Fallback if the slides can't be loaded (the managed list lives at
+// /admin/hero, table hero_slides — seeded with these same flyers).
+const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
     src: "/hero/overly-cheezy-pizza.jpg",
     alt: "Overly Cheezy Pizza — 1-for-1 regular pizzas at $25.90 and large pizzas at $33.90, plus 10% off your first online order",
@@ -54,6 +57,15 @@ const HERO_SLIDES: HeroSlide[] = [
     alt: "Kumon — 100% off registration fee (save $50) when you sign up by 15 September 2024",
   },
 ];
+
+async function loadHeroSlides(): Promise<HeroSlide[]> {
+  try {
+    const rows = await getActiveHeroSlides();
+    return rows.map((r) => ({ src: r.imageUrl, alt: r.altText, href: r.linkUrl }));
+  } catch {
+    return DEFAULT_HERO_SLIDES;
+  }
+}
 
 function firstValue(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? "";
@@ -214,7 +226,7 @@ export default async function Home({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
-  const result = await loadPageData(params);
+  const [result, heroSlides] = await Promise.all([loadPageData(params), loadHeroSlides()]);
   const gridKey = [
     firstValue(params.q),
     firstValue(params.category),
@@ -228,7 +240,7 @@ export default async function Home({
   return (
     <main className="flex flex-1 flex-col">
       <JsonLd data={siteJsonLd} />
-      <HeroSection slides={HERO_SLIDES} />
+      <HeroSection slides={heroSlides} />
 
       {result.ok && <FeaturedVideoSlider slides={result.data.featured} />}
 
