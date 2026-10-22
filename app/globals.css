@@ -196,3 +196,65 @@ body {
     transform: none;
   }
 }
+
+/* Homepage search card: a teal-and-orange light that slowly travels around its
+   border, then speeds up and brightens while the visitor is using the box.
+   Reduced-motion visitors get a plain border. */
+@property --search-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes search-border-spin {
+  to {
+    --search-angle: 360deg;
+  }
+}
+@keyframes search-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.search-card-animated {
+  border: 2px solid transparent;
+  --search-surface: #ffffff;
+  background:
+    linear-gradient(var(--search-surface), var(--search-surface)) padding-box,
+    conic-gradient(
+        from var(--search-angle),
+        rgb(14 178 191 / 0.15),
+        var(--brand-teal) 12%,
+        rgb(14 178 191 / 0.15) 25%,
+        rgb(246 171 77 / 0.15) 50%,
+        var(--brand-orange) 62%,
+        rgb(246 171 77 / 0.15) 75%,
+        rgb(14 178 191 / 0.15)
+      )
+      border-box;
+  animation:
+    search-card-in 0.6s ease-out both,
+    search-border-spin 8s linear infinite;
+}
+.search-card-animated:focus-within {
+  animation:
+    search-card-in 0.6s ease-out both,
+    search-border-spin 2.5s linear infinite;
+}
+@media (prefers-color-scheme: dark) {
+  .search-card-animated {
+    --search-surface: #18181b;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-card-animated,
+  .search-card-animated:focus-within {
+    animation: none;
+    border-color: rgb(161 161 170 / 0.35);
+    background: var(--search-surface);
+  }
+}

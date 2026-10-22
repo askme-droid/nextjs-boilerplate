@@ -255,7 +255,8 @@ export function ListingsSearchForm({
   return (
     <div className="flex flex-col gap-4">
     {/* The search card: lifts and glows while the visitor is using it. */}
-    <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg transition-[box-shadow,transform,border-color] duration-300 focus-within:border-brand-teal/50 focus-within:shadow-xl focus-within:shadow-brand-teal/15 motion-safe:focus-within:-translate-y-0.5 dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
+    {/* Animated border light: .search-card-animated in globals.css. */}
+    <div className="search-card-animated flex flex-col gap-3 rounded-xl p-4 shadow-lg transition-[box-shadow,transform] duration-300 focus-within:shadow-xl focus-within:shadow-brand-teal/20 motion-safe:focus-within:-translate-y-0.5 sm:p-5">
       {/* A GET form: submitting re-navigates to "/" with these fields as the
           full search params (any not listed here, like `page`, are dropped —
           a new search should start back on page 1). Works with JS disabled. */}
