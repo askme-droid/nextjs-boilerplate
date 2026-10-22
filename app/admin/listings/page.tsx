@@ -1,17 +1,9 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { ListingsTable } from "./listings-table";
 import { getAdminListings } from "@/lib/listings/admin-queries";
-import { createListing, deleteListing, publishListing } from "./actions";
-import { isExpired } from "@/lib/listings/expiry-dates";
-import { formatViews } from "@/lib/listings/views";
-import { formatListingDate } from "@/lib/listings/dates";
+import { createListing } from "./actions";
 
-const statusClass: Record<string, string> = {
-  published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-  pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
-  draft: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-  rejected: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
-};
 
 export default async function AdminListingsPage({
   searchParams,
@@ -77,88 +69,7 @@ export default async function AdminListingsPage({
           .
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
-          {listings.map((listing) => (
-            <li key={listing.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
-              <div className="min-w-0">
-                <Link
-                  href={`/admin/listings/${listing.id}/edit`}
-                  className="font-medium hover:underline"
-                >
-                  {listing.title}
-                </Link>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  {listing.categories?.name ?? "No category"}
-                  {listing.location ? ` · ${listing.location}` : ""}
-                  {` · ${formatViews(listing.view_count)}`}
-                  {/* Created = when the entry was made (fixed); published = the
-                      date visitors see (editable on the listing). */}
-                  {` · created ${formatListingDate(listing.created_at)}`}
-                  {listing.published_at
-                    ? ` · published ${formatListingDate(listing.published_at)}`
-                    : " · not published yet"}
-                  {listing.expires_at
-                    ? isExpired(listing.expires_at)
-                      ? ""
-                      : ` · until ${listing.expires_at}`
-                    : " · never expires"}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    statusClass[listing.status] ?? statusClass.draft
-                  }`}
-                >
-                  {listing.status}
-                </span>
-                {isExpired(listing.expires_at) && (
-                  <span
-                    title={`Expired on ${listing.expires_at} — hidden from the site`}
-                    className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                  >
-                    expired
-                  </span>
-                )}
-                {listing.redirect_url && (
-                  <span
-                    title={`Redirects to ${listing.redirect_url}`}
-                    className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                  >
-                    redirects
-                  </span>
-                )}
-                <Link
-                  href={`/admin/listings/${listing.id}/edit`}
-                  className="text-sm font-medium hover:underline"
-                >
-                  Edit
-                </Link>
-                {listing.status !== "published" && (
-                  <form action={publishListing}>
-                    <input type="hidden" name="id" value={listing.id} />
-                    <input type="hidden" name="returnTo" value="list" />
-                    <button
-                      type="submit"
-                      className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400"
-                    >
-                      Publish
-                    </button>
-                  </form>
-                )}
-                <form action={deleteListing}>
-                  <input type="hidden" name="id" value={listing.id} />
-                  <button
-                    type="submit"
-                    className="text-sm text-red-600 hover:underline dark:text-red-400"
-                  >
-                    Delete
-                  </button>
-                </form>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <ListingsTable listings={listings} returnTo="list" />
       )}
     </div>
   );

@@ -446,9 +446,9 @@ export async function publishListing(formData: FormData) {
   const returnTo = formData.get("returnTo");
   redirect(
     returnTo === "list"
-      ? "/admin/listings?published=1"
+      ? listUrl("/admin/listings", formData, "published=1")
       : returnTo === "synced"
-        ? "/admin/listings/synced?published=1"
+        ? listUrl("/admin/listings/synced", formData, "published=1")
         : `/admin/listings/${id}/edit?saved=1`,
   );
 }
@@ -476,9 +476,18 @@ export async function deleteListing(formData: FormData) {
   if (slug) revalidatePath(`/listings/${slug}`);
   redirect(
     formData.get("returnTo") === "synced"
-      ? "/admin/listings/synced?deleted=1"
-      : "/admin/listings?deleted=1",
+      ? listUrl("/admin/listings/synced", formData, "deleted=1")
+      : listUrl("/admin/listings", formData, "deleted=1"),
   );
+}
+
+/** Back to a list page, keeping its tab/search/filters/page (the `back`
+ *  field the list's row buttons send), plus a message flag. */
+function listUrl(path: string, formData: FormData, flag: string) {
+  const back = new URLSearchParams(String(formData.get("back") ?? ""));
+  for (const key of ["published", "deleted", "error", "refreshed"]) back.delete(key);
+  back.set(flag.split("=")[0], flag.split("=")[1]);
+  return `${path}?${back.toString()}`;
 }
 
 function editUrl(listingId: string, error?: string) {
