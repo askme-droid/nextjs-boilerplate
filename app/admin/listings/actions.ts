@@ -1,5 +1,6 @@
 "use server";
 
+import { dbErrorMessage, pgErrorCode } from "@/lib/db/errors";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
@@ -128,9 +129,6 @@ function isOwnListingUrl(url: string, slug: string): boolean {
 // postgres.js throws a PostgresError whose `code` is the Postgres SQLSTATE —
 // 23505 (unique_violation) / 23503 (foreign_key_violation) — surfaced as-is,
 // not wrapped, so this narrow check is enough to distinguish them.
-function pgErrorCode(e: unknown): string | undefined {
-  return e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : undefined;
-}
 
 /** Creates a listing (no `id` field in formData) or updates one (with `id`). */
 export async function saveListing(
@@ -312,7 +310,7 @@ export async function saveListing(
         values,
       };
     }
-    return { error: e instanceof Error ? e.message : "Could not save listing.", values };
+    return { error: dbErrorMessage(e, "Could not save listing."), values };
   }
 
   // Tag checkboxes only exist (and only send this marker) once the listing

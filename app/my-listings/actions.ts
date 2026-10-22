@@ -1,5 +1,6 @@
 "use server";
 
+import { dbErrorMessage, pgErrorCode } from "@/lib/db/errors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -60,9 +61,6 @@ function readValues(formData: FormData): MyListingFormValues {
   };
 }
 
-function pgErrorCode(e: unknown): string | undefined {
-  return e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : undefined;
-}
 
 /** Creates (no `id`) or updates (`id` present) a listing the user owns. The
  *  clicked submit button sets `intent` to "draft" or "pending" — see the form. */
@@ -159,7 +157,7 @@ export async function saveMyListing(
     if (code === "23503") {
       return { fieldErrors: { category_id: "Invalid category selected." }, values };
     }
-    return { error: e instanceof Error ? e.message : "Could not save listing.", values };
+    return { error: dbErrorMessage(e, "Could not save listing."), values };
   }
 
   // Check a newly entered UEN against ACRA once the response is sent.
