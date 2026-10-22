@@ -487,15 +487,25 @@ function editUrl(listingId: string, error?: string) {
     : `/admin/listings/${listingId}/edit`;
 }
 
-export async function addImage(formData: FormData) {
+/** Image actions return instead of redirecting: the image manager calls
+ *  them in place, so the page isn't reloaded and anything typed or generated
+ *  in the (unsaved) listing form above stays put. */
+export type ImageActionResult = { error?: string };
+
+function imagesChanged(listingId: string): ImageActionResult {
+  revalidatePath(`/admin/listings/${listingId}/edit`);
+  return {};
+}
+
+export async function addImage(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
   const url = String(formData.get("url") ?? "").trim();
   const altText = String(formData.get("altText") ?? "").trim();
 
-  if (!listingId) redirect(editUrl(listingId, "Missing listing."));
-  if (!url) redirect(editUrl(listingId, "Image URL is required."));
+  if (!listingId) return { error: "Missing listing." };
+  if (!url) return { error: "Image URL is required." };
 
   try {
     const existingCount = await db.$count(listingImages, eq(listingImages.listingId, listingId));
@@ -514,31 +524,31 @@ export async function addImage(formData: FormData) {
       embedding,
     });
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not add image."));
+    return { error: e instanceof Error ? e.message : "Could not add image." };
   }
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
 /** Uploads one or more image files to R2 storage (lib/storage/r2.ts) and attaches them
  *  to the listing, in the order they were selected. */
-export async function uploadImages(formData: FormData) {
+export async function uploadImages(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
-  if (!listingId) redirect(editUrl(listingId, "Missing listing."));
+  if (!listingId) return { error: "Missing listing." };
 
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length === 0) redirect(editUrl(listingId, "Choose at least one image to upload."));
+  if (files.length === 0) return { error: "Choose at least one image to upload." };
 
   const invalidType = files.find((f) => !ALLOWED_IMAGE_TYPES.has(f.type));
-  if (invalidType) redirect(editUrl(listingId, `${invalidType.name}: must be PNG, JPEG, WebP, or GIF.`));
+  if (invalidType) return { error: `${invalidType.name}: must be PNG, JPEG, WebP, or GIF.` };
 
   const tooLarge = files.find((f) => f.size > MAX_IMAGE_BYTES);
-  if (tooLarge) redirect(editUrl(listingId, `${tooLarge.name}: must be under 5MB.`));
+  if (tooLarge) return { error: `${tooLarge.name}: must be under 5MB.` };
 
   try {
     let position = await db.$count(listingImages, eq(listingImages.listingId, listingId));
@@ -564,16 +574,16 @@ export async function uploadImages(formData: FormData) {
       position += 1;
     }
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not upload images."));
+    return { error: e instanceof Error ? e.message : "Could not upload images." };
   }
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-export async function deleteImage(formData: FormData) {
+export async function deleteImage(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
@@ -582,16 +592,16 @@ export async function deleteImage(formData: FormData) {
   try {
     await db.delete(listingImages).where(eq(listingImages.id, imageId));
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not delete image."));
+    return { error: e instanceof Error ? e.message : "Could not delete image." };
   }
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-export async function setFeaturedImage(formData: FormData) {
+export async function setFeaturedImage(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
@@ -601,16 +611,16 @@ export async function setFeaturedImage(formData: FormData) {
     await db.update(listingImages).set({ isFeatured: false }).where(eq(listingImages.listingId, listingId));
     await db.update(listingImages).set({ isFeatured: true }).where(eq(listingImages.id, imageId));
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not set featured image."));
+    return { error: e instanceof Error ? e.message : "Could not set featured image." };
   }
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-export async function updateImageAltText(formData: FormData) {
+export async function updateImageAltText(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
@@ -620,15 +630,15 @@ export async function updateImageAltText(formData: FormData) {
   try {
     await db.update(listingImages).set({ altText: altText || null }).where(eq(listingImages.id, imageId));
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not update alt text."));
+    return { error: e instanceof Error ? e.message : "Could not update alt text." };
   }
 
   const slug = await getListingSlug(listingId);
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-export async function moveImage(formData: FormData) {
+export async function moveImage(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
@@ -645,7 +655,7 @@ export async function moveImage(formData: FormData) {
   const swapWith = direction === "up" ? index - 1 : index + 1;
 
   if (index === -1 || swapWith < 0 || swapWith >= images.length) {
-    redirect(editUrl(listingId));
+    return imagesChanged(listingId);
   }
 
   const a = images[index];
@@ -655,12 +665,12 @@ export async function moveImage(formData: FormData) {
     await db.update(listingImages).set({ position: b.position }).where(eq(listingImages.id, a.id));
     await db.update(listingImages).set({ position: a.position }).where(eq(listingImages.id, b.id));
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not reorder images."));
+    return { error: e instanceof Error ? e.message : "Could not reorder images." };
   }
 
   const slug = await getListingSlug(listingId);
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
 /**
