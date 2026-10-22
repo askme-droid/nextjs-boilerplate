@@ -4,9 +4,10 @@ import { useEffect, useRef, useState, useTransition, type FormEvent } from "reac
 import Form from "next/form";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, Search, X } from "lucide-react";
+import { BrowsePills, ResultSummary, useTypingPlaceholder, type ActiveFilter } from "./search-extras";
 import type { ListingTag } from "@/lib/experience-tags/queries";
-import { SHOW_FILTERS } from "@/lib/listings/badges";
+import { SHOW_FILTERS, type ShowFilter } from "@/lib/listings/badges";
 import type { ListingCategory } from "@/lib/listings/queries";
 import { cn } from "@/lib/utils";
 import { ImageSearchButton } from "./image-search-button";
@@ -70,6 +71,8 @@ export function ListingsSearchForm({
   categories,
   experiences,
   chips,
+  totalCount,
+  showCounts = null,
 }: {
   q: string;
   category: string;
@@ -80,6 +83,10 @@ export function ListingsSearchForm({
   categories: ListingCategory[];
   experiences: ListingTag[];
   chips: CategoryChip[];
+  /** Listings matching the current search, for "24 deals found". */
+  totalCount?: number;
+  /** Per-pill counts for the Browse row. */
+  showCounts?: Record<ShowFilter, number> | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -213,6 +220,33 @@ export function ListingsSearchForm({
     navigate(values, { kind: "submit", scroll: true, replace: false });
   }
 
+  const [qFocused, setQFocused] = useState(false);
+  const typingPlaceholder = useTypingPlaceholder(!qFocused && values.q === "", "Search listings…");
+
+  // Chips for the filters in use (from the URL, i.e. what the results show).
+  const clearOne = (field: keyof Filters) => {
+    cancelLiveSearch();
+    const next = { ...values, [field]: "" };
+    setValues(next);
+    navigate(next, { kind: "submit", scroll: false, replace: false });
+  };
+  const activeFilters: ActiveFilter[] = [
+    q && { key: "q", label: `“${q}”` },
+    category && {
+      key: "category",
+      label: categories.find((c) => c.slug === category)?.name ?? category,
+    },
+    location && { key: "location", label: `In ${location}` },
+    experience && {
+      key: "experience",
+      label: experiences.find((t) => t.slug === experience)?.name ?? experience,
+    },
+    show && {
+      key: "show",
+      label: SHOW_FILTERS.find((f) => f.value === show)?.short ?? show,
+    },
+  ].filter((f): f is ActiveFilter => !!f);
+
   const hasFilters =
     q !== "" || category !== "" || location !== "" || experience !== "" || show !== "" || hasImageMatch;
   const showSearchingCard = isPending && pendingKind === "submit";
@@ -229,21 +263,43 @@ export function ListingsSearchForm({
         aria-busy={isPending}
         className="flex flex-col flex-wrap gap-2 sm:flex-row sm:items-center"
       >
-        <div className="relative flex-1 sm:min-w-[10rem]">
+        <div className="group/q relative flex-1 sm:min-w-[12rem]">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/q:text-brand-teal"
+          />
           <input
             type="search"
             name="q"
-            placeholder="Search listings…"
+            placeholder={typingPlaceholder}
             value={values.q}
             onChange={(e) => changeText("q", e.target.value)}
+            onFocus={() => setQFocused(true)}
+            onBlur={() => setQFocused(false)}
             aria-label="Search listings"
-            className={`${fieldClass} w-full`}
+            className={`${fieldClass} w-full pl-9 pr-9 [&::-webkit-search-cancel-button]:hidden`}
           />
-          {liveSearching && (
+          {liveSearching ? (
             <LoaderCircle
               aria-hidden
-              className="pointer-events-none absolute right-9 top-1/2 size-4 -translate-y-1/2 text-brand-teal motion-safe:animate-spin"
+              className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-brand-teal motion-safe:animate-spin"
             />
+          ) : (
+            values.q && (
+              <button
+                type="button"
+                onClick={() => {
+                  cancelLiveSearch();
+                  const next = { ...values, q: "" };
+                  setValues(next);
+                  navigate(next, { kind: "submit", scroll: false, replace: false });
+                }}
+                aria-label="Clear search text"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 motion-safe:animate-pop-in dark:hover:bg-zinc-800"
+              >
+                <X aria-hidden className="size-4" />
+              </button>
+            )
           )}
         </div>
 
@@ -287,12 +343,13 @@ export function ListingsSearchForm({
           ))}
         </select>
 
+        {/* Phones only: on wider screens the Browse pills below do this. */}
         <select
           name="show"
           value={values.show}
           onChange={(e) => changeChoice("show", e.target.value)}
           aria-label="Show only featured, trending, popular or verified listings"
-          className={fieldClass}
+          className={`${fieldClass} sm:hidden`}
         >
           <option value="">All listings</option>
           {SHOW_FILTERS.map((f) => (
@@ -312,6 +369,10 @@ export function ListingsSearchForm({
           Search
         </button>
       </Form>
+
+      <div className="hidden sm:block">
+        <BrowsePills value={values.show} counts={showCounts} onPick={(v) => changeChoice("show", v)} />
+      </div>
 
       {chips.length > 0 && (
         <div role="group" aria-label="Quick category filter" className="relative">
@@ -346,12 +407,16 @@ export function ListingsSearchForm({
 
       {showSearchingCard && <SearchingCard subtitle="Looking through the listings…" />}
 
+      {totalCount !== undefined && !hasImageMatch && (
+        <ResultSummary total={totalCount} filters={activeFilters} onRemove={(key) => clearOne(key as keyof Filters)} />
+      )}
+
       {hasFilters && (
         <Link
           href="/"
           className="w-fit text-sm text-brand-teal underline-offset-4 hover:underline"
         >
-          Clear
+          Clear all
         </Link>
       )}
     </div>

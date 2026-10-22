@@ -10,7 +10,7 @@ import { getCategoriesWithCounts } from "@/lib/categories/queries";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
 import { getActiveHeroSlides } from "@/lib/hero/queries";
-import { parseShowFilter } from "@/lib/listings/badges";
+import { parseShowFilter, type ShowFilter } from "@/lib/listings/badges";
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/queries";
 import {
@@ -18,6 +18,7 @@ import {
   getFeaturedVideos,
   getListings,
   getListingsByIds,
+  getShowCounts,
   type FeaturedVideoSlide,
   type ListingCategory,
   type ListingWithRelations,
@@ -89,6 +90,10 @@ type PageData = {
   featured: FeaturedVideoSlide[];
   page: number;
   totalPages: number;
+  /** Listings matching the current search (all pages). */
+  totalCount: number;
+  /** How many listings each "Browse" pill would show; null if unavailable. */
+  showCounts: Record<ShowFilter, number> | null;
 };
 
 /** Categories with at least one published listing, fullest first. */
@@ -107,11 +112,12 @@ async function loadPageData(
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
   try {
-    const [categories, experiences, chips] = await Promise.all([
+    const [categories, experiences, chips, showCounts] = await Promise.all([
       getCategories(),
       getExperienceTags(),
       // Decorative extra, like the slider: if it fails the pills just go away.
       getCategoryChips().catch((): CategoryChip[] => []),
+      getShowCounts().catch(() => null),
     ]);
 
     // "Search by image" (see app/components/image-search-button.tsx) is its
@@ -138,6 +144,8 @@ async function loadPageData(
           featured: [],
           page: 1,
           totalPages: 1,
+          totalCount: listings.length,
+          showCounts,
         },
       };
     }
@@ -160,7 +168,7 @@ async function loadPageData(
 
     const isDefaultView = !q && !category && !location && !experience && !show && page === 1;
 
-    const [{ listings, page: currentPage, totalPages }, featured] = await Promise.all([
+    const [{ listings, page: currentPage, totalPages, totalCount }, featured] = await Promise.all([
       getListings({ q, category, location, experience, show, page }),
       // Decorative extra: a failure here must not take the whole page down
       // into the error state, so it degrades to "no featured section".
@@ -183,6 +191,8 @@ async function loadPageData(
         featured,
         page: currentPage,
         totalPages,
+        totalCount,
+        showCounts,
       },
     };
   } catch (e) {
@@ -258,7 +268,8 @@ export default async function Home({
           <>
             <div
               id="search"
-              className="scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
+              // Lifts and glows while the visitor is using it.
+              className="scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg transition-[box-shadow,transform,border-color] duration-300 focus-within:border-brand-teal/50 focus-within:shadow-xl focus-within:shadow-brand-teal/15 motion-safe:focus-within:-translate-y-0.5 dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
             >
               <ListingsSearchForm
                 q={result.data.q}
@@ -269,6 +280,8 @@ export default async function Home({
                 hasImageMatch={result.data.isImageSearch}
                 categories={result.data.categories}
                 chips={result.data.chips}
+                totalCount={result.data.totalCount}
+                showCounts={result.data.showCounts}
                 experiences={result.data.experiences}
               />
             </div>

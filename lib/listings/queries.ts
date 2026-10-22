@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { isVerifiedBusiness } from "@/lib/business/verify-listing";
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
-import { POPULAR_MIN_VIEWS, TRENDING_MIN_VIEWS, type ShowFilter } from "./badges";
+import { ENDS_SOON_WITHIN_DAYS, NEW_WITHIN_DAYS, POPULAR_MIN_VIEWS, TRENDING_MIN_VIEWS, type ShowFilter } from "./badges";
 import { notExpired } from "./expiry";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
@@ -10,6 +10,27 @@ export const PAGE_SIZE = 12;
 
 // The date visitors see and the newest-first order (see the schema comment).
 const publishedAtSql = sql<Date>`coalesce(${listings.publishedAt}, ${listings.createdAt})`;
+
+// Same windows as the New and "Ends in …" card badges (lib/listings/badges.ts).
+const newSql = sql`${publishedAtSql} >= now() - make_interval(days => ${NEW_WITHIN_DAYS}::int)`;
+const endingSoonSql = sql`${listings.expiresAt} is not null and ${listings.expiresAt} <= (now() at time zone 'Asia/Singapore')::date + ${ENDS_SOON_WITHIN_DAYS}::int`;
+
+/** How many current listings each homepage "Browse" pill would show. */
+export async function getShowCounts(): Promise<Record<ShowFilter, number>> {
+  const n = (cond: SQL) => sql<number>`count(*) filter (where ${cond})::int`;
+  const [row] = await db
+    .select({
+      trending: n(and(gte(listings.viewCount, TRENDING_MIN_VIEWS), lt(listings.viewCount, POPULAR_MIN_VIEWS))!),
+      popular: n(gte(listings.viewCount, POPULAR_MIN_VIEWS)),
+      new: n(newSql),
+      ending: n(endingSoonSql),
+      verified: n(sql`${verifiedBusinessSql}`),
+      featured: n(eq(listings.homepageFeatured, true)),
+    })
+    .from(listings)
+    .where(and(eq(listings.status, "published"), notExpired));
+  return row;
+}
 
 // Same rule as isVerifiedBusiness (lib/business/verify-listing.ts), in SQL
 // for the listing grids: the saved UEN is the one checked against ACRA, and
@@ -186,6 +207,8 @@ function buildListingsWhere(filter: ListingsFilter): SQL {
     conditions.push(and(gte(listings.viewCount, TRENDING_MIN_VIEWS), lt(listings.viewCount, POPULAR_MIN_VIEWS))!);
   if (filter.show === "popular") conditions.push(gte(listings.viewCount, POPULAR_MIN_VIEWS));
   if (filter.show === "verified") conditions.push(sql`${verifiedBusinessSql}`);
+  if (filter.show === "new") conditions.push(newSql);
+  if (filter.show === "ending") conditions.push(endingSoonSql);
 
   return and(...conditions)!;
 }

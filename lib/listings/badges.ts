@@ -50,11 +50,14 @@ export function endsSoonLabel(expiresAt: string | null): string | null {
 
 /** The homepage "Show" filter (search box): listings carrying a given badge.
  *  Value = the `show` URL parameter. */
+// Order = order of the homepage "Browse" pills. `short` is the pill text.
 export const SHOW_FILTERS = [
-  { value: "featured", label: "Featured" },
-  { value: "trending", label: `Trending (${TRENDING_MIN_VIEWS}+ views)` },
-  { value: "popular", label: `Popular (${POPULAR_MIN_VIEWS.toLocaleString("en-SG")}+ views)` },
-  { value: "verified", label: "Verified business" },
+  { value: "trending", label: `Trending (${TRENDING_MIN_VIEWS}+ views)`, short: "Trending" },
+  { value: "popular", label: `Popular (${POPULAR_MIN_VIEWS.toLocaleString("en-SG")}+ views)`, short: "Popular" },
+  { value: "new", label: `New (last ${NEW_WITHIN_DAYS} days)`, short: "New" },
+  { value: "ending", label: `Ending soon (${ENDS_SOON_WITHIN_DAYS} days)`, short: "Ending soon" },
+  { value: "verified", label: "Verified business", short: "Verified" },
+  { value: "featured", label: "Featured", short: "Featured" },
 ] as const;
 
 export type ShowFilter = (typeof SHOW_FILTERS)[number]["value"];
