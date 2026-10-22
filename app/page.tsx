@@ -268,8 +268,9 @@ export default async function Home({
           <>
             <div
               id="search"
-              // Lifts and glows while the visitor is using it.
-              className="scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg transition-[box-shadow,transform,border-color] duration-300 focus-within:border-brand-teal/50 focus-within:shadow-xl focus-within:shadow-brand-teal/15 motion-safe:focus-within:-translate-y-0.5 dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
+              // The white search card itself is drawn by ListingsSearchForm, so
+              // the category pills can sit just outside it.
+              className="scroll-mt-4"
             >
               <ListingsSearchForm
                 q={result.data.q}

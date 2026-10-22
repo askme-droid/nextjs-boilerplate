@@ -253,7 +253,9 @@ export function ListingsSearchForm({
   const liveSearching = isPending && pendingKind === "live";
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+    {/* The search card: lifts and glows while the visitor is using it. */}
+    <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg transition-[box-shadow,transform,border-color] duration-300 focus-within:border-brand-teal/50 focus-within:shadow-xl focus-within:shadow-brand-teal/15 motion-safe:focus-within:-translate-y-0.5 dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
       {/* A GET form: submitting re-navigates to "/" with these fields as the
           full search params (any not listed here, like `page`, are dropped —
           a new search should start back on page 1). Works with JS disabled. */}
@@ -389,9 +391,11 @@ export function ListingsSearchForm({
         </Link>
       )}
 
-      {/* Categories sit last, at the bottom of the search card. */}
+    </div>
+
+      {/* Categories sit just below the search card, outside it. */}
       {chips.length > 0 && (
-        <div role="group" aria-label="Quick category filter" className="relative border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <div role="group" aria-label="Quick category filter" className="relative">
           {/* One swipeable row on phones, wrapping on wider screens. */}
           <div
             ref={chipRow}
@@ -416,7 +420,7 @@ export function ListingsSearchForm({
           </div>
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent sm:hidden dark:from-zinc-900"
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent sm:hidden"
           />
         </div>
       )}
