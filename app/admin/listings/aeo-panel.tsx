@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { suggestAeoFields } from "./aeo-actions";
 import {
   AUDIENCE_MAX,
   KEY_POINT_MAX,
@@ -160,6 +161,76 @@ export function AeoPanel({
         ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
         : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
 
+  // "Suggest from listing": drafts the empty boxes from the listing's title and
+  // description. Never overwrites what staff already typed.
+  const [suggesting, startSuggest] = useTransition();
+  const [suggestNote, setSuggestNote] = useState<{ ok: boolean; text: string } | null>(null);
+  function suggest() {
+    const formEl = (ref.current?.closest("form") ?? document.getElementById("listing-form")) as HTMLFormElement | null;
+    const data = formEl ? new FormData(formEl) : new FormData();
+    const get = (n: string) => String(data.get(n) ?? "");
+    const categorySelect = formEl?.elements.namedItem("category_id");
+    const category =
+      categorySelect instanceof HTMLSelectElement && categorySelect.value
+        ? (categorySelect.selectedOptions[0]?.textContent ?? "")
+        : "";
+    startSuggest(async () => {
+      setSuggestNote(null);
+      try {
+        const res = await suggestAeoFields({
+          title: get("title"),
+          description: get("description"),
+          location: get("location"),
+          companyName: get("company_name"),
+          category,
+          expiresAt: get("expires_at"),
+          ctaLabel: get("cta_label"),
+          ctaUrl: get("cta_url"),
+        });
+        if (!res.suggestion) {
+          setSuggestNote({ ok: false, text: res.error ?? "Couldn't make a suggestion." });
+          return;
+        }
+        const sug = res.suggestion;
+        const filled: string[] = [];
+        if (!quickAnswer.trim() && sug.quickSummary) {
+          setQuickAnswer(sug.quickSummary);
+          filled.push("quick summary");
+        }
+        if (!audience.trim() && sug.audience) {
+          setAudience(sug.audience);
+          filled.push("who it's for");
+        }
+        if (points.every((p) => !p.trim()) && sug.keyPoints.length > 0) {
+          setPoints(sug.keyPoints);
+          filled.push("key points");
+        }
+        if (!offerDiscount.trim() && sug.offerDiscount) {
+          setOfferDiscount(sug.offerDiscount);
+          filled.push("discount");
+        }
+        if (!offerPrice.trim() && sug.offerPrice) {
+          setOfferPrice(sug.offerPrice);
+          filled.push("price");
+        }
+        if (!redemption.trim() && sug.redemption) {
+          setRedemption(sug.redemption);
+          filled.push("how to redeem");
+        }
+        setSuggestNote(
+          filled.length === 0
+            ? { ok: false, text: "Nothing new to add — every box already has text (clear one to get a suggestion for it)." }
+            : {
+                ok: true,
+                text: `Filled in ${filled.join(", ")}${sug.source === "basic" ? " (picked from the description)" : ""}. Check and edit, then Save — nothing is saved yet.`,
+              },
+        );
+      } catch {
+        setSuggestNote({ ok: false, text: "Couldn't make a suggestion. Try again." });
+      }
+    });
+  }
+
   const updateFaq = (i: number, patch: Partial<Faq>) =>
     setFaqs((list) => list.map((f, j) => (j === i ? { ...f, ...patch } : f)));
 
@@ -173,6 +244,29 @@ export function AeoPanel({
         Helps Google&apos;s AI answers, ChatGPT, Perplexity and voice assistants quote this listing correctly. Everything
         here is shown on the listing page and marked up for them.
       </p>
+
+      <div className="flex flex-col gap-1.5">
+        <button
+          type="button"
+          onClick={suggest}
+          disabled={suggesting}
+          className="w-fit rounded-md border border-brand-teal px-3 py-1.5 text-sm font-medium text-brand-teal hover:bg-brand-teal/10 disabled:opacity-60"
+        >
+          {suggesting ? "Drafting…" : "✨ Suggest from listing"}
+        </button>
+        <span className={hintClass}>
+          Drafts the empty boxes below from the listing&apos;s title and description. Boxes you&apos;ve already filled are
+          left alone.
+        </span>
+        {suggestNote && (
+          <p
+            role="status"
+            className={`text-sm ${suggestNote.ok ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
+          >
+            {suggestNote.text}
+          </p>
+        )}
+      </div>
 
       <label className="text-sm font-medium">
         Listing quick summary
