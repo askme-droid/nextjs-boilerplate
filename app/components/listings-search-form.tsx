@@ -374,8 +374,24 @@ export function ListingsSearchForm({
         <BrowsePills value={values.show} counts={showCounts} onPick={(v) => changeChoice("show", v)} />
       </div>
 
+      {showSearchingCard && <SearchingCard subtitle="Looking through the listings…" />}
+
+      {totalCount !== undefined && !hasImageMatch && (
+        <ResultSummary total={totalCount} filters={activeFilters} onRemove={(key) => clearOne(key as keyof Filters)} />
+      )}
+
+      {hasFilters && (
+        <Link
+          href="/"
+          className="w-fit text-sm text-brand-teal underline-offset-4 hover:underline"
+        >
+          Clear all
+        </Link>
+      )}
+
+      {/* Categories sit last, at the bottom of the search card. */}
       {chips.length > 0 && (
-        <div role="group" aria-label="Quick category filter" className="relative">
+        <div role="group" aria-label="Quick category filter" className="relative border-t border-zinc-100 pt-3 dark:border-zinc-800">
           {/* One swipeable row on phones, wrapping on wider screens. */}
           <div
             ref={chipRow}
@@ -403,21 +419,6 @@ export function ListingsSearchForm({
             className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent sm:hidden dark:from-zinc-900"
           />
         </div>
-      )}
-
-      {showSearchingCard && <SearchingCard subtitle="Looking through the listings…" />}
-
-      {totalCount !== undefined && !hasImageMatch && (
-        <ResultSummary total={totalCount} filters={activeFilters} onRemove={(key) => clearOne(key as keyof Filters)} />
-      )}
-
-      {hasFilters && (
-        <Link
-          href="/"
-          className="w-fit text-sm text-brand-teal underline-offset-4 hover:underline"
-        >
-          Clear all
-        </Link>
       )}
     </div>
   );
