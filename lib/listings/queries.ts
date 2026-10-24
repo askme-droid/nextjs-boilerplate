@@ -403,6 +403,7 @@ export type FeaturedVideoSlide = {
   /** Set when the client asked for a redirect to their own page. */
   redirectUrl: string | null;
   categoryName: string | null;
+  location: string | null;
   /** "video" plays the clip; "image" shows an image or animated GIF. */
   kind: "video" | "image";
   /** The clip (kind "video") or the slide image/GIF (kind "image"). */
@@ -427,6 +428,7 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
       externalUrl: listings.externalUrl,
       redirectUrl: listings.redirectUrl,
       categoryName: categories.name,
+      location: listings.location,
       videoUrl: listings.featuredVideoUrl,
       slideImageUrl: listings.featuredSlideImageUrl,
       // Same photo choice as pickListingImage: the flagged one, else the first
