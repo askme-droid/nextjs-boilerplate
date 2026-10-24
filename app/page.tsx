@@ -9,6 +9,7 @@ import type { CategoryChip } from "@/app/components/listings-search-form";
 import { getCategoriesWithCounts } from "@/lib/categories/queries";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
+import { PromoBanner } from "@/app/components/promo-banner";
 import { getActiveHeroSlides } from "@/lib/hero/queries";
 import { parseShowFilter, type ShowFilter } from "@/lib/listings/badges";
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
@@ -251,6 +252,8 @@ export default async function Home({
     <main className="flex flex-1 flex-col">
       <JsonLd data={siteJsonLd} />
       <HeroSection slides={heroSlides} />
+
+      <PromoBanner />
 
       {result.ok && <FeaturedVideoSlider slides={result.data.featured} />}
 
