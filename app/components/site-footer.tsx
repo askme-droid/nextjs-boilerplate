@@ -9,8 +9,8 @@ const socialLinkClass = "text-zinc-300 transition-colors hover:text-brand-teal";
 /**
  * Three-column footer modeled on digital.fd.sg's own: logo, an About Us
  * blurb + social links, and a Guides link list — plus a copyright bar.
- * Always dark (#18181b) with light text, whatever the site theme. The logo
- * sits on a white tile, since its tagline is dark lettering.
+ * Always dark (#18181b) with light text, whatever the site theme. The logo is
+ * the transparent footer version (public/logo-footer.png).
  */
 export function SiteFooter() {
   const year = new Date().getFullYear();
@@ -19,15 +19,14 @@ export function SiteFooter() {
     <footer className="bg-[#18181b] text-zinc-300">
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-6 py-10 sm:grid-cols-3">
         <div>
-          <div className="inline-block rounded-lg bg-white px-3 py-2">
+          {/* Footer version of the logo (transparent background), as on fd.sg. */}
           <Image
-            src="/logo.png"
-            alt="FDSG"
+            src="/logo-footer.png"
+            alt="FDSG — Fly Further with Targeted Distribution"
             width={216}
             height={86}
-            className="h-10 w-auto"
+            className="h-16 w-auto"
           />
-          </div>
         </div>
 
         <div className="flex flex-col gap-3">
