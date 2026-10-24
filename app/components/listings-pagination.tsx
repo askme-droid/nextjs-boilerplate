@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-type FilterParams = { q: string; category: string; location: string; experience: string };
+type FilterParams = { q: string; category: string; location: string; experience: string; show: string };
 
 function pageHref(params: FilterParams, page: number) {
   const search = new URLSearchParams();
@@ -8,6 +8,7 @@ function pageHref(params: FilterParams, page: number) {
   if (params.category) search.set("category", params.category);
   if (params.location) search.set("location", params.location);
   if (params.experience) search.set("experience", params.experience);
+  if (params.show) search.set("show", params.show);
   if (page > 1) search.set("page", String(page));
   const qs = search.toString();
   return qs ? `/?${qs}` : "/";
@@ -25,13 +26,14 @@ export function ListingsPagination({
   category,
   location,
   experience,
+  show,
 }: FilterParams & {
   page: number;
   totalPages: number;
 }) {
   if (totalPages <= 1) return null;
 
-  const params = { q, category, location, experience };
+  const params = { q, category, location, experience, show };
 
   return (
     <nav

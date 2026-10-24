@@ -14,7 +14,15 @@ import {
 } from "./geometry";
 import { canvasToCmyk, CMYK_CONDITION, loadCmykEngine, type CmykEngine } from "./cmyk";
 
-export type BleedMode = "mirror" | "stretch";
+export type BleedMode = "mirror" | "stretch" | "color";
+
+/** "#1a9fb0" / "1A9FB0" / "#19b" → "#1a9fb0"; null if it isn't a hex colour. */
+export function normalizeHexColor(input: string): string | null {
+  const v = input.trim().replace(/^#/, "").toLowerCase();
+  if (/^[0-9a-f]{3}$/.test(v)) return `#${v.split("").map((c) => c + c).join("")}`;
+  if (/^[0-9a-f]{6}$/.test(v)) return `#${v}`;
+  return null;
+}
 
 /** The flyer to print: the uploaded image, or its AI-enhanced version. */
 export type PrintSource = ImageBitmap | HTMLCanvasElement;
@@ -23,6 +31,8 @@ export type RenderOptions = {
   plan: PrintPlan;
   fit: FitMode;
   bleedMode: BleedMode;
+  /** The fill for bleedMode "color", as "#rrggbb". */
+  bleedColor?: string;
   title: string;
   /** A finished trim-sized canvas (a PDF page drawn at exactly 300 dpi). When
    *  given, the source is not resized at all and is only used for its shape. */
@@ -131,13 +141,21 @@ async function buildTrim(bitmap: PrintSource, plan: PrintPlan, fit: FitMode, onS
 }
 
 /** The trim area plus bleed on every side, made by extending the edges. */
-function buildBleed(trim: HTMLCanvasElement, plan: PrintPlan, mode: BleedMode) {
+function buildBleed(trim: HTMLCanvasElement, plan: PrintPlan, mode: BleedMode, color = "#ffffff") {
   const { trimW: w, trimH: h, bleed: b } = plan;
   if (b === 0) return trim;
 
   const out = createCanvas(w + 2 * b, h + 2 * b);
   const ctx = context(out);
   ctx.imageSmoothingEnabled = false;
+
+  // "Color": one solid colour all round (e.g. the flyer's background colour).
+  if (mode === "color") {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(trim, b, b);
+    return out;
+  }
 
   // Nine tiles: the trim itself in the middle, four edge strips and four
   // corners around it. -1 = before the trim, 0 = along it, 1 = after it.
@@ -399,13 +417,13 @@ export async function renderPrintFiles(
   options: RenderOptions,
   onStage: Stage,
 ): Promise<RenderResult> {
-  const { plan, fit, bleedMode, title } = options;
+  const { plan, fit, bleedMode, bleedColor, title } = options;
 
   const trim = options.trim ?? (await buildTrim(bitmap, plan, fit, onStage));
 
   onStage(plan.bleed > 0 ? "Adding bleed…" : "Preparing the page…");
   await nextFrame();
-  const art = buildBleed(trim, plan, bleedMode);
+  const art = buildBleed(trim, plan, bleedMode, bleedColor);
   if (art !== trim) release(trim);
 
   const page = buildPage(art, plan);

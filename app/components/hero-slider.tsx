@@ -7,6 +7,8 @@ import { useState } from "react";
 export type HeroSlide = {
   src: string;
   alt: string;
+  /** Optional: where clicking the flyer goes. */
+  href?: string | null;
 };
 
 /**
@@ -42,22 +44,48 @@ export function HeroSlider({ slides }: { slides: HeroSlide[] }) {
           const isCopy = i >= slides.length;
           return (
             <li
-              key={`${slide.src}-${isCopy ? "copy" : "orig"}`}
+              key={`${i}-${slide.src}`}
               aria-hidden={isCopy}
               className={`mr-4 shrink-0 ${isCopy ? "motion-reduce:hidden" : ""}`}
             >
-              <div className="relative h-72 w-[205px] overflow-hidden rounded-xl bg-muted shadow-md lg:h-[22rem] lg:w-[251px]">
-                <Image
-                  src={slide.src}
-                  alt={isCopy ? "" : slide.alt}
-                  fill
-                  sizes="(min-width: 1024px) 251px, 205px"
-                  // Eager even off-screen: cards slide in from beyond the clip
-                  // edge, and a lazy one would pop in blank as it arrives.
-                  loading="eager"
-                  className="object-cover"
-                />
-              </div>
+              {slide.href ? (
+                <a
+                  href={slide.href}
+                  tabIndex={isCopy ? -1 : undefined}
+                  {...(/^https?:/.test(slide.href) ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                  className="block"
+                >
+                <div className="relative h-72 w-[205px] overflow-hidden rounded-xl bg-muted shadow-md lg:h-[22rem] lg:w-[251px]">
+                  <Image
+                    src={slide.src}
+                    alt={isCopy ? "" : slide.alt}
+                    fill
+                    sizes="(min-width: 1024px) 251px, 205px"
+                    // Managed at /admin/hero: any address, so not optimised.
+                    unoptimized
+                    // Eager even off-screen: cards slide in from beyond the clip
+                    // edge, and a lazy one would pop in blank as it arrives.
+                    loading="eager"
+                    className="object-cover"
+                  />
+                </div>
+                </a>
+              ) : (
+                <div className="relative h-72 w-[205px] overflow-hidden rounded-xl bg-muted shadow-md lg:h-[22rem] lg:w-[251px]">
+                  <Image
+                    src={slide.src}
+                    alt={isCopy ? "" : slide.alt}
+                    fill
+                    sizes="(min-width: 1024px) 251px, 205px"
+                    // Managed at /admin/hero: any address, so not optimised.
+                    unoptimized
+                    // Eager even off-screen: cards slide in from beyond the clip
+                    // edge, and a lazy one would pop in blank as it arrives.
+                    loading="eager"
+                    className="object-cover"
+                  />
+                </div>
+              )}
             </li>
           );
         })}

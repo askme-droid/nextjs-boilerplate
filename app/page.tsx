@@ -1,4 +1,6 @@
 import type { HeroSlide } from "@/app/components/hero-slider";
+import { JsonLd } from "@/lib/seo/json-ld";
+import { SITE_NAME, SITE_URL } from "@/lib/seo/listing-seo";
 import { FeaturedVideoSlider } from "@/app/components/featured-video-slider";
 import { HeroSection } from "@/components/blocks/hero-section-6";
 import { ListingCard } from "@/app/components/listing-card";
@@ -7,6 +9,9 @@ import type { CategoryChip } from "@/app/components/listings-search-form";
 import { getCategoriesWithCounts } from "@/lib/categories/queries";
 import { ListingsPagination } from "@/app/components/listings-pagination";
 import { ListingsSearchForm } from "@/app/components/listings-search-form";
+import { PromoBanner } from "@/app/components/promo-banner";
+import { getActiveHeroSlides } from "@/lib/hero/queries";
+import { parseShowFilter, type ShowFilter } from "@/lib/listings/badges";
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { getExperienceTags, type ListingTag } from "@/lib/experience-tags/queries";
 import {
@@ -14,6 +19,7 @@ import {
   getFeaturedVideos,
   getListings,
   getListingsByIds,
+  getShowCounts,
   type FeaturedVideoSlide,
   type ListingCategory,
   type ListingWithRelations,
@@ -21,7 +27,9 @@ import {
 
 // Promo banners for the homepage hero slider — swap these out (or wire up
 // an admin-managed source later) whenever the current promotions change.
-const HERO_SLIDES: HeroSlide[] = [
+// Fallback if the slides can't be loaded (the managed list lives at
+// /admin/hero, table hero_slides — seeded with these same flyers).
+const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
     src: "/hero/overly-cheezy-pizza.jpg",
     alt: "Overly Cheezy Pizza — 1-for-1 regular pizzas at $25.90 and large pizzas at $33.90, plus 10% off your first online order",
@@ -52,6 +60,15 @@ const HERO_SLIDES: HeroSlide[] = [
   },
 ];
 
+async function loadHeroSlides(): Promise<HeroSlide[]> {
+  try {
+    const rows = await getActiveHeroSlides();
+    return rows.map((r) => ({ src: r.imageUrl, alt: r.altText, href: r.linkUrl }));
+  } catch {
+    return DEFAULT_HERO_SLIDES;
+  }
+}
+
 function firstValue(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? "";
 }
@@ -61,6 +78,8 @@ type PageData = {
   category: string;
   location: string;
   experience: string;
+  /** Badge filter ("Show" dropdown); "" = all listings. */
+  show: string;
   isImageSearch: boolean;
   categories: ListingCategory[];
   /** Quick-filter pills: categories that have something to show. */
@@ -72,6 +91,10 @@ type PageData = {
   featured: FeaturedVideoSlide[];
   page: number;
   totalPages: number;
+  /** Listings matching the current search (all pages). */
+  totalCount: number;
+  /** How many listings each "Browse" pill would show; null if unavailable. */
+  showCounts: Record<ShowFilter, number> | null;
 };
 
 /** Categories with at least one published listing, fullest first. */
@@ -90,11 +113,12 @@ async function loadPageData(
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
   try {
-    const [categories, experiences, chips] = await Promise.all([
+    const [categories, experiences, chips, showCounts] = await Promise.all([
       getCategories(),
       getExperienceTags(),
       // Decorative extra, like the slider: if it fails the pills just go away.
       getCategoryChips().catch((): CategoryChip[] => []),
+      getShowCounts().catch(() => null),
     ]);
 
     // "Search by image" (see app/components/image-search-button.tsx) is its
@@ -112,6 +136,7 @@ async function loadPageData(
           category: "",
           location: "",
           experience: "",
+          show: "",
           isImageSearch: true,
           categories,
           chips,
@@ -120,6 +145,8 @@ async function loadPageData(
           featured: [],
           page: 1,
           totalPages: 1,
+          totalCount: listings.length,
+          showCounts,
         },
       };
     }
@@ -128,6 +155,7 @@ async function loadPageData(
     const requestedCategory = firstValue(params.category).trim();
     const location = firstValue(params.location).trim();
     const requestedExperience = firstValue(params.experience).trim();
+    const show = parseShowFilter(firstValue(params.show).trim());
 
     // Validate both slugs against real rows rather than passing an arbitrary
     // URL value into an inner-join/subquery filter: an unknown slug would
@@ -139,10 +167,10 @@ async function loadPageData(
       ? requestedExperience
       : "";
 
-    const isDefaultView = !q && !category && !location && !experience && page === 1;
+    const isDefaultView = !q && !category && !location && !experience && !show && page === 1;
 
-    const [{ listings, page: currentPage, totalPages }, featured] = await Promise.all([
-      getListings({ q, category, location, experience, page }),
+    const [{ listings, page: currentPage, totalPages, totalCount }, featured] = await Promise.all([
+      getListings({ q, category, location, experience, show, page }),
       // Decorative extra: a failure here must not take the whole page down
       // into the error state, so it degrades to "no featured section".
       isDefaultView ? getFeaturedVideos(FEATURED_SLOTS).catch(() => []) : Promise.resolve([]),
@@ -155,6 +183,7 @@ async function loadPageData(
         category,
         location,
         experience,
+        show,
         isImageSearch: false,
         categories,
         chips,
@@ -163,6 +192,8 @@ async function loadPageData(
         featured,
         page: currentPage,
         totalPages,
+        totalCount,
+        showCounts,
       },
     };
   } catch (e) {
@@ -170,25 +201,59 @@ async function loadPageData(
   }
 }
 
+/** Site-wide identity for search engines and AI assistants: who runs FDSG
+ *  and how to search it. Listing pages reference the WebSite by its @id. */
+const siteJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: SITE_NAME,
+      description: "Flyer deals, e-vouchers and promotions from local Singapore businesses.",
+      inLanguage: "en-SG",
+      publisher: { "@id": `${SITE_URL}/#organization` },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/?q={search_term_string}` },
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: `${SITE_URL}/logo.png`,
+      sameAs: ["https://www.facebook.com/FDSGDeals", "https://www.instagram.com/fdsgdeals/", "https://fd.sg"],
+    },
+  ],
+};
+
 export default async function Home({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
-  const result = await loadPageData(params);
+  const [result, heroSlides] = await Promise.all([loadPageData(params), loadHeroSlides()]);
   const gridKey = [
     firstValue(params.q),
     firstValue(params.category),
     firstValue(params.location),
     firstValue(params.experience),
+    firstValue(params.show),
     firstValue(params.imageMatch),
     firstValue(params.page),
   ].join("|");
 
   return (
     <main className="flex flex-1 flex-col">
-      <HeroSection slides={HERO_SLIDES} />
+      <JsonLd data={siteJsonLd} />
+      <HeroSection slides={heroSlides} />
+
+      <PromoBanner />
 
       {result.ok && <FeaturedVideoSlider slides={result.data.featured} />}
 
@@ -206,16 +271,21 @@ export default async function Home({
           <>
             <div
               id="search"
-              className="scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
+              // The white search card itself is drawn by ListingsSearchForm, so
+              // the category pills can sit just outside it.
+              className="scroll-mt-4"
             >
               <ListingsSearchForm
                 q={result.data.q}
                 category={result.data.category}
                 location={result.data.location}
                 experience={result.data.experience}
+                show={result.data.show}
                 hasImageMatch={result.data.isImageSearch}
                 categories={result.data.categories}
                 chips={result.data.chips}
+                totalCount={result.data.totalCount}
+                showCounts={result.data.showCounts}
                 experiences={result.data.experiences}
               />
             </div>
@@ -233,7 +303,8 @@ export default async function Home({
                   : result.data.q ||
                       result.data.category ||
                       result.data.location ||
-                      result.data.experience
+                      result.data.experience ||
+                      result.data.show
                     ? "No listings match your search."
                     : "No listings have been published yet."}
               </p>
@@ -261,6 +332,7 @@ export default async function Home({
                 category={result.data.category}
                 location={result.data.location}
                 experience={result.data.experience}
+                show={result.data.show}
               />
             )}
           </>

@@ -1,0 +1,1 @@
+ALTER TABLE "listings" ADD COLUMN "published_date_locked" boolean DEFAULT false NOT NULL;

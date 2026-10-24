@@ -2,6 +2,8 @@ import {
   boolean,
   date,
   integer,
+  jsonb,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -61,6 +63,11 @@ export const listings = pgTable("listings", {
   // from /admin/listings/featured). The slider is video-only, so a picked
   // listing without one is simply not shown.
   featuredVideoUrl: text("featured_video_url"),
+  // Alternative to the video: an image or animated GIF for the homepage
+  // slider (R2 URL, uploaded from /admin/listings/featured). A slide has one
+  // or the other — setting one clears the other. Not to be confused with
+  // featured_image_url, the listing's own photo.
+  featuredSlideImageUrl: text("featured_slide_image_url"),
   // Set only for listings syndicated from elsewhere (e.g. fd.sg) that we show
   // in search/browse here but whose actual content stays at the source —
   // the card and the detail route both send visitors there instead of
@@ -72,6 +79,33 @@ export const listings = pgTable("listings", {
   // our own listings: it stays in search, categories and the admin list as
   // normal, but its card links out and its detail page redirects here.
   redirectUrl: text("redirect_url"),
+  // SEO panel (admin listing editor, Yoast-style). All optional: when empty
+  // the page falls back to "<title> | FDSG" and the start of the description.
+  // seo_title is used as the full <title> as-is (no "| FDSG" suffix added),
+  // so the 60-character counter in the editor matches what search shows.
+  // focus_keyword is only for the editor's checks — never output as a tag.
+  seoTitle: text("seo_title"),
+  seoDescription: text("seo_description"),
+  focusKeyword: text("focus_keyword"),
+  // Social share overrides (Open Graph: Facebook, WhatsApp, LinkedIn, X).
+  // Empty = fall back to the SEO title/description and the featured photo.
+  ogTitle: text("og_title"),
+  ogDescription: text("og_description"),
+  ogImageUrl: text("og_image_url"),
+  // AEO/GEO (answer engines and AI assistants; admin editor's "Answer engines"
+  // panel). quick_answer is a 1–2 sentence factual summary shown at the top of
+  // the page; faqs are question/answer pairs shown on the page and marked up
+  // as schema.org FAQPage; the offer fields feed the page and the Offer markup.
+  quickAnswer: text("quick_answer"),
+  faqs: jsonb("faqs").$type<{ q: string; a: string }[]>(),
+  offerPrice: numeric("offer_price", { precision: 10, scale: 2 }),
+  offerDiscount: text("offer_discount"),
+  redemptionInfo: text("redemption_info"),
+  // "Who is this for" (one line, e.g. "Parents of P1–Sec 4 students in Bukit
+  // Batok") and up to 8 short "key points" bullets — both shown on the page
+  // and read by answer engines.
+  audience: text("audience"),
+  keyPoints: jsonb("key_points").$type<string[]>(),
   // Was uuid FK -> profiles.id under Supabase; Better-Auth's user.id is text,
   // so this column's type changed too (see migration plan). ON DELETE
   // behavior is an assumption (SET NULL — a user's historical listings
@@ -79,7 +113,31 @@ export const listings = pgTable("listings", {
   // original listings_created_by_fkey, since that specific cascade was never
   // tested this session.
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  // Null = never expires. Otherwise shown through the end of this date in
+  // Singapore time, then hidden from the public site (lib/listings/expiry.ts).
   expiresAt: date("expires_at"),
+  // How many times the listing page (or its redirect) has been opened by a
+  // visitor, ACADP-style. Bots and link prefetches aren't counted. Staff can
+  // edit it in admin (e.g. to carry over counts from the old WordPress site).
+  viewCount: integer("view_count").notNull().default(0),
+  // Last check of company_uen against ACRA's register (data.gov.sg, see
+  // lib/business/acra.ts). uen_verified_uen is the UEN that was checked, so
+  // changing company_uen afterwards hides the "Verified business" badge until
+  // it's checked again. Status is ACRA's own wording ("Live", "Live Company",
+  // "Struck Off", ...) or "Not found".
+  uenVerifiedUen: text("uen_verified_uen"),
+  uenVerifiedName: text("uen_verified_name"),
+  uenVerifiedStatus: text("uen_verified_status"),
+  uenVerifiedAt: timestamp("uen_verified_at", { withTimezone: true }),
+  // published_at is the date visitors see ("Posted 2 days ago", newest first,
+  // the New badge). Set when the listing is first published; staff can edit
+  // it. For synced listings it's fd.sg's posting date. Null = never published
+  // (code falls back to created_at). created_at stays the moment the entry
+  // was made and never changes.
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  // Set when staff edit the published date, so "Refresh from fd.sg" stops
+  // copying fd.sg's date over it.
+  publishedDateLocked: boolean("published_date_locked").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   // search_vector intentionally dropped: confirmed via exploration that no

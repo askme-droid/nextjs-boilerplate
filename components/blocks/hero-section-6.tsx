@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button"
 
 const highlights = ["Flyer deals", "E-vouchers", "Local promotions"]
 
+// "Search listings by photo" pill. Off while search-by-image is turned off
+// for the Cloudflare move (lib/listings/embeddings.ts IMAGE_SEARCH_ENABLED),
+// so the homepage doesn't advertise a feature that isn't there.
+const SHOW_PHOTO_SEARCH_PILL = false
+
 // Adapted from the 21st.dev "hero-section-6" block. Dropped from the
 // original: its demo <header>/<nav> (the site already has one in the root
 // layout, so keeping it would stack two navbars) and its email signup form
@@ -25,6 +30,7 @@ export function HeroSection({ slides }: { slides: HeroSlide[] }) {
           (and can bleed off the right edge of the screen), not this box. */}
       <div className="relative mx-auto max-w-6xl px-6 py-14 lg:static lg:py-20">
         <div className="relative z-10 mx-auto max-w-xl text-center lg:mx-0 lg:w-[45%] lg:text-left">
+          {SHOW_PHOTO_SEARCH_PILL && (
           <Link
             href="#search"
             className="relative mx-auto flex w-fit items-center gap-2 overflow-hidden rounded-lg border border-border bg-background p-1 pr-3 text-foreground lg:mx-0"
@@ -43,8 +49,9 @@ export function HeroSection({ slides }: { slides: HeroSlide[] }) {
             <span className="block h-4 w-px bg-border" />
             <ArrowRight className="size-4" />
           </Link>
+          )}
 
-          <h1 className="mt-8 text-balance text-4xl font-bold md:text-5xl">
+          <h1 className={SHOW_PHOTO_SEARCH_PILL ? "mt-8 text-balance text-4xl font-bold md:text-5xl" : "text-balance text-4xl font-bold md:text-5xl"}>
             Find great deals near you
           </h1>
           <p className="mx-auto mt-6 max-w-md text-lg lg:mx-0">

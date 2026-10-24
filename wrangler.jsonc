@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The FD.SG directory (directories.fd.sg), built with OpenNext.
+  // Deploy: `npm run deploy`, or Cloudflare Workers Builds on push to main.
+  "name": "fdsg-directory",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Env vars and secrets (DATABASE_URL, BETTER_AUTH_SECRET, R2_*, ...) are set
+  // in the Cloudflare dashboard (Worker -> Settings -> Variables and Secrets);
+  // keep them there instead of letting a deploy wipe dashboard-only vars.
+  "keep_vars": true,
+  "observability": {
+    "enabled": true
+  }
+  // Hyperdrive (connection pooling to Postgres, recommended). Create one in
+  // the dashboard (Storage & databases -> Hyperdrive) pointing at the
+  // database, then uncomment and paste its id. Until then the app connects
+  // with DATABASE_URL directly (see lib/db/client.ts).
+  // ,"hyperdrive": [
+  //   {
+  //     "binding": "HYPERDRIVE",
+  //     "id": "<hyperdrive-config-id>",
+  //     "localConnectionString": "postgresql://user:password@localhost:5432/fdsg"
+  //   }
+  // ]
+}

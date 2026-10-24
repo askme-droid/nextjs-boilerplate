@@ -1,16 +1,32 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { endsSoonLabel, isNewListing } from "@/lib/listings/badges";
+import { endsSoonLabel, isNewListing, isPopularListing, isTrendingListing } from "@/lib/listings/badges";
+import { formatViews } from "@/lib/listings/format-views";
 import { pickListingImage } from "@/lib/listings/image";
 import type { ListingWithRelations } from "@/lib/listings/queries";
 
 export function ListingCard({ listing }: { listing: ListingWithRelations }) {
-  const outboundUrl = listing.external_url ?? listing.redirect_url;
+  // Client-redirected listings go through their own /listings/ page, which
+  // redirects instantly (proxy.ts) and counts the visit as a view. Synced
+  // fd.sg listings link straight to the source.
+  const outboundUrl =
+    // A redirect set by staff wins over the fd.sg source link, so a synced
+    // listing can be pointed at the client's own page too.
+    listing.redirect_url ? `/listings/${listing.slug}` : listing.external_url;
   const imageUrl = pickListingImage(listing);
-  const isNew = isNewListing(listing.created_at);
+  const isNew = isNewListing(listing.published_at);
   const endsSoon = endsSoonLabel(listing.expires_at);
+  // fd.sg-style badges: Popular at 1,000+ views, Featured for listings
+  // picked for the homepage slider.
+  const isPopular = isPopularListing(listing.view_count);
+  // 500–999 views; Popular takes over from 1,000.
+  const isTrending = isTrendingListing(listing.view_count);
+  const isFeatured = listing.homepage_featured;
+  // UEN checked against ACRA's register and the business is live.
+  const isVerified = listing.verified_business;
+  const hasLeftBadges = isNew || isTrending || isPopular || isFeatured || isVerified;
 
   const body = (
     <>
@@ -25,6 +41,9 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
             alt={listing.title}
             fill
             unoptimized
+            // Cards sit below the hero, so each photo loads only as it nears
+            // the screen.
+            loading="lazy"
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
             className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none"
           />
@@ -34,17 +53,45 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
           </div>
         )}
 
-        {(isNew || endsSoon) && (
+        {(hasLeftBadges || endsSoon) && (
           <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-2">
-            {isNew ? (
-              <span className="rounded-full bg-brand-teal px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
-                New
-              </span>
+            {hasLeftBadges ? (
+              <div className="flex flex-wrap gap-1.5">
+                {isNew && (
+                  <span className="rounded-full bg-brand-teal px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
+                    New
+                  </span>
+                )}
+                {isTrending && (
+                  <span className="rounded-full bg-rose-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm">
+                    Trending
+                  </span>
+                )}
+                {isPopular && (
+                  <span className="rounded-full bg-emerald-700 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm">
+                    Popular
+                  </span>
+                )}
+                {isFeatured && (
+                  <span className="rounded-full bg-brand-orange px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
+                    Featured
+                  </span>
+                )}
+                {isVerified && (
+                  <span
+                    title="Business registration (UEN) checked with ACRA"
+                    className="inline-flex items-center gap-1 rounded-full bg-sky-700 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm"
+                  >
+                    <Check aria-hidden className="size-3.5" strokeWidth={3} />
+                    Verified
+                  </span>
+                )}
+              </div>
             ) : (
               <span />
             )}
             {endsSoon && (
-              <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
+              <span className="shrink-0 whitespace-nowrap rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-sm">
                 {endsSoon}
               </span>
             )}
@@ -85,8 +132,16 @@ export function ListingCard({ listing }: { listing: ListingWithRelations }) {
           </p>
         )}
 
-        <p className="mt-auto pt-1 text-xs text-zinc-400 dark:text-zinc-600">
-          Posted {formatRelativeTime(listing.created_at)}
+        <p className="mt-auto flex flex-wrap gap-x-1.5 pt-1 text-xs text-zinc-400 dark:text-zinc-600">
+          <span>Posted {formatRelativeTime(listing.published_at)}</span>
+          {/* Synced fd.sg listings aren't counted here (clicks go to fd.sg),
+              so only show a count once there is one. */}
+          {(!listing.external_url || listing.view_count > 0) && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{formatViews(listing.view_count)}</span>
+            </>
+          )}
         </p>
       </div>
     </>

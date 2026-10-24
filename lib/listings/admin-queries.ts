@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
+import { categories, experienceTags, listingExperienceTags, listingImages, listings, user } from "@/lib/db/schema";
 import { isStaff } from "@/lib/auth/roles";
 import type { ListingCategory, ListingImage, ListingTag } from "./queries";
 
@@ -26,9 +26,14 @@ export type AdminListingRow = {
   external_url: string | null;
   redirect_url: string | null;
   homepage_featured: boolean;
+  view_count: number;
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
+  /** Who created the listing (name, else email); null if unknown/deleted. */
+  author: string | null;
+  /** When it was (first) published; null if it never has been. Editable. */
+  published_at: string | null;
   updated_at: string;
   categories: ListingCategory | null;
 };
@@ -54,16 +59,21 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
       homepage_featured: listings.homepageFeatured,
+      view_count: listings.viewCount,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: listings.publishedAt,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
       category_slug: categories.slug,
+      author_name: user.name,
+      author_email: user.email,
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .leftJoin(user, eq(listings.createdBy, user.id))
     .where(extra)
     .orderBy(desc(listings.updatedAt));
 
@@ -80,9 +90,12 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
     external_url: r.external_url,
     redirect_url: r.redirect_url,
     homepage_featured: r.homepage_featured,
+    view_count: r.view_count,
     created_by: r.created_by,
     expires_at: r.expires_at,
+    author: r.author_name || r.author_email || null,
     created_at: r.created_at.toISOString(),
+    published_at: r.published_at?.toISOString() ?? null,
     updated_at: r.updated_at.toISOString(),
     categories: r.category_row_id
       ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
@@ -114,8 +127,30 @@ export type AdminListingDetail = AdminListingRow & {
   social_links: string[];
   cta_label: string | null;
   cta_url: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  focus_keyword: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  og_image_url: string | null;
+  uen_verification: UenVerification | null;
+  quick_answer: string | null;
+  faqs: { q: string; a: string }[];
+  offer_price: string | null;
+  offer_discount: string | null;
+  redemption_info: string | null;
+  audience: string | null;
+  key_points: string[];
   listing_images: ListingImage[];
   tagIds: string[];
+};
+
+/** Last ACRA check of the listing's UEN (see lib/business/acra.ts). */
+export type UenVerification = {
+  uen: string;
+  name: string | null;
+  status: string;
+  verified_at: string;
 };
 
 /** One listing by id (any status), with its images and linked tag ids. */
@@ -138,22 +173,44 @@ export async function getAdminListingById(
       social_links: listings.socialLinks,
       cta_label: listings.ctaLabel,
       cta_url: listings.ctaUrl,
+      seo_title: listings.seoTitle,
+      seo_description: listings.seoDescription,
+      focus_keyword: listings.focusKeyword,
+      og_title: listings.ogTitle,
+      og_description: listings.ogDescription,
+      og_image_url: listings.ogImageUrl,
+      quick_answer: listings.quickAnswer,
+      faqs: listings.faqs,
+      offer_price: listings.offerPrice,
+      offer_discount: listings.offerDiscount,
+      redemption_info: listings.redemptionInfo,
+      audience: listings.audience,
+      key_points: listings.keyPoints,
+      uen_verified_uen: listings.uenVerifiedUen,
+      uen_verified_name: listings.uenVerifiedName,
+      uen_verified_status: listings.uenVerifiedStatus,
+      uen_verified_at: listings.uenVerifiedAt,
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
       homepage_featured: listings.homepageFeatured,
+      view_count: listings.viewCount,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: listings.publishedAt,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
       category_slug: categories.slug,
+      author_name: user.name,
+      author_email: user.email,
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .leftJoin(user, eq(listings.createdBy, user.id))
     .where(eq(listings.id, id))
     .limit(1);
 
@@ -190,15 +247,40 @@ export async function getAdminListingById(
     social_links: row.social_links ?? [],
     cta_label: row.cta_label,
     cta_url: row.cta_url,
+    seo_title: row.seo_title,
+    seo_description: row.seo_description,
+    focus_keyword: row.focus_keyword,
+    og_title: row.og_title,
+    og_description: row.og_description,
+    og_image_url: row.og_image_url,
+    quick_answer: row.quick_answer,
+    faqs: row.faqs ?? [],
+    offer_price: row.offer_price,
+    offer_discount: row.offer_discount,
+    redemption_info: row.redemption_info,
+    audience: row.audience,
+    key_points: row.key_points ?? [],
+    uen_verification:
+      row.uen_verified_uen && row.uen_verified_status && row.uen_verified_at
+        ? {
+            uen: row.uen_verified_uen,
+            name: row.uen_verified_name,
+            status: row.uen_verified_status,
+            verified_at: row.uen_verified_at.toISOString(),
+          }
+        : null,
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,
     external_url: row.external_url,
     redirect_url: row.redirect_url,
     homepage_featured: row.homepage_featured,
+    view_count: row.view_count,
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),
+    author: row.author_name || row.author_email || null,
+    published_at: row.published_at?.toISOString() ?? null,
     updated_at: row.updated_at.toISOString(),
     categories: row.category_row_id
       ? { id: row.category_row_id, name: row.category_name!, slug: row.category_slug! }
@@ -222,8 +304,10 @@ export type FeaturedAdminRow = {
   status: string;
   categoryName: string | null;
   imageUrl: string | null;
-  /** The slider clip; the homepage skips a picked listing that has none. */
+  /** The slider clip, or… */
   videoUrl: string | null;
+  /** …an image/GIF slide instead. The homepage skips a picked listing with neither. */
+  slideImageUrl: string | null;
   /** Syndicated from elsewhere (fd.sg etc.) rather than owned here. */
   synced: boolean;
 };
@@ -244,6 +328,7 @@ const featuredAdminSelect = {
   )`,
   externalUrl: listings.externalUrl,
   videoUrl: listings.featuredVideoUrl,
+  slideImageUrl: listings.featuredSlideImageUrl,
 };
 
 function toFeaturedAdminRow(r: {
@@ -254,6 +339,7 @@ function toFeaturedAdminRow(r: {
   imageUrl: string | null;
   externalUrl: string | null;
   videoUrl: string | null;
+  slideImageUrl: string | null;
 }): FeaturedAdminRow {
   return {
     id: r.id,
@@ -262,6 +348,7 @@ function toFeaturedAdminRow(r: {
     categoryName: r.categoryName,
     imageUrl: r.imageUrl,
     videoUrl: r.videoUrl,
+    slideImageUrl: r.slideImageUrl,
     synced: r.externalUrl !== null,
   };
 }

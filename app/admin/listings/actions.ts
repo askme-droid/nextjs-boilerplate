@@ -1,16 +1,30 @@
 "use server";
 
+import { dbErrorMessage, pgErrorCode } from "@/lib/db/errors";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
 import { redirect } from "next/navigation";
-import { put } from "@vercel/blob";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { isStoredFileUrl, makeKey, putFile } from "@/lib/storage/r2";
 import { normalizeHttpUrl, parseContactFields } from "@/lib/listings/contact-fields";
+import { todayInSingapore } from "@/lib/listings/expiry-dates";
+import {
+  AUDIENCE_MAX,
+  parseKeyPoints,
+  OFFER_DISCOUNT_MAX,
+  QUICK_ANSWER_MAX,
+  REDEMPTION_MAX,
+  normalizePrice,
+  parseFaqs,
+} from "@/lib/seo/aeo";
 import { LISTING_STATUSES } from "@/lib/listings/constants";
 import { embedImage, embedImageUrl } from "@/lib/listings/embeddings";
 import { isPlaceholderSlug, slugify } from "@/lib/listings/slug";
+import { FOCUS_KEYWORD_LIMIT, SEO_DESCRIPTION_LIMIT, SEO_TITLE_LIMIT } from "@/lib/seo/listing-seo";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -33,10 +47,32 @@ export type ListingFormValues = {
   cta_url: string;
   /** Client's own landing page; when set, visitors to this listing go there. */
   redirect_url: string;
+  /** SEO panel (see app/admin/listings/seo-panel.tsx). Empty = use fallbacks. */
+  seo_title: string;
+  seo_description: string;
+  focus_keyword: string;
+  /** Social share overrides. Empty = use the SEO title/description and the
+   *  featured photo. og_image_url is a listing photo URL or an uploaded one. */
+  og_title: string;
+  og_description: string;
+  og_image_url: string;
+  /** "Answer engines" panel (AEO/GEO, see lib/seo/aeo.ts). faqs_json is the
+   *  panel's hidden JSON list of {q, a}. */
+  quick_answer: string;
+  faqs_json: string;
+  offer_price: string;
+  offer_discount: string;
+  redemption_info: string;
+  audience: string;
+  key_points_json: string;
   keywords: string;
   description: string;
   status: string;
   expires_at: string;
+  /** Editable view count (string from the number input). */
+  view_count: string;
+  /** Published date (YYYY-MM-DD, Singapore) = published_at; "" if never published. */
+  published_date: string;
   /** Checkbox: "1" when ticked, "" when not (an unticked box isn't sent at all). */
   homepage_featured: string;
 };
@@ -60,10 +96,25 @@ function readValues(formData: FormData): ListingFormValues {
     cta_label: get("cta_label"),
     cta_url: get("cta_url"),
     redirect_url: get("redirect_url"),
+    seo_title: get("seo_title"),
+    seo_description: get("seo_description"),
+    focus_keyword: get("focus_keyword"),
+    og_title: get("og_title"),
+    og_description: get("og_description"),
+    og_image_url: get("og_image_url"),
+    quick_answer: get("quick_answer"),
+    faqs_json: get("faqs_json"),
+    offer_price: get("offer_price"),
+    offer_discount: get("offer_discount"),
+    redemption_info: get("redemption_info"),
+    audience: get("audience"),
+    key_points_json: get("key_points_json"),
     keywords: get("keywords"),
     description: get("description"),
     status: get("status"),
     expires_at: get("expires_at"),
+    view_count: get("view_count") || "0",
+    published_date: get("published_date"),
     homepage_featured: formData.has("homepage_featured") ? "1" : "",
   };
 }
@@ -78,9 +129,6 @@ function isOwnListingUrl(url: string, slug: string): boolean {
 // postgres.js throws a PostgresError whose `code` is the Postgres SQLSTATE —
 // 23505 (unique_violation) / 23503 (foreign_key_violation) — surfaced as-is,
 // not wrapped, so this narrow check is enough to distinguish them.
-function pgErrorCode(e: unknown): string | undefined {
-  return e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : undefined;
-}
 
 /** Creates a listing (no `id` field in formData) or updates one (with `id`). */
 export async function saveListing(
@@ -122,6 +170,72 @@ export async function saveListing(
     }
   }
 
+  // Only write the view count if staff actually changed it, so saving the
+  // form doesn't wipe out views counted while it was open.
+  const viewCountChanged = values.view_count !== String(formData.get("view_count_original") ?? values.view_count);
+  const viewCount = Number(values.view_count);
+  if (viewCountChanged && (!Number.isInteger(viewCount) || viewCount < 0 || viewCount > 2_000_000_000)) {
+    fieldErrors.view_count = "Views must be a whole number, 0 or more.";
+  }
+  // Published date: only written when staff changed it (like the view count),
+  // so saving never shifts it. Today = now; another day = midday that day.
+  const publishedDateChanged =
+    !!values.published_date &&
+    values.published_date !== String(formData.get("published_date_original") ?? values.published_date);
+  let publishedAt: Date | null = null;
+  if (publishedDateChanged) {
+    const valid = /^\d{4}-\d{2}-\d{2}$/.test(values.published_date);
+    publishedAt = !valid
+      ? null
+      : values.published_date === todayInSingapore()
+        ? new Date()
+        : new Date(`${values.published_date}T12:00:00+08:00`);
+    if (!publishedAt || Number.isNaN(publishedAt.getTime())) {
+      fieldErrors.published_date = "Enter a valid published date.";
+    } else if (values.published_date > todayInSingapore()) {
+      fieldErrors.published_date = "The published date can't be in the future.";
+    }
+  }
+  if (values.expires_at && !/^\d{4}-\d{2}-\d{2}$/.test(values.expires_at)) {
+    fieldErrors.expires_at = "Enter a valid expiry date.";
+  }
+
+  // Lengths past the recommended 60/160 are only warned about in the panel;
+  // these hard caps just stop accidental pastes of whole documents.
+  if (values.seo_title.length > SEO_TITLE_LIMIT) fieldErrors.seo_title = `Keep the SEO title under ${SEO_TITLE_LIMIT} characters.`;
+  if (values.seo_description.length > SEO_DESCRIPTION_LIMIT)
+    fieldErrors.seo_description = `Keep the meta description under ${SEO_DESCRIPTION_LIMIT} characters.`;
+  if (values.focus_keyword.length > FOCUS_KEYWORD_LIMIT)
+    fieldErrors.focus_keyword = `Keep the focus keyword under ${FOCUS_KEYWORD_LIMIT} characters.`;
+  if (values.og_title.length > SEO_TITLE_LIMIT) fieldErrors.og_title = `Keep the social title under ${SEO_TITLE_LIMIT} characters.`;
+  if (values.og_description.length > SEO_DESCRIPTION_LIMIT)
+    fieldErrors.og_description = `Keep the social description under ${SEO_DESCRIPTION_LIMIT} characters.`;
+  // Either a file in our own storage (an uploaded social image) or any valid
+  // http(s) image address (a listing photo, which may be hotlinked).
+  const ogImageUrl = values.og_image_url
+    ? isStoredFileUrl(values.og_image_url)
+      ? values.og_image_url
+      : normalizeHttpUrl(values.og_image_url)
+    : null;
+  if (values.og_image_url && !ogImageUrl) fieldErrors.og_image_url = "That social image address isn't valid — pick or upload the image again.";
+
+  // Answer engines panel. Hard caps only; the panel's checks give the advice.
+  const quickAnswer = values.quick_answer.replace(/\s+/g, " ").trim();
+  if (quickAnswer.length > QUICK_ANSWER_MAX + 100)
+    fieldErrors.quick_answer = `Keep the quick answer under ${QUICK_ANSWER_MAX} characters.`;
+  const faqResult = parseFaqs(values.faqs_json);
+  if (faqResult.error) fieldErrors.faqs_json = faqResult.error;
+  const offerPrice = normalizePrice(values.offer_price);
+  if (offerPrice === undefined) fieldErrors.offer_price = "Enter the price as a number, e.g. 25.90";
+  if (values.offer_discount.length > OFFER_DISCOUNT_MAX)
+    fieldErrors.offer_discount = `Keep the discount under ${OFFER_DISCOUNT_MAX} characters.`;
+  if (values.audience.length > AUDIENCE_MAX)
+    fieldErrors.audience = `Keep "who is this for" under ${AUDIENCE_MAX} characters.`;
+  const keyPointResult = parseKeyPoints(values.key_points_json);
+  if (keyPointResult.error) fieldErrors.key_points_json = keyPointResult.error;
+  if (values.redemption_info.length > REDEMPTION_MAX)
+    fieldErrors.redemption_info = `Keep "how to redeem" under ${REDEMPTION_MAX} characters.`;
+
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors, values };
   }
@@ -142,14 +256,38 @@ export async function saveListing(
     ctaLabel: contact.parsed.ctaLabel,
     ctaUrl: contact.parsed.ctaUrl,
     redirectUrl,
+    seoTitle: values.seo_title.replace(/\s+/g, " ").trim() || null,
+    seoDescription: values.seo_description.replace(/\s+/g, " ").trim() || null,
+    focusKeyword: values.focus_keyword.replace(/\s+/g, " ").trim() || null,
+    ogTitle: values.og_title.replace(/\s+/g, " ").trim() || null,
+    ogDescription: values.og_description.replace(/\s+/g, " ").trim() || null,
+    ogImageUrl,
+    quickAnswer: quickAnswer || null,
+    faqs: faqResult.faqs.length > 0 ? faqResult.faqs : null,
+    offerPrice: offerPrice ?? null,
+    offerDiscount: values.offer_discount.replace(/\s+/g, " ").trim() || null,
+    redemptionInfo: values.redemption_info || null,
+    audience: values.audience.replace(/\s+/g, " ").trim() || null,
+    keyPoints: keyPointResult.points.length > 0 ? keyPointResult.points : null,
     keywords,
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
     expiresAt: values.expires_at || null,
-    homepageFeatured: values.homepage_featured === "1",
-    // Unticking drops the listing out of the manual order too; ticking leaves
-    // the stored position alone (the Featured page owns ordering).
-    ...(values.homepage_featured === "1" ? {} : { homepageFeaturedOrder: 0 }),
+    // Set here rather than on every UPDATE: view counting also updates the
+    // row, and that shouldn't count as the listing changing (the sitemap's
+    // lastModified tells search engines when to re-read the page).
+    updatedAt: new Date(),
+    ...(viewCountChanged ? { viewCount } : {}),
+    // Published date: a date staff typed wins; otherwise publishing for the
+    // first time stamps it with now (an existing date is kept).
+    ...(publishedDateChanged && publishedAt
+      ? { publishedAt, publishedDateLocked: true }
+      : status === "published"
+        ? { publishedAt: id ? sql`coalesce(${listings.publishedAt}, now())` : new Date() }
+        : {}),
+    // Homepage featuring isn't set here any more: it's managed only on the
+    // Featured listings page (featured-actions.ts), so saving a listing
+    // leaves homepage_featured and its order untouched.
   };
 
   let listingId: string;
@@ -172,7 +310,7 @@ export async function saveListing(
         values,
       };
     }
-    return { error: e instanceof Error ? e.message : "Could not save listing.", values };
+    return { error: dbErrorMessage(e, "Could not save listing."), values };
   }
 
   // Tag checkboxes only exist (and only send this marker) once the listing
@@ -189,9 +327,22 @@ export async function saveListing(
     }
   }
 
+  // A UEN that hasn't been checked yet is looked up in ACRA's register once
+  // the response is sent (lib/business/verify-listing.ts).
+  const uenToCheck = contact.parsed.companyUen;
+  if (uenToCheck) {
+    const savedId = listingId;
+    after(() => verifyListingBusinessIfChanged(savedId, uenToCheck));
+  }
+
   revalidatePath("/");
   revalidatePath(`/listings/${slug}`);
-  redirect(`/admin/listings/${listingId}/edit?saved=1`);
+  // "Save & preview" button: same save, then the preview page.
+  redirect(
+    formData.get("intent") === "preview"
+      ? `/admin/listings/${listingId}/preview`
+      : `/admin/listings/${listingId}/edit?saved=1`,
+  );
 }
 
 /**
@@ -276,7 +427,11 @@ export async function publishListing(formData: FormData) {
   if (!id) redirect("/admin/listings");
 
   try {
-    await db.update(listings).set({ status: "published" }).where(eq(listings.id, id));
+    await db
+      .update(listings)
+      // First publish stamps the published date; a re-publish keeps it.
+      .set({ status: "published", publishedAt: sql`coalesce(${listings.publishedAt}, now())` })
+      .where(eq(listings.id, id));
   } catch (e) {
     redirect(editUrl(id, e instanceof Error ? e.message : "Could not publish listing."));
   }
@@ -291,9 +446,9 @@ export async function publishListing(formData: FormData) {
   const returnTo = formData.get("returnTo");
   redirect(
     returnTo === "list"
-      ? "/admin/listings?published=1"
+      ? listUrl("/admin/listings", formData, "published=1")
       : returnTo === "synced"
-        ? "/admin/listings/synced?published=1"
+        ? listUrl("/admin/listings/synced", formData, "published=1")
         : `/admin/listings/${id}/edit?saved=1`,
   );
 }
@@ -321,9 +476,18 @@ export async function deleteListing(formData: FormData) {
   if (slug) revalidatePath(`/listings/${slug}`);
   redirect(
     formData.get("returnTo") === "synced"
-      ? "/admin/listings/synced?deleted=1"
-      : "/admin/listings?deleted=1",
+      ? listUrl("/admin/listings/synced", formData, "deleted=1")
+      : listUrl("/admin/listings", formData, "deleted=1"),
   );
+}
+
+/** Back to a list page, keeping its tab/search/filters/page (the `back`
+ *  field the list's row buttons send), plus a message flag. */
+function listUrl(path: string, formData: FormData, flag: string) {
+  const back = new URLSearchParams(String(formData.get("back") ?? ""));
+  for (const key of ["published", "deleted", "error", "refreshed"]) back.delete(key);
+  back.set(flag.split("=")[0], flag.split("=")[1]);
+  return `${path}?${back.toString()}`;
 }
 
 function editUrl(listingId: string, error?: string) {
@@ -332,15 +496,25 @@ function editUrl(listingId: string, error?: string) {
     : `/admin/listings/${listingId}/edit`;
 }
 
-export async function addImage(formData: FormData) {
+/** Image actions return instead of redirecting: the image manager calls
+ *  them in place, so the page isn't reloaded and anything typed or generated
+ *  in the (unsaved) listing form above stays put. */
+export type ImageActionResult = { error?: string };
+
+function imagesChanged(listingId: string): ImageActionResult {
+  revalidatePath(`/admin/listings/${listingId}/edit`);
+  return {};
+}
+
+export async function addImage(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
   const url = String(formData.get("url") ?? "").trim();
   const altText = String(formData.get("altText") ?? "").trim();
 
-  if (!listingId) redirect(editUrl(listingId, "Missing listing."));
-  if (!url) redirect(editUrl(listingId, "Image URL is required."));
+  if (!listingId) return { error: "Missing listing." };
+  if (!url) return { error: "Image URL is required." };
 
   try {
     const existingCount = await db.$count(listingImages, eq(listingImages.listingId, listingId));
@@ -359,48 +533,46 @@ export async function addImage(formData: FormData) {
       embedding,
     });
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not add image."));
+    return { error: e instanceof Error ? e.message : "Could not add image." };
   }
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-/** Uploads one or more image files to Vercel Blob storage and attaches them
+/** Uploads one or more image files to R2 storage (lib/storage/r2.ts) and attaches them
  *  to the listing, in the order they were selected. */
-export async function uploadImages(formData: FormData) {
+export async function uploadImages(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
-  if (!listingId) redirect(editUrl(listingId, "Missing listing."));
+  if (!listingId) return { error: "Missing listing." };
 
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length === 0) redirect(editUrl(listingId, "Choose at least one image to upload."));
+  if (files.length === 0) return { error: "Choose at least one image to upload." };
 
   const invalidType = files.find((f) => !ALLOWED_IMAGE_TYPES.has(f.type));
-  if (invalidType) redirect(editUrl(listingId, `${invalidType.name}: must be PNG, JPEG, WebP, or GIF.`));
+  if (invalidType) return { error: `${invalidType.name}: must be PNG, JPEG, WebP, or GIF.` };
 
   const tooLarge = files.find((f) => f.size > MAX_IMAGE_BYTES);
-  if (tooLarge) redirect(editUrl(listingId, `${tooLarge.name}: must be under 5MB.`));
+  if (tooLarge) return { error: `${tooLarge.name}: must be under 5MB.` };
 
   try {
     let position = await db.$count(listingImages, eq(listingImages.listingId, listingId));
     for (const file of files) {
       // Embedded from the uploaded bytes directly (not re-fetched from the
-      // blob URL afterwards) — best-effort, same as every other embedding
+      // stored URL afterwards) — best-effort, same as every other embedding
       // call site.
-      const [blob, embedding] = await Promise.all([
-        put(`listings/${listingId}/${file.name}`, file, {
-          access: "public",
-          addRandomSuffix: true,
-        }),
-        embedImage(Buffer.from(await file.arrayBuffer())),
+      const bytes = await file.arrayBuffer();
+      const [url, embedding] = await Promise.all([
+        putFile(makeKey(`listings/${listingId}`, file.name), bytes, file.type),
+        embedImage(Buffer.from(bytes)),
       ]);
       await db.insert(listingImages).values({
         listingId,
-        url: blob.url,
+        url,
         altText: null,
         position,
         // Auto-feature the first image a listing gets, so it isn't imageless
@@ -411,16 +583,16 @@ export async function uploadImages(formData: FormData) {
       position += 1;
     }
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not upload images."));
+    return { error: e instanceof Error ? e.message : "Could not upload images." };
   }
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-export async function deleteImage(formData: FormData) {
+export async function deleteImage(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
@@ -429,16 +601,16 @@ export async function deleteImage(formData: FormData) {
   try {
     await db.delete(listingImages).where(eq(listingImages.id, imageId));
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not delete image."));
+    return { error: e instanceof Error ? e.message : "Could not delete image." };
   }
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-export async function setFeaturedImage(formData: FormData) {
+export async function setFeaturedImage(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
@@ -448,16 +620,16 @@ export async function setFeaturedImage(formData: FormData) {
     await db.update(listingImages).set({ isFeatured: false }).where(eq(listingImages.listingId, listingId));
     await db.update(listingImages).set({ isFeatured: true }).where(eq(listingImages.id, imageId));
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not set featured image."));
+    return { error: e instanceof Error ? e.message : "Could not set featured image." };
   }
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-export async function updateImageAltText(formData: FormData) {
+export async function updateImageAltText(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
@@ -467,15 +639,15 @@ export async function updateImageAltText(formData: FormData) {
   try {
     await db.update(listingImages).set({ altText: altText || null }).where(eq(listingImages.id, imageId));
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not update alt text."));
+    return { error: e instanceof Error ? e.message : "Could not update alt text." };
   }
 
   const slug = await getListingSlug(listingId);
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
 }
 
-export async function moveImage(formData: FormData) {
+export async function moveImage(formData: FormData): Promise<ImageActionResult> {
   await requireStaff();
 
   const listingId = String(formData.get("listingId") ?? "");
@@ -492,7 +664,7 @@ export async function moveImage(formData: FormData) {
   const swapWith = direction === "up" ? index - 1 : index + 1;
 
   if (index === -1 || swapWith < 0 || swapWith >= images.length) {
-    redirect(editUrl(listingId));
+    return imagesChanged(listingId);
   }
 
   const a = images[index];
@@ -502,10 +674,32 @@ export async function moveImage(formData: FormData) {
     await db.update(listingImages).set({ position: b.position }).where(eq(listingImages.id, a.id));
     await db.update(listingImages).set({ position: a.position }).where(eq(listingImages.id, b.id));
   } catch (e) {
-    redirect(editUrl(listingId, e instanceof Error ? e.message : "Could not reorder images."));
+    return { error: e instanceof Error ? e.message : "Could not reorder images." };
   }
 
   const slug = await getListingSlug(listingId);
   if (slug) revalidatePath(`/listings/${slug}`);
-  redirect(editUrl(listingId));
+  return imagesChanged(listingId);
+}
+
+/**
+ * Uploads a dedicated social share image (not added to the listing's photo
+ * gallery) and returns its URL; the SEO panel puts it in og_image_url, which
+ * is saved with the rest of the form. Called directly from the panel, not as
+ * a form action, since it lives inside the main listing form.
+ */
+export async function uploadSocialImage(formData: FormData): Promise<{ url?: string; error?: string }> {
+  await requireStaff();
+  const listingId = String(formData.get("listingId") ?? "");
+  const file = formData.get("file");
+  if (!/^[0-9a-f-]{36}$/i.test(listingId)) return { error: "Save the listing first, then add a social image." };
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose an image." };
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) return { error: "The image must be PNG, JPEG, WebP or GIF." };
+  if (file.size > MAX_IMAGE_BYTES) return { error: "The image must be under 5MB." };
+  try {
+    const url = await putFile(makeKey(`social/${listingId}`, file.name), await file.arrayBuffer(), file.type);
+    return { url };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not upload the image." };
+  }
 }

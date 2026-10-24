@@ -55,6 +55,10 @@ export function ImageSearchButton() {
   useEffect(() => {
     if (busy || !previewUrl) return;
     URL.revokeObjectURL(previewUrl);
+    // Flagged by the stricter react-hooks rule that came with Next 16.4. Left
+    // as-is: this component is hidden while search by image is turned off
+    // (see lib/listings/embeddings.ts); revisit when it's brought back.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreviewUrl(null);
   }, [busy, previewUrl]);
 

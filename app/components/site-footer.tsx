@@ -2,36 +2,36 @@ import Image from "next/image";
 import Link from "next/link";
 import { FacebookIcon, InstagramIcon } from "./social-icons";
 
-const headingClass = "text-sm font-semibold uppercase tracking-wide text-brand-gray";
-const linkClass = "text-sm text-zinc-600 hover:text-brand-teal hover:underline";
-const socialLinkClass = "text-brand-gray transition-colors hover:text-brand-teal";
+const headingClass = "text-sm font-semibold uppercase tracking-wide text-white";
+const linkClass = "text-sm text-zinc-300 hover:text-brand-teal hover:underline";
+const socialLinkClass = "text-zinc-300 transition-colors hover:text-brand-teal";
 
 /**
  * Three-column footer modeled on digital.fd.sg's own: logo, an About Us
  * blurb + social links, and a Guides link list — plus a copyright bar.
- * Always light (like the nav's white main bar), not theme-aware: it sits
- * on the same logo/brand-gray palette that already commits to a light
- * treatment regardless of site theme.
+ * Always dark (#18181b) with light text, whatever the site theme. The logo is
+ * the transparent footer version (public/logo-footer.png).
  */
 export function SiteFooter() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-zinc-200 bg-zinc-50">
+    <footer className="bg-[#18181b] text-zinc-300">
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-6 py-10 sm:grid-cols-3">
         <div>
+          {/* Footer version of the logo (transparent background), as on fd.sg. */}
           <Image
-            src="/logo.png"
-            alt="FDSG"
+            src="/logo-footer.png"
+            alt="FDSG — Fly Further with Targeted Distribution"
             width={216}
             height={86}
-            className="h-10 w-auto"
+            className="h-16 w-auto"
           />
         </div>
 
         <div className="flex flex-col gap-3">
           <h2 className={headingClass}>About Us</h2>
-          <p className="text-sm text-zinc-600">
+          <p className="text-sm text-zinc-300">
             FDSG connects Singapore shoppers with flyer deals, e-vouchers,
             and promotions from local businesses.
           </p>
@@ -78,7 +78,7 @@ export function SiteFooter() {
         </div>
       </div>
 
-      <div className="border-t border-zinc-200 py-4 text-center text-xs text-zinc-500">
+      <div className="border-t border-white/10 py-4 text-center text-xs text-zinc-400">
         © {year} FDSG. All rights reserved.
       </div>
     </footer>

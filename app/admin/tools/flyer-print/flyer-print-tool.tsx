@@ -28,7 +28,8 @@ import {
   type EnhanceProgress,
   type EnhanceResult,
 } from "@/lib/flyer-print/enhance";
-import { renderPrintFiles, type BleedMode, type PrintSource } from "@/lib/flyer-print/render";
+import { normalizeHexColor, renderPrintFiles, type BleedMode, type PrintSource } from "@/lib/flyer-print/render";
+import { cropBorder, describeBorder, detectWhiteBorder, hasBorder, type Border } from "@/lib/flyer-print/borders";
 import {
   PdfProblem,
   type OpenedPdf,
@@ -102,9 +103,14 @@ export function FlyerPrintTool() {
   const [addBleed, setAddBleed] = useState(true);
   const [bleedInput, setBleedInput] = useState(String(DEFAULT_BLEED_MM));
   const [bleedMode, setBleedMode] = useState<BleedMode>("mirror");
+  const [bleedColorInput, setBleedColorInput] = useState("#ffffff");
   const [marks, setMarks] = useState(true);
   const [cmyk, setCmyk] = useState(true);
   const [showProof, setShowProof] = useState(false);
+  // Preview "as cut" (the finished piece) by default: the full page also shows
+  // the bleed and the white crop-mark border, which looks like a fault at the
+  // edges even though the printer cuts it all away.
+  const [showFullPage, setShowFullPage] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +119,10 @@ export function FlyerPrintTool() {
   const [useEnhanced, setUseEnhanced] = useState(true);
   const [enhancing, setEnhancing] = useState<EnhanceProgress | null>(null);
   const [gpu, setGpu] = useState<boolean | null>(null);
+  // A plain white margin found around an image flyer, and whether to cut it
+  // off before printing (lib/flyer-print/borders.ts).
+  const [border, setBorder] = useState<{ bitmap: ImageBitmap; border: Border } | null>(null);
+  const [removeBorder, setRemoveBorder] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const enhancedRef = useRef<Enhanced | null>(null);
   const enhanceCount = useRef(0);
@@ -146,6 +156,26 @@ export function FlyerPrintTool() {
     };
   }, []);
 
+  // Look for a white margin whenever a new image flyer is chosen. (A PDF page
+  // is drawn as vector artwork, so it's left as it is.)
+  useEffect(() => {
+    if (!source || source.pdf) return;
+    const bitmap = source.bitmap;
+    const id = requestAnimationFrame(() => {
+      try {
+        setBorder({ bitmap, border: detectWhiteBorder(bitmap) });
+      } catch {
+        setBorder(null);
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [source]);
+  const foundBorder = source && !source.pdf && border?.bitmap === source.bitmap && hasBorder(border.border) ? border.border : null;
+  const trimBorder = !!foundBorder && removeBorder;
+  // Size of the flyer once its margin is cut off, for the dpi and crop notes.
+  const srcW = source ? source.bitmap.width - (trimBorder ? foundBorder.left + foundBorder.right : 0) : 0;
+  const srcH = source ? source.bitmap.height - (trimBorder ? foundBorder.top + foundBorder.bottom : 0) : 0;
+
   const orientationFromChoice: Orientation =
     orientationChoice === "auto"
       ? source
@@ -164,6 +194,10 @@ export function FlyerPrintTool() {
       : "portrait"
     : orientationFromChoice;
   const plan = planPrint({ paper: paper === "custom" ? (customPaper ?? "A4") : paper, orientation, bleedMm, marks });
+  // A solid-colour bleed needs a valid HEX code before anything is created.
+  const bleedColor = normalizeHexColor(bleedColorInput);
+  const colorProblem =
+    bleedMm > 0 && bleedMode === "color" && !bleedColor ? "Enter the bleed colour as a HEX code, e.g. #1A9FB0." : null;
   const sizeProblem =
     custom?.problem ??
     (plan.pageW * plan.pageH > MAX_PAGE_PIXELS
@@ -176,11 +210,11 @@ export function FlyerPrintTool() {
   const enhancedInUse = !!enhanced && useEnhanced;
   const activeSource: PrintSource | null = source ? (enhancedInUse ? enhanced.canvas : source.bitmap) : null;
 
-  const dpi = source && !source.pdf ? effectiveDpi(source.bitmap.width, source.bitmap.height, plan, fit) : null;
+  const dpi = source && !source.pdf ? effectiveDpi(srcW, srcH, plan, fit) : null;
   const verdict = dpi === null ? null : judgeDpi(dpi);
   const reference = enhanced?.reference ?? source?.bitmap ?? null;
   const printScale = reference ? placement(reference.width, reference.height, plan, fit).scale : 1;
-  const cropped = source && fit === "fill" ? croppedShare(source.bitmap.width, source.bitmap.height, plan) : 0;
+  const cropped = source && fit === "fill" ? croppedShare(srcW || source.bitmap.width, srcH || source.bitmap.height, plan) : 0;
 
   // The downloads belong to the settings they were made with.
   const settingsKey = JSON.stringify([
@@ -195,9 +229,11 @@ export function FlyerPrintTool() {
     fit,
     bleedMm,
     bleedMode,
+    bleedMode === "color" ? bleedColor : "",
     marks,
     cmyk,
     enhancedInUse ? enhanced.id : 0,
+    trimBorder,
   ]);
   const current = result && result.key === settingsKey ? result : null;
 
@@ -377,7 +413,20 @@ export function FlyerPrintTool() {
         setWorking("Drawing the PDF page…");
         trim = await renderPdfToTrim(source.pdf.page, plan, fit);
       }
-      const made = await renderPrintFiles(activeSource, { plan, fit, bleedMode, title, trim, cmyk }, setWorking);
+      // Cut off a white margin first, so the artwork (not the margin) reaches
+      // the trim line and the bleed. The enhanced copy is 4x the original.
+      let printSource: PrintSource = activeSource;
+      let croppedCopy: HTMLCanvasElement | null = null;
+      if (!trim && trimBorder && foundBorder) {
+        setWorking("Removing the white border…");
+        croppedCopy = cropBorder(activeSource, foundBorder, activeSource.width / source.bitmap.width);
+        printSource = croppedCopy;
+      }
+      const made = await renderPrintFiles(printSource, { plan, fit, bleedMode, bleedColor: bleedColor ?? undefined, title, trim, cmyk }, setWorking);
+      if (croppedCopy) {
+        croppedCopy.width = 0;
+        croppedCopy.height = 0;
+      }
       setResult({
         key: settingsKey,
         baseName,
@@ -674,6 +723,25 @@ export function FlyerPrintTool() {
             </select>
           </label>
 
+          {foundBorder && (
+            <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+              <input
+                type="checkbox"
+                checked={removeBorder}
+                onChange={(e) => setRemoveBorder(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium">Remove the white border around the flyer</span>
+                <span className={`${hintClass} block`}>
+                  This flyer has a plain white margin ({describeBorder(foundBorder)}). Left in, it prints as a
+                  white band where the artwork should reach the edge — and mirrored bleed copies it too. Untick
+                  only if the white is part of the design.
+                </span>
+              </span>
+            </label>
+          )}
+
           <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
             <label className="flex items-start gap-2 text-sm">
               <input
@@ -714,8 +782,43 @@ export function FlyerPrintTool() {
                   >
                     <option value="mirror">Mirror the edges</option>
                     <option value="stretch">Stretch edge colour</option>
+                    <option value="color">Solid colour</option>
                   </select>
                 </label>
+              </div>
+            )}
+
+            {addBleed && bleedMode === "color" && (
+              <div className={labelClass}>
+                <label htmlFor="bleed-color">Bleed colour</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label="Pick the bleed colour"
+                    value={bleedColor ?? "#ffffff"}
+                    onChange={(e) => setBleedColorInput(e.target.value)}
+                    className="h-10 w-12 cursor-pointer rounded-md border border-zinc-300 bg-transparent p-1 dark:border-zinc-700"
+                  />
+                  <input
+                    id="bleed-color"
+                    type="text"
+                    value={bleedColorInput}
+                    onChange={(e) => setBleedColorInput(e.target.value)}
+                    placeholder="#1A9FB0"
+                    maxLength={7}
+                    spellCheck={false}
+                    className={`${fieldClass} mt-0 w-32 font-mono uppercase`}
+                  />
+                </div>
+                <p className={hintClass}>
+                  Fills the bleed with one solid colour — use the colour along the flyer&apos;s edge (from the
+                  designer, or a colour picker). Type a HEX code or pick it.
+                </p>
+                {colorProblem && (
+                  <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+                    {colorProblem}
+                  </p>
+                )}
               </div>
             )}
 
@@ -825,7 +928,7 @@ export function FlyerPrintTool() {
             <button
               type="button"
               onClick={create}
-              disabled={!source || working !== null || sizeProblem !== null}
+              disabled={!source || working !== null || sizeProblem !== null || colorProblem !== null}
               className={`${downloadClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {working ? working : current ? "Create again" : "Create print files"}
@@ -896,17 +999,88 @@ export function FlyerPrintTool() {
               </div>
             )}
 
+            {(plan.bleed > 0 || plan.marks) && (
+              <div role="group" aria-label="Preview area" className="flex flex-wrap items-center gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowFullPage(false)}
+                  aria-pressed={!showFullPage}
+                  className={`rounded-full border px-3 py-1 ${!showFullPage ? "border-foreground bg-foreground text-background" : "border-zinc-300 dark:border-zinc-700"}`}
+                >
+                  After cutting
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFullPage(true)}
+                  aria-pressed={showFullPage}
+                  className={`rounded-full border px-3 py-1 ${showFullPage ? "border-foreground bg-foreground text-background" : "border-zinc-300 dark:border-zinc-700"}`}
+                >
+                  Whole page (bleed &amp; marks)
+                </button>
+                <span className={hintClass}>
+                  {showFullPage
+                    ? "Everything outside the dashed line is cut off by the printer."
+                    : "The finished flyer at its trimmed size."}
+                </span>
+              </div>
+            )}
+
             <div className="rounded-lg border border-zinc-200 bg-zinc-100 p-3 dark:border-zinc-800 dark:bg-zinc-900">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview */}
-              <img
-                src={showProof && current.proofUrl ? current.proofUrl : current.previewUrl}
-                alt={
+              {(() => {
+                const src = showProof && current.proofUrl ? current.proofUrl : current.previewUrl;
+                const alt =
                   showProof && current.proofUrl
                     ? "Preview of the finished print page as it would look printed in CMYK"
-                    : "Preview of the finished print page, with crop marks if selected"
+                    : "Preview of the finished print page, with crop marks if selected";
+                const offX = (plan.pageW - plan.trimW) / 2;
+                const offY = (plan.pageH - plan.trimH) / 2;
+                if (!showFullPage && (offX > 0 || offY > 0)) {
+                  // The trim area only: the page image, enlarged and shifted
+                  // so the cut lines meet the frame's edges.
+                  return (
+                    <div
+                      className="relative mx-auto max-w-full overflow-hidden shadow-md"
+                      // Width-led so the frame keeps the trim's shape at any screen
+                      // width, never taller than 36rem.
+                      style={{
+                        aspectRatio: `${plan.trimW} / ${plan.trimH}`,
+                        width: `min(100%, ${(36 * plan.trimW) / plan.trimH}rem)`,
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview */}
+                      <img
+                        src={src}
+                        alt={alt}
+                        className="absolute max-w-none"
+                        style={{
+                          width: `${(plan.pageW / plan.trimW) * 100}%`,
+                          height: `${(plan.pageH / plan.trimH) * 100}%`,
+                          left: `${(-offX / plan.trimW) * 100}%`,
+                          top: `${(-offY / plan.trimH) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  );
                 }
-                className="mx-auto max-h-[36rem] w-auto max-w-full shadow-md"
-              />
+                return (
+                  <div className="relative mx-auto w-fit max-w-full shadow-md">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview */}
+                    <img src={src} alt={alt} className="block max-h-[36rem] w-auto max-w-full" />
+                    {(offX > 0 || offY > 0) && (
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute border border-dashed border-red-500"
+                        style={{
+                          left: `${(offX / plan.pageW) * 100}%`,
+                          right: `${(offX / plan.pageW) * 100}%`,
+                          top: `${(offY / plan.pageH) * 100}%`,
+                          bottom: `${(offY / plan.pageH) * 100}%`,
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-400">

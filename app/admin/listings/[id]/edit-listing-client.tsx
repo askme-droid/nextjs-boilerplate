@@ -6,6 +6,7 @@ import type { ListingFormValues } from "../actions";
 import { ListingForm } from "../listing-form";
 import { generateListing, type GenerateState } from "../generate-actions";
 import { FlyerReader } from "./flyer-reader";
+import type { UenVerification } from "@/lib/listings/admin-queries";
 
 const fieldClass =
   "rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/30 dark:border-zinc-700";
@@ -16,9 +17,17 @@ export function EditListingClient({
   categories,
   allTags,
   selectedTagIds,
+  images,
   children,
+  footer,
+  uenVerification,
+  verifiedBusiness,
 }: {
   listingId: string;
+  uenVerification?: UenVerification | null;
+  verifiedBusiness?: boolean;
+  /** Listing photos, offered as social share images in the SEO panel. */
+  images?: { url: string; is_featured: boolean; position: number }[];
   initialValues: ListingFormValues;
   categories: ListingCategory[];
   allTags: ListingTag[];
@@ -26,6 +35,8 @@ export function EditListingClient({
   /** The image manager, slotted between the form's fields and its Save
    *  button (see ListingForm). */
   children?: React.ReactNode;
+  /** Shown after the SEO panel (the delete box). */
+  footer?: React.ReactNode;
 }) {
   // The flyer picked in the box below, also read by the free flyer reader.
   const flyerInput = useRef<HTMLInputElement>(null);
@@ -102,6 +113,7 @@ export function EditListingClient({
       <ListingForm
         key={draft?.key ?? 0}
         listingId={listingId}
+        images={images}
         categories={categories}
         submitLabel="Save changes"
         initialValues={
@@ -116,12 +128,30 @@ export function EditListingClient({
                 cta_label: initialValues.cta_label,
                 cta_url: initialValues.cta_url,
                 redirect_url: initialValues.redirect_url,
+                seo_title: initialValues.seo_title,
+                seo_description: initialValues.seo_description,
+                focus_keyword: initialValues.focus_keyword,
+                og_title: initialValues.og_title,
+                og_description: initialValues.og_description,
+                og_image_url: initialValues.og_image_url,
+                quick_answer: initialValues.quick_answer,
+                faqs_json: initialValues.faqs_json,
+                offer_price: initialValues.offer_price,
+                offer_discount: initialValues.offer_discount,
+                redemption_info: initialValues.redemption_info,
+                audience: initialValues.audience,
+                key_points_json: initialValues.key_points_json,
                 homepage_featured: initialValues.homepage_featured,
+                view_count: initialValues.view_count,
+                published_date: initialValues.published_date,
               }
             : initialValues
         }
         allTags={allTags}
         selectedTagIds={selectedTagIds}
+        footer={footer}
+        uenVerification={uenVerification}
+        verifiedBusiness={verifiedBusiness}
       >
         {children}
       </ListingForm>

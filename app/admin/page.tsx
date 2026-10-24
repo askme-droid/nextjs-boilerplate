@@ -18,6 +18,9 @@ export default async function AdminPage() {
       <Link href="/admin/listings/featured" className={linkClass}>
         Featured listings
       </Link>
+      <Link href="/admin/hero" className={linkClass}>
+        Homepage header slider
+      </Link>
       <Link href="/admin/listings/synced" className={linkClass}>
         Synced listings
       </Link>
@@ -32,6 +35,11 @@ export default async function AdminPage() {
       {role === "admin" && (
         <Link href="/admin/experience-tags" className={linkClass}>
           Manage experiences
+        </Link>
+      )}
+      {role === "admin" && (
+        <Link href="/admin/tools/move-files" className={linkClass}>
+          Move files to Cloudflare R2
         </Link>
       )}
     </main>

@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { todayInSingapore } from "@/lib/listings/expiry-dates";
+import { isVerifiedBusiness } from "@/lib/business/verify-listing";
 import {
   getAdminListingById,
   getExperienceTags,
@@ -53,7 +55,7 @@ export default async function EditListingPage({
         </p>
       )}
 
-      {listing.redirect_url && !listing.external_url && (
+      {listing.redirect_url && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
           Visitors to this listing are redirected to{" "}
           <a href={listing.redirect_url} target="_blank" rel="noopener noreferrer nofollow" className="underline">
@@ -66,6 +68,7 @@ export default async function EditListingPage({
 
       <EditListingClient
         listingId={listing.id}
+        images={listing.listing_images}
         categories={categories}
         initialValues={{
           title: listing.title,
@@ -78,34 +81,57 @@ export default async function EditListingPage({
           cta_label: listing.cta_label ?? "",
           cta_url: listing.cta_url ?? "",
           redirect_url: listing.redirect_url ?? "",
+          seo_title: listing.seo_title ?? "",
+          seo_description: listing.seo_description ?? "",
+          focus_keyword: listing.focus_keyword ?? "",
+          og_title: listing.og_title ?? "",
+          og_description: listing.og_description ?? "",
+          og_image_url: listing.og_image_url ?? "",
+          quick_answer: listing.quick_answer ?? "",
+          faqs_json: listing.faqs.length > 0 ? JSON.stringify(listing.faqs) : "",
+          offer_price: listing.offer_price ?? "",
+          offer_discount: listing.offer_discount ?? "",
+          redemption_info: listing.redemption_info ?? "",
+          audience: listing.audience ?? "",
+          key_points_json: listing.key_points.length > 0 ? JSON.stringify(listing.key_points) : "",
           keywords: (listing.keywords ?? []).join(", "),
           description: listing.description ?? "",
           status: listing.status,
           expires_at: listing.expires_at ?? "",
+          view_count: String(listing.view_count),
+          published_date: listing.published_at ? todayInSingapore(new Date(listing.published_at)) : "",
           homepage_featured: listing.homepage_featured ? "1" : "",
         }}
         allTags={allTags}
         selectedTagIds={listing.tagIds}
+        uenVerification={listing.uen_verification}
+        verifiedBusiness={isVerifiedBusiness({
+          company_uen: listing.company_uen,
+          uen_verified_uen: listing.uen_verification?.uen ?? null,
+          uen_verified_status: listing.uen_verification?.status ?? null,
+        })}
+        footer={
+            <section className="flex flex-col gap-2 rounded-lg border border-red-200 p-4 dark:border-red-900/50">
+              <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete listing</h2>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                {listing.status === "published"
+                  ? "This listing is live — deleting it removes it from the site immediately, along with its images and tags. This cannot be undone."
+                  : "Deleting removes this listing, its images, and its tags. This cannot be undone."}
+              </p>
+              <form action={deleteListing}>
+                <input type="hidden" name="id" value={listing.id} />
+                <button
+                  type="submit"
+                  className="w-fit rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  Delete listing
+                </button>
+              </form>
+            </section>
+        }
       >
         <ImageManager listingId={listing.id} images={listing.listing_images} />
 
-        <section className="flex flex-col gap-2 rounded-lg border border-red-200 p-4 dark:border-red-900/50">
-          <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete listing</h2>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {listing.status === "published"
-              ? "This listing is live — deleting it removes it from the site immediately, along with its images and tags. This cannot be undone."
-              : "Deleting removes this listing, its images, and its tags. This cannot be undone."}
-          </p>
-          <form action={deleteListing}>
-            <input type="hidden" name="id" value={listing.id} />
-            <button
-              type="submit"
-              className="w-fit rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
-            >
-              Delete listing
-            </button>
-          </form>
-        </section>
       </EditListingClient>
     </div>
   );

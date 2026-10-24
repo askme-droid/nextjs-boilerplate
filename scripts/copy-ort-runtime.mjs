@@ -16,7 +16,10 @@ const files = [
   // WebGPU build (fast path) and the WebAssembly CPU build (fallback).
   "ort.webgpu.min.mjs",
   "ort-wasm-simd-threaded.asyncify.mjs",
-  "ort-wasm-simd-threaded.asyncify.wasm",
+  // ort-wasm-simd-threaded.asyncify.wasm is deliberately NOT copied: at
+  // ~26.8 MB it's over Cloudflare Workers' 25 MiB static-asset limit, so it's
+  // served from R2 instead (see NEXT_PUBLIC_ORT_ASYNCIFY_WASM_URL in
+  // lib/flyer-print/enhance.ts).
   "ort.wasm.min.mjs",
   "ort-wasm-simd-threaded.mjs",
   "ort-wasm-simd-threaded.wasm",

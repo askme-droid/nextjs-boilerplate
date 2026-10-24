@@ -1,5 +1,9 @@
+"use client";
+
+import { useState, useTransition } from "react";
 import type { ListingImage } from "@/lib/listings/queries";
 import {
+  type ImageActionResult,
   addImage,
   deleteImage,
   moveImage,
@@ -20,9 +24,41 @@ export function ImageManager({
   listingId: string;
   images: ListingImage[];
 }) {
+  // Every image action runs in place (no page reload), so unsaved changes or a
+  // generated draft in the listing form above are kept.
+  const [busy, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const run =
+    (action: (formData: FormData) => Promise<ImageActionResult>) =>
+    (formData: FormData) =>
+      new Promise<void>((resolve) => {
+        startTransition(async () => {
+          setError(null);
+          try {
+            const result = await action(formData);
+            if (result?.error) setError(result.error);
+          } catch {
+            setError("Something went wrong — try again.");
+          }
+          resolve();
+        });
+      });
+
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold">Images</h2>
+    <section className="flex flex-col gap-4" aria-busy={busy}>
+      <h2 className="flex items-center gap-2 text-lg font-semibold">
+        Images
+        {busy && <span className="text-sm font-normal text-zinc-500">Updating…</span>}
+      </h2>
+      <p className="-mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+        Changes here save straight away and don&apos;t reload the page — anything you&apos;ve typed above stays as it
+        is (still click Save changes for those).
+      </p>
+      {error && (
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+          {error}
+        </p>
+      )}
 
       {images.length === 0 ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">No images yet.</p>
@@ -41,6 +77,8 @@ export function ImageManager({
                 <img
                   src={image.url}
                   alt={image.alt_text ?? ""}
+                  loading="lazy"
+                  decoding="async"
                   className="h-16 w-16 flex-none rounded object-cover"
                 />
 
@@ -53,7 +91,7 @@ export function ImageManager({
                   )}
                 </div>
 
-                <form action={moveImage}>
+                <form action={run(moveImage)}>
                   <input type="hidden" name="listingId" value={listingId} />
                   <input type="hidden" name="imageId" value={image.id} />
                   <input type="hidden" name="direction" value="up" />
@@ -62,7 +100,7 @@ export function ImageManager({
                   </button>
                 </form>
 
-                <form action={moveImage}>
+                <form action={run(moveImage)}>
                   <input type="hidden" name="listingId" value={listingId} />
                   <input type="hidden" name="imageId" value={image.id} />
                   <input type="hidden" name="direction" value="down" />
@@ -76,7 +114,7 @@ export function ImageManager({
                 </form>
 
                 {!image.is_featured && (
-                  <form action={setFeaturedImage}>
+                  <form action={run(setFeaturedImage)}>
                     <input type="hidden" name="listingId" value={listingId} />
                     <input type="hidden" name="imageId" value={image.id} />
                     <button type="submit" className={buttonClass}>
@@ -85,7 +123,7 @@ export function ImageManager({
                   </form>
                 )}
 
-                <form action={deleteImage}>
+                <form action={run(deleteImage)}>
                   <input type="hidden" name="listingId" value={listingId} />
                   <input type="hidden" name="imageId" value={image.id} />
                   <button
@@ -98,7 +136,7 @@ export function ImageManager({
               </div>
 
               <form
-                action={updateImageAltText}
+                action={run(updateImageAltText)}
                 className="flex items-center gap-2 pl-[76px]"
               >
                 <input type="hidden" name="listingId" value={listingId} />
@@ -122,7 +160,7 @@ export function ImageManager({
         </ul>
       )}
 
-      <form action={uploadImages} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+      <form action={run(uploadImages)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <input type="hidden" name="listingId" value={listingId} />
         <label className="flex-1 text-sm font-medium">
           Upload images
@@ -146,7 +184,7 @@ export function ImageManager({
         </button>
       </form>
 
-      <form action={addImage} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+      <form action={run(addImage)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <input type="hidden" name="listingId" value={listingId} />
         <label className="flex-1 text-sm font-medium">
           Or add by image URL

@@ -1,9 +1,41 @@
 import { cache } from "react";
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { isVerifiedBusiness } from "@/lib/business/verify-listing";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { ENDS_SOON_WITHIN_DAYS, NEW_WITHIN_DAYS, POPULAR_MIN_VIEWS, TRENDING_MIN_VIEWS, type ShowFilter } from "./badges";
+import { notExpired } from "./expiry";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 
 export const PAGE_SIZE = 12;
+
+// The date visitors see and the newest-first order (see the schema comment).
+const publishedAtSql = sql<Date>`coalesce(${listings.publishedAt}, ${listings.createdAt})`;
+
+// Same windows as the New and "Ends in …" card badges (lib/listings/badges.ts).
+const newSql = sql`${publishedAtSql} >= now() - make_interval(days => ${NEW_WITHIN_DAYS}::int)`;
+const endingSoonSql = sql`${listings.expiresAt} is not null and ${listings.expiresAt} <= (now() at time zone 'Asia/Singapore')::date + ${ENDS_SOON_WITHIN_DAYS}::int`;
+
+/** How many current listings each homepage "Browse" pill would show. */
+export async function getShowCounts(): Promise<Record<ShowFilter, number>> {
+  const n = (cond: SQL) => sql<number>`count(*) filter (where ${cond})::int`;
+  const [row] = await db
+    .select({
+      trending: n(and(gte(listings.viewCount, TRENDING_MIN_VIEWS), lt(listings.viewCount, POPULAR_MIN_VIEWS))!),
+      popular: n(gte(listings.viewCount, POPULAR_MIN_VIEWS)),
+      new: n(newSql),
+      ending: n(endingSoonSql),
+      verified: n(sql`${verifiedBusinessSql}`),
+      featured: n(eq(listings.homepageFeatured, true)),
+    })
+    .from(listings)
+    .where(and(eq(listings.status, "published"), notExpired));
+  return row;
+}
+
+// Same rule as isVerifiedBusiness (lib/business/verify-listing.ts), in SQL
+// for the listing grids: the saved UEN is the one checked against ACRA, and
+// ACRA lists the business as live ("Live", "Live Company", "Registered").
+const verifiedBusinessSql = sql<boolean>`coalesce(${listings.companyUen} = ${listings.uenVerifiedUen} and (lower(${listings.uenVerifiedStatus}) like 'live%' or lower(${listings.uenVerifiedStatus}) = 'registered'), false)`;
 
 export type ListingCategory = { id: string; name: string; slug: string };
 
@@ -33,9 +65,16 @@ export type ListingWithRelations = {
   // page. Like external_url the card and detail route send visitors there,
   // but the listing is ours (see the schema comment on redirectUrl).
   redirect_url: string | null;
+  view_count: number;
+  homepage_featured: boolean;
+  /** UEN checked against ACRA and the business is live (Verified badge). */
+  verified_business: boolean;
   created_by: string | null;
   expires_at: string | null;
   created_at: string;
+  /** Date shown to visitors ("Posted …", New badge): published_at, or
+   *  created_at for a listing that was never published. */
+  published_at: string;
   updated_at: string;
   categories: ListingCategory | null;
   listing_images: Pick<ListingImage, "id" | "url" | "is_featured" | "position">[];
@@ -51,6 +90,25 @@ export type ListingDetail = Omit<ListingWithRelations, "listing_images"> & {
   social_links: string[];
   cta_label: string | null;
   cta_url: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  og_image_url: string | null;
+  view_count: number;
+  /** The listing's UEN was checked against ACRA and the business is live
+   *  (lib/business/verify-listing.ts) — shows the "Verified business" badge. */
+  verified_business: boolean;
+  /** ACRA's registered name for the UEN, when verified. */
+  verified_business_name: string | null;
+  /** AEO/GEO fields (lib/seo/aeo.ts). offer_price is a "25.90" string. */
+  quick_answer: string | null;
+  faqs: { q: string; a: string }[];
+  offer_price: string | null;
+  offer_discount: string | null;
+  redemption_info: string | null;
+  audience: string | null;
+  key_points: string[];
 };
 
 export type ListingsResult = {
@@ -71,6 +129,8 @@ export type ListingsFilter = {
   location?: string;
   /** Experience tag slug, as it appears in the URL. */
   experience?: string;
+  /** Badge filter ("Show" dropdown): featured / trending / popular / verified. */
+  show?: ShowFilter | "";
   /** 1-based page number. */
   page?: number;
 };
@@ -101,7 +161,8 @@ function escapeLikeTerm(term: string): string {
  * would otherwise read as "no listings" rather than "filter ignored".
  */
 function buildListingsWhere(filter: ListingsFilter): SQL {
-  const conditions: SQL[] = [eq(listings.status, "published")];
+  // Expired listings drop out of browse/search (see lib/listings/expiry.ts).
+  const conditions: SQL[] = [eq(listings.status, "published"), notExpired];
 
   const q = filter.q?.trim();
   if (q) {
@@ -139,6 +200,15 @@ function buildListingsWhere(filter: ListingsFilter): SQL {
       ),
     );
   }
+
+  // Same thresholds as the card badges (lib/listings/badges.ts).
+  if (filter.show === "featured") conditions.push(eq(listings.homepageFeatured, true));
+  if (filter.show === "trending")
+    conditions.push(and(gte(listings.viewCount, TRENDING_MIN_VIEWS), lt(listings.viewCount, POPULAR_MIN_VIEWS))!);
+  if (filter.show === "popular") conditions.push(gte(listings.viewCount, POPULAR_MIN_VIEWS));
+  if (filter.show === "verified") conditions.push(sql`${verifiedBusinessSql}`);
+  if (filter.show === "new") conditions.push(newSql);
+  if (filter.show === "ending") conditions.push(endingSoonSql);
 
   return and(...conditions)!;
 }
@@ -203,9 +273,13 @@ export async function getListings(
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
+      view_count: listings.viewCount,
+      homepage_featured: listings.homepageFeatured,
+      verified_business: verifiedBusinessSql,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: publishedAtSql,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
@@ -214,7 +288,7 @@ export async function getListings(
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
     .where(where)
-    .orderBy(desc(listings.createdAt))
+    .orderBy(desc(publishedAtSql), desc(listings.createdAt))
     .limit(PAGE_SIZE)
     .offset(offset);
 
@@ -232,9 +306,13 @@ export async function getListings(
     featured_image_url: r.featured_image_url,
     external_url: r.external_url,
     redirect_url: r.redirect_url,
+    view_count: r.view_count,
+    homepage_featured: r.homepage_featured,
+    verified_business: r.verified_business,
     created_by: r.created_by,
     expires_at: r.expires_at,
     created_at: r.created_at.toISOString(),
+    published_at: new Date(r.published_at).toISOString(),
     updated_at: r.updated_at.toISOString(),
     categories: r.category_row_id
       ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
@@ -268,9 +346,13 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
+      view_count: listings.viewCount,
+      homepage_featured: listings.homepageFeatured,
+      verified_business: verifiedBusinessSql,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: publishedAtSql,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
@@ -278,7 +360,7 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
-    .where(and(inArray(listings.id, ids), eq(listings.status, "published")));
+    .where(and(inArray(listings.id, ids), eq(listings.status, "published"), notExpired));
 
   const imagesByListing = await attachImages(rows.map((r) => r.id));
   const rank = new Map(ids.map((id, i) => [id, i]));
@@ -296,9 +378,13 @@ export async function getListingsByIds(ids: string[]): Promise<ListingWithRelati
       featured_image_url: r.featured_image_url,
       external_url: r.external_url,
       redirect_url: r.redirect_url,
+      view_count: r.view_count,
+      homepage_featured: r.homepage_featured,
+      verified_business: r.verified_business,
       created_by: r.created_by,
       expires_at: r.expires_at,
       created_at: r.created_at.toISOString(),
+      published_at: new Date(r.published_at).toISOString(),
       updated_at: r.updated_at.toISOString(),
       categories: r.category_row_id
         ? { id: r.category_row_id, name: r.category_name!, slug: r.category_slug! }
@@ -317,17 +403,21 @@ export type FeaturedVideoSlide = {
   /** Set when the client asked for a redirect to their own page. */
   redirectUrl: string | null;
   categoryName: string | null;
-  videoUrl: string;
-  /** The listing's photo, shown until the video has loaded; may be absent. */
+  location: string | null;
+  /** "video" plays the clip; "image" shows an image or animated GIF. */
+  kind: "video" | "image";
+  /** The clip (kind "video") or the slide image/GIF (kind "image"). */
+  mediaUrl: string;
+  /** The listing's photo, shown until a video has loaded; may be absent. */
   posterUrl: string | null;
 };
 
 /**
- * Slides for the homepage "Featured listings" video slider: published
- * listings that staff picked (homepage_featured) *and* uploaded a video for,
- * in the order set on /admin/listings/featured. There is deliberately no
- * top-up with other listings — the slider is video-only, so a listing without
- * one has nothing to show.
+ * Slides for the homepage "Featured listings" slider: published listings
+ * that staff picked (homepage_featured) *and* gave a video or a slide image
+ * (still or animated GIF), in the order set on /admin/listings/featured.
+ * There is deliberately no top-up with other listings — a picked listing
+ * without either has nothing to show.
  */
 export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]> {
   const rows = await db
@@ -338,7 +428,9 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
       externalUrl: listings.externalUrl,
       redirectUrl: listings.redirectUrl,
       categoryName: categories.name,
+      location: listings.location,
       videoUrl: listings.featuredVideoUrl,
+      slideImageUrl: listings.featuredSlideImageUrl,
       // Same photo choice as pickListingImage: the flagged one, else the first
       // by position, else the listing's own featured_image_url.
       posterUrl: sql<string | null>`coalesce(
@@ -354,20 +446,27 @@ export async function getFeaturedVideos(limit = 6): Promise<FeaturedVideoSlide[]
     .where(
       and(
         eq(listings.status, "published"),
+        notExpired,
         eq(listings.homepageFeatured, true),
-        isNotNull(listings.featuredVideoUrl),
+        or(isNotNull(listings.featuredVideoUrl), isNotNull(listings.featuredSlideImageUrl)),
       ),
     )
     .orderBy(asc(listings.homepageFeaturedOrder), desc(listings.createdAt))
     .limit(limit);
 
-  return rows.flatMap((r) => (r.videoUrl ? [{ ...r, videoUrl: r.videoUrl }] : []));
+  return rows.flatMap(({ videoUrl, slideImageUrl, ...r }): FeaturedVideoSlide[] =>
+    videoUrl
+      ? [{ ...r, kind: "video", mediaUrl: videoUrl }]
+      : slideImageUrl
+        ? [{ ...r, kind: "image", mediaUrl: slideImageUrl }]
+        : [],
+  );
 }
 
 /**
- * Every published listing that has its own page, for the sitemap. Syndicated
- * listings (with an external_url) and listings a client asked to redirect
- * (redirect_url) are left out: their page just redirects.
+ * Every published, unexpired listing, for the sitemap — including synced
+ * fd.sg listings and client-redirected ones (staff asked for all listings to
+ * be listed), even though those pages forward visitors elsewhere.
  */
 export async function getSitemapListings(): Promise<{ slug: string; updatedAt: Date }[]> {
   return db
@@ -376,11 +475,42 @@ export async function getSitemapListings(): Promise<{ slug: string; updatedAt: D
     .where(
       and(
         eq(listings.status, "published"),
-        isNull(listings.externalUrl),
-        isNull(listings.redirectUrl),
+        notExpired,
       ),
     )
     .orderBy(desc(listings.updatedAt));
+}
+
+/** Published, unexpired listings with the short facts an AI tool needs, for
+ *  /llms.txt (app/llms.txt/route.ts). Most recently updated first. */
+export async function getLlmsListings(): Promise<
+  {
+    title: string;
+    slug: string;
+    quickAnswer: string | null;
+    audience: string | null;
+    description: string | null;
+    location: string | null;
+    category: string | null;
+    expiresAt: string | null;
+  }[]
+> {
+  return db
+    .select({
+      title: listings.title,
+      slug: listings.slug,
+      quickAnswer: listings.quickAnswer,
+      audience: listings.audience,
+      description: listings.description,
+      location: listings.location,
+      category: categories.name,
+      expiresAt: listings.expiresAt,
+    })
+    .from(listings)
+    .leftJoin(categories, eq(listings.categoryId, categories.id))
+    .where(and(eq(listings.status, "published"), notExpired))
+    .orderBy(desc(listings.updatedAt))
+    .limit(500);
 }
 
 /**
@@ -391,9 +521,18 @@ export async function getSitemapListings(): Promise<{ slug: string; updatedAt: D
  * its page component — both of which need this same row — share one query
  * per request instead of fetching it twice.
  */
-export const getListingBySlug = cache(async (
-  slug: string,
-): Promise<ListingDetail | null> => {
+export const getListingBySlug = cache(
+  (slug: string): Promise<ListingDetail | null> =>
+    loadListingDetail(and(eq(listings.slug, slug), eq(listings.status, "published"))!),
+);
+
+/** Any listing by id, whatever its status — for the staff preview
+ *  (app/admin/listings/[id]/preview). Callers must check staff access. */
+export function getListingForPreview(id: string): Promise<ListingDetail | null> {
+  return loadListingDetail(eq(listings.id, id));
+}
+
+async function loadListingDetail(where: SQL): Promise<ListingDetail | null> {
   const rows = await db
     .select({
       id: listings.id,
@@ -407,14 +546,32 @@ export const getListingBySlug = cache(async (
       social_links: listings.socialLinks,
       cta_label: listings.ctaLabel,
       cta_url: listings.ctaUrl,
+      seo_title: listings.seoTitle,
+      seo_description: listings.seoDescription,
+      og_title: listings.ogTitle,
+      og_description: listings.ogDescription,
+      og_image_url: listings.ogImageUrl,
+      quick_answer: listings.quickAnswer,
+      faqs: listings.faqs,
+      offer_price: listings.offerPrice,
+      offer_discount: listings.offerDiscount,
+      redemption_info: listings.redemptionInfo,
+      audience: listings.audience,
+      key_points: listings.keyPoints,
+      uen_verified_uen: listings.uenVerifiedUen,
+      uen_verified_name: listings.uenVerifiedName,
+      uen_verified_status: listings.uenVerifiedStatus,
       keywords: listings.keywords,
       status: listings.status,
       featured_image_url: listings.featuredImageUrl,
       external_url: listings.externalUrl,
       redirect_url: listings.redirectUrl,
+      view_count: listings.viewCount,
+      homepage_featured: listings.homepageFeatured,
       created_by: listings.createdBy,
       expires_at: listings.expiresAt,
       created_at: listings.createdAt,
+      published_at: publishedAtSql,
       updated_at: listings.updatedAt,
       category_row_id: categories.id,
       category_name: categories.name,
@@ -422,7 +579,7 @@ export const getListingBySlug = cache(async (
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
-    .where(and(eq(listings.slug, slug), eq(listings.status, "published")))
+    .where(where)
     .limit(1);
 
   const row = rows[0];
@@ -459,14 +616,31 @@ export const getListingBySlug = cache(async (
     social_links: row.social_links ?? [],
     cta_label: row.cta_label,
     cta_url: row.cta_url,
+    seo_title: row.seo_title,
+    seo_description: row.seo_description,
+    og_title: row.og_title,
+    og_description: row.og_description,
+    og_image_url: row.og_image_url,
+    view_count: row.view_count,
+    verified_business: isVerifiedBusiness(row),
+    verified_business_name: isVerifiedBusiness(row) ? row.uen_verified_name : null,
+    quick_answer: row.quick_answer,
+    faqs: row.faqs ?? [],
+    offer_price: row.offer_price,
+    offer_discount: row.offer_discount,
+    redemption_info: row.redemption_info,
+    audience: row.audience,
+    key_points: row.key_points ?? [],
     keywords: row.keywords,
     status: row.status,
     featured_image_url: row.featured_image_url,
     external_url: row.external_url,
     redirect_url: row.redirect_url,
+    homepage_featured: row.homepage_featured,
     created_by: row.created_by,
     expires_at: row.expires_at,
     created_at: row.created_at.toISOString(),
+    published_at: new Date(row.published_at).toISOString(),
     updated_at: row.updated_at.toISOString(),
     categories: row.category_row_id
       ? { id: row.category_row_id, name: row.category_name!, slug: row.category_slug! }
@@ -474,4 +648,4 @@ export const getListingBySlug = cache(async (
     listing_images: images,
     experience_tags: tags,
   };
-});
+}

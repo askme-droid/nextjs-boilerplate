@@ -64,6 +64,76 @@
       "when": 1792200109046,
       "tag": "0008_listing_redirect_url",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792378878601,
+      "tag": "0009_listing_seo_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792380145382,
+      "tag": "0010_listing_social_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792381018712,
+      "tag": "0011_featured_slide_image",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792383428268,
+      "tag": "0012_listing_view_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792469243499,
+      "tag": "0013_listing_uen_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792545692418,
+      "tag": "0014_listing_aeo_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792549472457,
+      "tag": "0015_listing_published_date_locked",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792557177673,
+      "tag": "0016_listing_published_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792557967644,
+      "tag": "0017_listing_audience_key_points",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792630972583,
+      "tag": "0018_hero_slides",
+      "breakpoints": true
     }
   ]
 }

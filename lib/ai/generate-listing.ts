@@ -113,10 +113,27 @@ export async function generateListingDraft({
     // Set by staff on a client's request, never the model's; kept from the
     // saved listing by edit-listing-client.tsx like homepage_featured.
     redirect_url: "",
+    // AEO fields are written by staff; kept from the saved listing.
+    quick_answer: "",
+    faqs_json: "",
+    offer_price: "",
+    offer_discount: "",
+    redemption_info: "",
+    audience: "",
+    key_points_json: "",
+    published_date: "",
+    // SEO fields are kept from the saved listing (edit-listing-client.tsx).
+    seo_title: "",
+    seo_description: "",
+    focus_keyword: "",
+    og_title: "",
+    og_description: "",
+    og_image_url: "",
     keywords: parsed.keywords.join(", "),
     description: parsed.description,
     status: "draft",
     expires_at: parsed.expires_at ?? "",
+    view_count: "0", // kept from the saved listing by edit-listing-client.tsx
     // An editorial choice, never the model's; the edit form keeps whatever's
     // saved (see edit-listing-client.tsx), so this blank is never applied.
     homepage_featured: "",

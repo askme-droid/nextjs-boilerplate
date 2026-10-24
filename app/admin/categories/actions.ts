@@ -1,5 +1,6 @@
 "use server";
 
+import { pgErrorCode } from "@/lib/db/errors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -31,9 +32,6 @@ function readValues(formData: FormData): CategoryFormValues {
   return { name: get("name"), slug: get("slug"), description: get("description") };
 }
 
-function pgErrorCode(e: unknown): string | undefined {
-  return e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : undefined;
-}
 
 /** Creates a category (no `id` field in formData) or updates one (with `id`). */
 export async function saveCategory(

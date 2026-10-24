@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { parseSort, sortListings } from "../sort";
+import { ListingsTable } from "../listings-table";
 import { getSyndicatedListings } from "@/lib/listings/admin-queries";
-import { deleteListing, publishListing } from "../actions";
 import { refreshSyncedListings } from "../sync-actions";
 
 // "Refresh from fd.sg" (below) now embeds every image it scrapes (CLIP
@@ -12,12 +13,6 @@ import { refreshSyncedListings } from "../sync-actions";
 // more than is available.
 export const maxDuration = 300;
 
-const statusClass: Record<string, string> = {
-  published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-  pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
-  draft: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-  rejected: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
-};
 
 /**
  * Listings synced from an external source (fd.sg etc.) — kept off the main
@@ -30,11 +25,13 @@ const statusClass: Record<string, string> = {
 export default async function SyncedListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ published?: string; deleted?: string; refreshed?: string; error?: string }>;
+  searchParams: Promise<{ published?: string; deleted?: string; refreshed?: string; error?: string; sort?: string; dir?: string }>;
 }) {
   const { role } = await requireStaff();
   const { published, deleted, refreshed, error } = await searchParams;
-  const listings = await getSyndicatedListings(role);
+  const { sort: sortParam, dir } = await searchParams;
+  const sort = parseSort(sortParam, dir);
+  const listings = sortListings(await getSyndicatedListings(role), sort);
 
   return (
     <div className="flex flex-col gap-6">
@@ -88,70 +85,7 @@ export default async function SyncedListingsPage({
       {listings.length === 0 ? (
         <p className="text-zinc-500 dark:text-zinc-400">No synced listings.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
-          {listings.map((listing) => (
-            <li key={listing.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{listing.title}</span>
-                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-400">
-                    Synced
-                  </span>
-                </div>
-                <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
-                  {listing.categories?.name ?? "No category"}
-                </p>
-                {listing.external_url && (
-                  <a
-                    href={listing.external_url}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className="text-xs text-brand-teal hover:underline"
-                  >
-                    {listing.external_url} ↗
-                  </a>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    statusClass[listing.status] ?? statusClass.draft
-                  }`}
-                >
-                  {listing.status}
-                </span>
-                <Link
-                  href={`/admin/listings/${listing.id}/edit`}
-                  className="text-sm font-medium hover:underline"
-                >
-                  Edit
-                </Link>
-                {listing.status !== "published" && (
-                  <form action={publishListing}>
-                    <input type="hidden" name="id" value={listing.id} />
-                    <input type="hidden" name="returnTo" value="synced" />
-                    <button
-                      type="submit"
-                      className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400"
-                    >
-                      Publish
-                    </button>
-                  </form>
-                )}
-                <form action={deleteListing}>
-                  <input type="hidden" name="id" value={listing.id} />
-                  <input type="hidden" name="returnTo" value="synced" />
-                  <button
-                    type="submit"
-                    className="text-sm text-red-600 hover:underline dark:text-red-400"
-                  >
-                    Delete
-                  </button>
-                </form>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <ListingsTable listings={listings} returnTo="synced" synced sort={sort} />
       )}
     </div>
   );

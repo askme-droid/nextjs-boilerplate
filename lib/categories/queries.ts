@@ -1,4 +1,5 @@
 import { asc, count, eq, isNull, sql } from "drizzle-orm";
+import { notExpired } from "@/lib/listings/expiry";
 import { db } from "@/lib/db/client";
 import { categories, listings } from "@/lib/db/schema";
 
@@ -63,7 +64,8 @@ export async function getCategoriesWithCounts(): Promise<CategoryWithCounts[]> {
       name: categories.name,
       slug: categories.slug,
       listingCount: count(listings.id),
-      publishedCount: sql<number>`count(${listings.id}) filter (where ${listings.status} = 'published')`,
+      // Published and not expired (lib/listings/expiry.ts) — what visitors see.
+      publishedCount: sql<number>`count(${listings.id}) filter (where ${listings.status} = 'published' and ${notExpired})`,
     })
     .from(categories)
     .leftJoin(listings, eq(listings.categoryId, categories.id))

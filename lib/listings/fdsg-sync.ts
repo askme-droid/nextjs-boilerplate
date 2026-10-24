@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { categories, listingImages, listings } from "@/lib/db/schema";
 import { embedImageUrl } from "./embeddings";
@@ -39,8 +39,12 @@ const CATEGORY_ALIASES: Record<string, string> = {
 // The real fd.sg's own listing archive is its homepage, paginated
 // (/page/2/, /page/3/, ...) — not a separate landing page the way
 // digital.fd.sg had one.
-const ARCHIVE_BASE = "https://www.fd.sg/";
-const MAX_ARCHIVE_PAGES = 20; // safety cap against an infinite loop, not a real expected limit
+// Oct 2026: fd.sg's homepage became a marketing page with no listing cards;
+// the directory (and each card's view count) now lives on this page,
+// paginated the same way. The homepage stays as a fallback.
+const ARCHIVE_BASES = ["https://www.fd.sg/fdsg-digital-flyer-deals-e-vouchers/", "https://www.fd.sg/"];
+const MAX_ARCHIVE_PAGES = 30; // safety cap against an infinite loop, not a real expected limit
+const LISTING_LINK = /\/acadp_listings\/[^/?#]+\/?$/;
 
 // Each new listing now costs a scrape plus a CLIP embedding per image, not
 // just an HTTP fetch — expensive enough that importing a large batch of new
@@ -50,33 +54,176 @@ const MAX_ARCHIVE_PAGES = 20; // safety cap against an infinite loop, not a real
 // repeatedly, so whatever's left over is picked up next click.
 const MAX_NEW_PER_RUN = 20;
 
-export type SyncResult = { added: number; skipped: number; total: number; remaining: number };
+// fd.sg's own site images (header/footer logo, menu icon, homepage slider,
+// promo banners) appear on every listing page. Oct 2026: the logo was
+// renamed to plain "FDSG.png", which the old "fdsg-logo" filter missed —
+// so it became the first (= featured) image of newly imported listings and
+// their cards showed the FDSG logo instead of the flyer.
+const SITE_CHROME_IMAGE =
+  /fdsg-logo|social-media|\/ultimatemember\/|\/(?:FDSG|best-deals-small|slider\d*|slider-banner|imgpsh_fullsize_anim|new-flyer|boost-your-flyer|users-guide|be-a-distributor)(?:-\d+x\d+)?\.(?:png|jpe?g|gif|webp)$/i;
 
-/** All listing detail URLs currently on fd.sg's archive, across every page.
- *  Stops once a page adds no URLs we haven't already seen (handles both an
- *  empty last page and a theme that just re-serves the last valid page for
- *  an out-of-range page number). */
-async function fetchListingUrls(): Promise<string[]> {
+export function isSiteChromeImage(url: string): boolean {
+  return SITE_CHROME_IMAGE.test(url);
+}
+
+export type SyncResult = {
+  added: number;
+  skipped: number;
+  total: number;
+  remaining: number;
+  /** Existing synced listings whose created date was corrected to fd.sg's. */
+  datesUpdated: number;
+  /** Existing synced listings whose view count was updated from fd.sg. */
+  viewsUpdated: number;
+  /** Synced listings whose wrongly imported fd.sg logo/banner images were removed. */
+  imagesFixed: number;
+};
+
+/** Normalised form of an fd.sg listing URL for matching (scheme, www,
+ *  case and trailing slash ignored). */
+export function normalizeSourceUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, "").toLowerCase()}${decodeURIComponent(u.pathname).replace(/\/+$/, "").toLowerCase()}`;
+  } catch {
+    return url.trim().replace(/\/+$/, "").toLowerCase();
+  }
+}
+
+const FEED_BASE = "https://www.fd.sg/feed/?post_type=acadp_listings";
+const MAX_FEED_PAGES = 50;
+
+/**
+ * When each fd.sg listing was originally published, keyed by normalised URL.
+ * The listing pages themselves only say "Posted 7 years ago", but
+ * WordPress's RSS feed for the listings post type carries the exact
+ * <pubDate>; it's paginated with &paged=N (10 per page by default) and
+ * returns 404 past the last page.
+ */
+export async function fetchSourceDates(): Promise<Map<string, Date>> {
+  const dates = new Map<string, Date>();
+  for (let page = 1; page <= MAX_FEED_PAGES; page++) {
+    const res = await fetch(page === 1 ? FEED_BASE : `${FEED_BASE}&paged=${page}`);
+    if (!res.ok) break;
+    const $ = cheerio.load(await res.text(), { xml: true });
+    const items = $("item");
+    if (items.length === 0) break;
+    const before = dates.size;
+    items.each((_, item) => {
+      const link = $(item).find("link").first().text().trim();
+      const published = new Date($(item).find("pubDate").first().text().trim());
+      if (link && !Number.isNaN(published.getTime())) dates.set(normalizeSourceUrl(link), published);
+    });
+    if (dates.size === before) break; // same page served again
+  }
+  return dates;
+}
+
+/** Copies fd.sg's view counts onto the synced listings (their clicks go to
+ *  fd.sg, so they're counted there, not here). Returns how many changed. */
+async function syncSourceViews(views: Map<string, number>): Promise<number> {
+  if (views.size === 0) return 0;
+  const synced = await db
+    .select({ id: listings.id, externalUrl: listings.externalUrl, viewCount: listings.viewCount })
+    .from(listings)
+    .where(isNotNull(listings.externalUrl));
+  let changed = 0;
+  for (const row of synced) {
+    const count = row.externalUrl ? views.get(normalizeSourceUrl(row.externalUrl)) : undefined;
+    // Never lower a count: staff may have raised it by hand (admin "Views"
+    // field), and fd.sg's number only ever goes up on its own.
+    if (count === undefined || count <= row.viewCount) continue;
+    await db.update(listings).set({ viewCount: count }).where(eq(listings.id, row.id));
+    changed += 1;
+  }
+  return changed;
+}
+
+/** Sets published_at on already-imported synced listings to fd.sg's original
+ *  posting date where it differs (created_at stays the import time). Skips
+ *  listings whose published date staff set by hand. Returns how many changed. */
+async function backfillSourceDates(dates: Map<string, Date>): Promise<number> {
+  if (dates.size === 0) return 0;
+  const synced = await db
+    .select({ id: listings.id, externalUrl: listings.externalUrl, publishedAt: listings.publishedAt })
+    .from(listings)
+    .where(and(isNotNull(listings.externalUrl), eq(listings.publishedDateLocked, false)));
+  let changed = 0;
+  for (const row of synced) {
+    const source = row.externalUrl ? dates.get(normalizeSourceUrl(row.externalUrl)) : undefined;
+    if (!source || source.getTime() === row.publishedAt?.getTime()) continue;
+    await db.update(listings).set({ publishedAt: source }).where(eq(listings.id, row.id));
+    changed += 1;
+  }
+  return changed;
+}
+
+/** "3,346 views" → 3346, from the text of one archive card. */
+function parseViews(text: string): number | null {
+  const match = text.match(/(\d[\d,]*)\s+views?\b/i);
+  return match ? Number(match[1].replace(/,/g, "")) : null;
+}
+
+/** All listing detail URLs currently on fd.sg's archive, across every page,
+ *  plus each listing's view count as shown on its archive card ("… / 3346
+ *  views /"). Stops once a page adds no URLs we haven't already seen
+ *  (handles both an empty last page and a theme that just re-serves the
+ *  last valid page for an out-of-range page number). */
+async function fetchArchive(): Promise<{ urls: string[]; views: Map<string, number> }> {
+  for (const base of ARCHIVE_BASES) {
+    const result = await fetchArchiveFrom(base);
+    if (result.urls.length > 0) return result;
+  }
+  return { urls: [], views: new Map() };
+}
+
+async function fetchArchiveFrom(base: string): Promise<{ urls: string[]; views: Map<string, number> }> {
   const seen = new Set<string>();
+  const views = new Map<string, number>();
 
   for (let page = 1; page <= MAX_ARCHIVE_PAGES; page++) {
-    const pageUrl = page === 1 ? ARCHIVE_BASE : `${ARCHIVE_BASE}page/${page}/`;
+    const pageUrl = page === 1 ? base : `${base}page/${page}/`;
     const res = await fetch(pageUrl);
     if (!res.ok) break;
 
-    const html = await res.text();
-    const $ = cheerio.load(html);
-    const links = $(".acadp-listings-title-block a")
-      .map((_, el) => $(el).attr("href"))
-      .get()
-      .filter((href): href is string => !!href);
+    const $ = cheerio.load(await res.text());
+
+    // Every link to a listing detail page (title, image, "read more"),
+    // grouped by URL. Not tied to one theme class, so a layout change on
+    // fd.sg doesn't silently find nothing.
+    const anchorsByUrl = new Map<string, ReturnType<typeof $>>();
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href")!.split("#")[0];
+      if (!LISTING_LINK.test(href)) return;
+      if (!anchorsByUrl.has(href)) anchorsByUrl.set(href, $(el));
+    });
 
     const before = seen.size;
-    for (const link of links) seen.add(link);
+    for (const [href, anchor] of anchorsByUrl) {
+      seen.add(href);
+      // The view count ("… / 3346 views /") sits in the same card: walk up
+      // to the largest ancestor that still only links to this one listing.
+      let card = anchor;
+      for (let i = 0; i < 8; i++) {
+        const parent = card.parent();
+        if (!parent.length) break;
+        const otherListing = parent
+          .find("a[href]")
+          .toArray()
+          .some((el) => {
+            const h = ($(el).attr("href") ?? "").split("#")[0];
+            return LISTING_LINK.test(h) && h !== href;
+          });
+        if (otherListing) break;
+        card = parent;
+      }
+      const count = parseViews(card.text());
+      if (count !== null) views.set(normalizeSourceUrl(href), count);
+    }
     if (seen.size === before) break;
   }
 
-  return [...seen];
+  return { urls: [...seen], views };
 }
 
 /** Strips WP's auto-generated resize suffix (e.g. "-1024x477") so the same
@@ -153,24 +300,61 @@ async function scrapeListing(url: string): Promise<ScrapedListing | null> {
   // until it scrolls into view, so the real URL is in data-src. Not an
   // issue on digital.fd.sg (no lazy-loading there), which is why this was
   // missed until switching the sync target.
-  const rawImgs = $("img")
-    .map((_, el) => $(el).attr("data-src") || $(el).attr("src"))
-    .get()
-    .filter(
-      (src): src is string =>
-        !!src &&
-        src.includes("/wp-content/uploads/") &&
-        !/fdsg-logo|social-media|\/ultimatemember\//i.test(src),
-    );
+  const pickImgs = (scope: ReturnType<typeof $>) =>
+    scope
+      .find("img")
+      .map((_, el) => $(el).attr("data-src") || $(el).attr("src"))
+      .get()
+      .filter(
+        (src): src is string => !!src && src.includes("/wp-content/uploads/") && !isSiteChromeImage(src),
+      );
+  // The listing's own images live in the post body; fall back to the whole
+  // page (still minus the site's own images) if the theme ever changes that.
+  const inContent = pickImgs($(".entry-content").first());
+  const rawImgs = inContent.length > 0 ? inContent : pickImgs($("body"));
 
   return { title, sourceUrl: url, category, description, imgs: dedupeImages([...new Set(rawImgs)]) };
+}
+
+/** Removes fd.sg site images (logo, banners) that earlier syncs attached to
+ *  synced listings, and makes the first remaining image the featured one
+ *  where the featured image was removed. Returns how many listings changed. */
+async function removeSiteChromeImages(): Promise<number> {
+  const rows = await db
+    .select({ id: listingImages.id, listingId: listingImages.listingId, url: listingImages.url })
+    .from(listingImages)
+    .innerJoin(listings, eq(listings.id, listingImages.listingId))
+    .where(isNotNull(listings.externalUrl));
+  const bad = rows.filter((r) => isSiteChromeImage(r.url));
+  if (bad.length === 0) return 0;
+
+  const affected = new Set(bad.map((r) => r.listingId));
+  await db.delete(listingImages).where(inArray(listingImages.id, bad.map((r) => r.id)));
+
+  for (const listingId of affected) {
+    const remaining = await db
+      .select({ id: listingImages.id, isFeatured: listingImages.isFeatured })
+      .from(listingImages)
+      .where(eq(listingImages.listingId, listingId))
+      .orderBy(asc(listingImages.position));
+    if (remaining.length > 0 && !remaining.some((r) => r.isFeatured)) {
+      await db.update(listingImages).set({ isFeatured: true }).where(eq(listingImages.id, remaining[0].id));
+    }
+  }
+  return affected.size;
 }
 
 /** Fetches fd.sg's current listing URLs, imports whichever ones we don't
  *  already have (matched by external_url), and leaves everything else
  *  untouched. Safe to call as often as wanted. */
 export async function syncFdsgListings(): Promise<SyncResult> {
-  const urls = await fetchListingUrls();
+  const { urls, views: sourceViews } = await fetchArchive();
+  // Original publish dates from fd.sg's feed. Best-effort: if the feed can't
+  // be read, new imports just get today's date as before.
+  const sourceDates = await fetchSourceDates().catch(() => new Map<string, Date>());
+  const datesUpdated = await backfillSourceDates(sourceDates);
+  const viewsUpdated = await syncSourceViews(sourceViews);
+  const imagesFixed = await removeSiteChromeImages();
 
   const existingExternal = await db
     .select({ externalUrl: listings.externalUrl })
@@ -180,7 +364,7 @@ export async function syncFdsgListings(): Promise<SyncResult> {
 
   const allNewUrls = urls.filter((u) => !existingUrls.has(u));
   if (allNewUrls.length === 0) {
-    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0 };
+    return { added: 0, skipped: urls.length, total: urls.length, remaining: 0, datesUpdated, viewsUpdated, imagesFixed };
   }
 
   const newUrls = allNewUrls.slice(0, MAX_NEW_PER_RUN);
@@ -235,6 +419,10 @@ export async function syncFdsgListings(): Promise<SyncResult> {
         categoryId,
         status: "published",
         externalUrl: scraped.sourceUrl,
+        viewCount: sourceViews.get(normalizeSourceUrl(scraped.sourceUrl)) ?? 0,
+        // Published date = fd.sg's original posting date (created_at stays the
+        // import time); today if the feed didn't have it.
+        publishedAt: sourceDates.get(normalizeSourceUrl(scraped.sourceUrl)) ?? new Date(),
       })
       .returning({ id: listings.id });
 
@@ -254,5 +442,5 @@ export async function syncFdsgListings(): Promise<SyncResult> {
     added += 1;
   }
 
-  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining };
+  return { added, skipped: urls.length - allNewUrls.length, total: urls.length, remaining, datesUpdated, viewsUpdated, imagesFixed };
 }

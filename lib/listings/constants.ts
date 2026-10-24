@@ -13,19 +13,16 @@ export type UserSubmittableStatus = (typeof USER_SUBMITTABLE_STATUSES)[number];
 // Slides in the homepage "Featured listings" video slider.
 export const FEATURED_SLOTS = 6;
 
-// Slider videos go browser -> Vercel Blob directly (server uploads are capped
-// at 4.5MB on Vercel), so these limits are enforced in the token route as
-// well as in the upload form.
+// Slider videos go browser -> R2 directly (server uploads are capped at 4.5MB
+// on Vercel), so these limits are enforced in the upload-URL route
+// (app/api/featured-video/upload) as well as in the upload form.
 export const FEATURED_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 export const FEATURED_VIDEO_TYPES = ["video/mp4", "video/webm"] as const;
 
-/** Only accept video URLs that really live in our Blob store — the value is
- *  rendered into a <video src>, so an arbitrary URL must never be saved. */
-export function isBlobVideoUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && url.hostname.endsWith(".public.blob.vercel-storage.com");
-  } catch {
-    return false;
-  }
-}
+// Image slides (alternative to a video): stills or animated GIFs. GIFs can be
+// heavy, hence a higher cap than listing photos.
+export const FEATURED_IMAGE_MAX_BYTES = 15 * 1024 * 1024;
+export const FEATURED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+
+/** How long an image slide stays before the slider moves on. */
+export const IMAGE_SLIDE_SECONDS = 6;

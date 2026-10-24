@@ -20,13 +20,43 @@ const PDFJS_BASE = "/pdfjs/";
 
 let library: Promise<PdfJs> | null = null;
 
+// pdf.js (v5.4+) calls Map/WeakMap.getOrInsertComputed, a 2025 JavaScript
+// addition that browsers a year or two old don't have — there it fails with
+// "getOrInsertComputed is not a function" and the PDF won't open. Same for
+// Math.sumPrecise (used for some fonts). Add them when missing, on this page
+// and inside pdf.js's worker.
+const MAP_POLYFILL = `for (const C of [Map, WeakMap]) {
+  if (!C.prototype.getOrInsertComputed) C.prototype.getOrInsertComputed = function (k, f) { if (this.has(k)) return this.get(k); const v = f(k); this.set(k, v); return v; };
+  if (!C.prototype.getOrInsert) C.prototype.getOrInsert = function (k, v) { if (this.has(k)) return this.get(k); this.set(k, v); return v; };
+}
+if (!Math.sumPrecise) Math.sumPrecise = function (values) { let s = 0; for (const v of values) s += v; return s; };`;
+
+function needsMapPolyfill() {
+  return (
+    !("getOrInsertComputed" in Map.prototype) ||
+    !("getOrInsertComputed" in WeakMap.prototype) ||
+    !("sumPrecise" in Math)
+  );
+}
+
 function loadPdfJs(): Promise<PdfJs> {
   library ??= (async () => {
+    const polyfill = needsMapPolyfill();
+    if (polyfill) new Function(MAP_POLYFILL)();
     // By URL at runtime (not bundled): it is large and only needed for PDFs.
     const lib = (await import(
       /* webpackIgnore: true */ /* turbopackIgnore: true */ PDFJS_BASE + "pdf.min.mjs"
     )) as PdfJs;
-    lib.GlobalWorkerOptions.workerSrc = PDFJS_BASE + "pdf.worker.min.mjs";
+    const workerUrl = new URL(PDFJS_BASE + "pdf.worker.min.mjs", window.location.origin).href;
+    if (polyfill) {
+      // A small module worker that adds the methods, then loads the real one.
+      const shim = new Blob([`${MAP_POLYFILL}\nawait import(${JSON.stringify(workerUrl)});`], {
+        type: "text/javascript",
+      });
+      lib.GlobalWorkerOptions.workerPort = new Worker(URL.createObjectURL(shim), { type: "module" });
+    } else {
+      lib.GlobalWorkerOptions.workerSrc = workerUrl;
+    }
     return lib;
   })();
   // If loading failed, let the next try start over instead of caching the error.

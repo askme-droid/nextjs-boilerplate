@@ -97,7 +97,10 @@ export async function SiteNav() {
               alt="FDSG"
               width={216}
               height={86}
-              priority
+              // Top of every page: load straight away (`priority` is
+              // deprecated in Next 16).
+              loading="eager"
+              fetchPriority="high"
               className="h-[46.8px] w-auto"
             />
           </Link>

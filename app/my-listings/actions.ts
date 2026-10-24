@@ -1,8 +1,11 @@
 "use server";
 
+import { dbErrorMessage, pgErrorCode } from "@/lib/db/errors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { put } from "@vercel/blob";
+import { after } from "next/server";
+import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
+import { makeKey, putFile } from "@/lib/storage/r2";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingImages, listings } from "@/lib/db/schema";
@@ -58,9 +61,6 @@ function readValues(formData: FormData): MyListingFormValues {
   };
 }
 
-function pgErrorCode(e: unknown): string | undefined {
-  return e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : undefined;
-}
 
 /** Creates (no `id`) or updates (`id` present) a listing the user owns. The
  *  clicked submit button sets `intent` to "draft" or "pending" — see the form. */
@@ -128,13 +128,23 @@ export async function saveMyListing(
     description: values.description || null,
     status: status as (typeof LISTING_STATUSES)[number],
     expiresAt: values.expires_at || null,
+    // Set here rather than on every UPDATE: view counting also updates the
+    // row, and that shouldn't count as the listing changing (the sitemap's
+    // lastModified tells search engines when to re-read the page).
+    updatedAt: new Date(),
   };
 
+  let savedId: string | undefined;
   try {
     if (id) {
       await db.update(listings).set(row).where(eq(listings.id, id));
+      savedId = id;
     } else {
-      await db.insert(listings).values({ ...row, createdBy: user.id });
+      const [created] = await db
+        .insert(listings)
+        .values({ ...row, createdBy: user.id })
+        .returning({ id: listings.id });
+      savedId = created?.id;
     }
   } catch (e) {
     const code = pgErrorCode(e);
@@ -147,7 +157,14 @@ export async function saveMyListing(
     if (code === "23503") {
       return { fieldErrors: { category_id: "Invalid category selected." }, values };
     }
-    return { error: e instanceof Error ? e.message : "Could not save listing.", values };
+    return { error: dbErrorMessage(e, "Could not save listing."), values };
+  }
+
+  // Check a newly entered UEN against ACRA once the response is sent.
+  const uenToCheck = contact.parsed.companyUen;
+  if (savedId && uenToCheck) {
+    const listingId = savedId;
+    after(() => verifyListingBusinessIfChanged(listingId, uenToCheck));
   }
 
   revalidatePath("/my-listings");
@@ -256,13 +273,10 @@ export async function uploadMyListingImages(formData: FormData) {
   try {
     let position = await db.$count(listingImages, eq(listingImages.listingId, listingId));
     for (const file of files) {
-      const blob = await put(`listings/${listingId}/${file.name}`, file, {
-        access: "public",
-        addRandomSuffix: true,
-      });
+      const url = await putFile(makeKey(`listings/${listingId}`, file.name), await file.arrayBuffer(), file.type);
       await db.insert(listingImages).values({
         listingId,
-        url: blob.url,
+        url,
         altText: null,
         position,
         isFeatured: position === 0,

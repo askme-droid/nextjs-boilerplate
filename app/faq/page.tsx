@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/lib/seo/json-ld";
+import { SITE_URL } from "@/lib/seo/listing-seo";
 
 export const metadata: Metadata = {
   title: "FAQ",
   description:
     "Answers to common questions about finding deals and submitting your own listing on FDSG.",
+  alternates: { canonical: "/faq" },
 };
 
 const faqs = [
@@ -26,6 +29,21 @@ const faqs = [
 export default function FaqPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-6">
+      {/* FAQPage structured data, built from the same list rendered below so
+          the two can't drift apart. Lets search engines and AI assistants
+          quote these answers directly. */}
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "@id": `${SITE_URL}/faq`,
+          mainEntity: faqs.map((faq) => ({
+            "@type": "Question",
+            name: faq.question,
+            acceptedAnswer: { "@type": "Answer", text: faq.answer },
+          })),
+        }}
+      />
       <h1 className="text-3xl font-semibold tracking-tight">
         Frequently Asked Questions
       </h1>

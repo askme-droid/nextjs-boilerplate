@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 import { getListingOutboundUrl } from "@/lib/listings/outbound";
+import { incrementViewsBySlug, shouldCountView } from "@/lib/listings/views";
 
 const PROTECTED_PREFIXES = ["/admin", "/my-listings"];
 
@@ -24,8 +25,14 @@ export async function proxy(request: NextRequest) {
   const listingMatch = LISTING_PATH.exec(request.nextUrl.pathname);
   if (listingMatch) {
     try {
-      const outbound = await getListingOutboundUrl(decodeURIComponent(listingMatch[1]));
-      if (outbound) return NextResponse.redirect(outbound, 307);
+      const slug = decodeURIComponent(listingMatch[1]);
+      const outbound = await getListingOutboundUrl(slug);
+      if (outbound) {
+        if (outbound.countsAsView && shouldCountView(request.headers, request.method)) {
+          after(() => incrementViewsBySlug(slug));
+        }
+        return NextResponse.redirect(outbound.url, 307);
+      }
     } catch {
       // fall through to the page
     }
