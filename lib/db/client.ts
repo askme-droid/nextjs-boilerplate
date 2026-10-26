@@ -1,68 +1,48 @@
 import "server-only";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "./schema";
 
-type Db = PostgresJsDatabase<typeof schema>;
+type Db = DrizzleD1Database<typeof schema>;
 
 /**
- * Database access, safe for Cloudflare Workers.
+ * Database access: Cloudflare D1 (SQLite), through the Worker's `DB` binding
+ * (wrangler.jsonc -> d1_databases).
  *
- * Workers don't allow a connection opened during one request to be reused
- * by another ("Cannot perform I/O on behalf of a different request"), so the
- * old module-level Postgres pool can't be used there. Instead each request
- * gets its own small client, created on first use and keyed by the request's
- * ExecutionContext. Connection pooling across requests is Hyperdrive's job:
- * when a HYPERDRIVE binding exists (wrangler.jsonc), its connection string is
- * used; otherwise DATABASE_URL is used directly (slower, but works).
+ * `next dev` gets the binding too (initOpenNextCloudflareForDev in
+ * next.config.ts), backed by a local copy of the database under .wrangler/.
  *
- * Outside Workers (next build, plain `node`), the old per-process singleton
- * is used.
+ * D1 has no interactive transactions: use `db.batch([...])` to run several
+ * writes all-or-nothing.
  *
- * `db` stays a plain object to import, so no call site had to change.
+ * `db` stays a plain object to import, so call sites don't change.
  */
 
-const perRequest = new WeakMap<object, Db>();
+const byBinding = new WeakMap<D1Database, Db>();
 
-declare global {
-  var __nodeDb: Db | undefined;
-}
-
-function connectionStringFrom(env?: { HYPERDRIVE?: { connectionString: string } }): string {
-  const url = env?.HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("Missing DATABASE_URL (or a HYPERDRIVE binding). See .env.local.example.");
-  }
-  return url;
-}
-
-function workerContext() {
+function binding(): D1Database {
+  let env: { DB?: D1Database } | undefined;
   try {
-    return getCloudflareContext();
+    env = getCloudflareContext().env as { DB?: D1Database };
   } catch {
-    return null; // not running inside a Worker request
+    env = undefined;
   }
+  if (!env?.DB) {
+    throw new Error(
+      "The database (D1 binding \"DB\") isn't available here. Run the site with `npm run dev` or on Cloudflare; see wrangler.jsonc.",
+    );
+  }
+  return env.DB;
 }
 
 export function getDb(): Db {
-  const cf = workerContext();
-  if (cf?.ctx) {
-    const existing = perRequest.get(cf.ctx);
-    if (existing) return existing;
-    const client = postgres(connectionStringFrom(cf.env as { HYPERDRIVE?: { connectionString: string } }), {
-      // One request rarely runs more than a few queries at once.
-      max: 5,
-      // Skips an extra round trip on connect; this schema uses no custom types.
-      fetch_types: false,
-    });
-    const db = drizzle(client, { schema });
-    perRequest.set(cf.ctx, db);
-    return db;
+  const d1 = binding();
+  let db = byBinding.get(d1);
+  if (!db) {
+    db = drizzle(d1, { schema });
+    byBinding.set(d1, db);
   }
-
-  globalThis.__nodeDb ??= drizzle(postgres(connectionStringFrom()), { schema });
-  return globalThis.__nodeDb;
+  return db;
 }
 
 export const db: Db = new Proxy({} as Db, {

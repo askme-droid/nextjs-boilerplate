@@ -329,7 +329,11 @@ async function removeSiteChromeImages(): Promise<number> {
   if (bad.length === 0) return 0;
 
   const affected = new Set(bad.map((r) => r.listingId));
-  await db.delete(listingImages).where(inArray(listingImages.id, bad.map((r) => r.id)));
+  const badIds = bad.map((r) => r.id);
+  for (let i = 0; i < badIds.length; i += 90) {
+    // D1 allows at most 100 values per query.
+    await db.delete(listingImages).where(inArray(listingImages.id, badIds.slice(i, i + 90)));
+  }
 
   for (const listingId of affected) {
     const remaining = await db

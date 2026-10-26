@@ -133,31 +133,28 @@ export async function removeFeatured(formData: FormData) {
 }
 
 /** Swap a picked listing with its neighbour. Renumbers the whole picked list
- *  0..n-1 in one transaction so the order stays gap-free and unambiguous. */
+ *  0..n-1 in one batch so the order stays gap-free and unambiguous. */
 export async function moveFeatured(formData: FormData) {
   await requireStaff();
   const id = String(formData.get("id") ?? "");
   const direction = formData.get("direction") === "up" ? -1 : 1;
 
-  await db.transaction(async (tx) => {
-    const picked = await tx
-      .select({ id: listings.id })
-      .from(listings)
-      .where(eq(listings.homepageFeatured, true))
-      .orderBy(asc(listings.homepageFeaturedOrder), desc(listings.createdAt));
+  const picked = await db
+    .select({ id: listings.id })
+    .from(listings)
+    .where(eq(listings.homepageFeatured, true))
+    .orderBy(asc(listings.homepageFeaturedOrder), desc(listings.createdAt));
 
-    const from = picked.findIndex((p) => p.id === id);
-    const to = from + direction;
-    if (from === -1 || to < 0 || to >= picked.length) return;
-
+  const from = picked.findIndex((p) => p.id === id);
+  const to = from + direction;
+  if (from !== -1 && to >= 0 && to < picked.length) {
     [picked[from], picked[to]] = [picked[to], picked[from]];
-    for (const [position, row] of picked.entries()) {
-      await tx
-        .update(listings)
-        .set({ homepageFeaturedOrder: position })
-        .where(eq(listings.id, row.id));
-    }
-  });
+    // One batch = all-or-nothing on D1 (it has no BEGIN/COMMIT transactions).
+    const [first, ...rest] = picked.map((row, position) =>
+      db.update(listings).set({ homepageFeaturedOrder: position }).where(eq(listings.id, row.id)),
+    );
+    await db.batch([first, ...rest]);
+  }
 
   refresh();
   redirect(FEATURED_PATH);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, cosineDistance, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingImages, listings } from "@/lib/db/schema";
 import { embedImage, IMAGE_SEARCH_ENABLED } from "@/lib/listings/embeddings";
@@ -12,7 +12,8 @@ const MAX_RESULTS = 24;
  * "Search by image" (see app/components/image-search-button.tsx): embeds the
  * uploaded photo with the same CLIP model used to index listing images (see
  * lib/listings/embeddings.ts), then ranks published listings by their
- * closest image match via pgvector cosine distance. Returns listing ids only,
+ * closest image match by cosine distance (worked out here: D1 has no vector
+ * search, and the directory has only a few hundred images). Returns listing ids only,
  * best match first — the home page re-fetches full listing data for them
  * (see getListingsByIds in lib/listings/queries.ts) and renders the normal
  * listing card.
@@ -43,15 +44,35 @@ export async function POST(request: Request) {
 
   // One listing can have several images; rank it by its single best match
   // rather than once per matching image.
-  const distance = cosineDistance(listingImages.embedding, embedding);
   const rows = await db
-    .select({ listingId: listingImages.listingId, distance: sql<number>`min(${distance})` })
+    .select({ listingId: listingImages.listingId, embedding: listingImages.embedding })
     .from(listingImages)
     .innerJoin(listings, eq(listings.id, listingImages.listingId))
-    .where(and(eq(listings.status, "published"), isNotNull(listingImages.embedding)))
-    .groupBy(listingImages.listingId)
-    .orderBy(sql`min(${distance})`)
-    .limit(MAX_RESULTS);
+    .where(and(eq(listings.status, "published"), isNotNull(listingImages.embedding)));
 
-  return NextResponse.json({ ids: rows.map((r) => r.listingId) });
+  const best = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.embedding) continue;
+    const d = cosineDistance(row.embedding, embedding);
+    const prev = best.get(row.listingId);
+    if (prev === undefined || d < prev) best.set(row.listingId, d);
+  }
+  const ids = [...best.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .slice(0, MAX_RESULTS)
+    .map(([id]) => id);
+
+  return NextResponse.json({ ids });
+}
+
+function cosineDistance(a: number[], b: number[]): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return na && nb ? 1 - dot / Math.sqrt(na * nb) : 1;
 }

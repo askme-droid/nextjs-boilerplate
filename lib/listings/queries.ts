@@ -1,23 +1,25 @@
 import { cache } from "react";
 import { isVerifiedBusiness } from "@/lib/business/verify-listing";
-import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { ENDS_SOON_WITHIN_DAYS, NEW_WITHIN_DAYS, POPULAR_MIN_VIEWS, TRENDING_MIN_VIEWS, type ShowFilter } from "./badges";
 import { notExpired } from "./expiry";
 import { db } from "@/lib/db/client";
+import { ilike, sgToday } from "@/lib/db/sql";
+import { nowMs } from "@/lib/db/schema/types";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings } from "@/lib/db/schema";
 
 export const PAGE_SIZE = 12;
 
 // The date visitors see and the newest-first order (see the schema comment).
-const publishedAtSql = sql<Date>`coalesce(${listings.publishedAt}, ${listings.createdAt})`;
+const publishedAtSql = sql<Date>`coalesce(${listings.publishedAt}, ${listings.createdAt})`.mapWith(listings.createdAt);
 
 // Same windows as the New and "Ends in …" card badges (lib/listings/badges.ts).
-const newSql = sql`${publishedAtSql} >= now() - make_interval(days => ${NEW_WITHIN_DAYS}::int)`;
-const endingSoonSql = sql`${listings.expiresAt} is not null and ${listings.expiresAt} <= (now() at time zone 'Asia/Singapore')::date + ${ENDS_SOON_WITHIN_DAYS}::int`;
+const newSql = sql`${publishedAtSql} >= ${nowMs} - ${sql.raw(String(NEW_WITHIN_DAYS * 86_400_000))}`;
+const endingSoonSql = sql`${listings.expiresAt} is not null and ${listings.expiresAt} <= ${sgToday(ENDS_SOON_WITHIN_DAYS)}`;
 
 /** How many current listings each homepage "Browse" pill would show. */
 export async function getShowCounts(): Promise<Record<ShowFilter, number>> {
-  const n = (cond: SQL) => sql<number>`count(*) filter (where ${cond})::int`;
+  const n = (cond: SQL) => sql<number>`count(*) filter (where ${cond})`.mapWith(Number);
   const [row] = await db
     .select({
       trending: n(and(gte(listings.viewCount, TRENDING_MIN_VIEWS), lt(listings.viewCount, POPULAR_MIN_VIEWS))!),
@@ -35,7 +37,9 @@ export async function getShowCounts(): Promise<Record<ShowFilter, number>> {
 // Same rule as isVerifiedBusiness (lib/business/verify-listing.ts), in SQL
 // for the listing grids: the saved UEN is the one checked against ACRA, and
 // ACRA lists the business as live ("Live", "Live Company", "Registered").
-const verifiedBusinessSql = sql<boolean>`coalesce(${listings.companyUen} = ${listings.uenVerifiedUen} and (lower(${listings.uenVerifiedStatus}) like 'live%' or lower(${listings.uenVerifiedStatus}) = 'registered'), false)`;
+const verifiedBusinessSql = sql<boolean>`coalesce(${listings.companyUen} = ${listings.uenVerifiedUen} and (lower(${listings.uenVerifiedStatus}) like 'live%' or lower(${listings.uenVerifiedStatus}) = 'registered'), false)`.mapWith((v) => Boolean(Number(v)));
+// (D1 returns 0/1 for SQL true/false; mapWith turns it back into a boolean so
+// `{verified && <Badge/>}` never renders a stray "0".)
 
 export type ListingCategory = { id: string; name: string; slug: string };
 
@@ -221,17 +225,23 @@ async function attachImages(
   const byListing = new Map<string, Pick<ListingImage, "id" | "url" | "is_featured" | "position">[]>();
   if (listingIds.length === 0) return byListing;
 
-  const rows: ImageRow[] = await db
-    .select({
-      listingId: listingImages.listingId,
-      id: listingImages.id,
-      url: listingImages.url,
-      is_featured: listingImages.isFeatured,
-      position: listingImages.position,
-    })
-    .from(listingImages)
-    .where(inArray(listingImages.listingId, listingIds))
-    .orderBy(asc(listingImages.position));
+  // D1 allows at most 100 values per query, so long id lists go in chunks.
+  const rows: ImageRow[] = [];
+  for (let i = 0; i < listingIds.length; i += 90) {
+    rows.push(
+      ...(await db
+        .select({
+          listingId: listingImages.listingId,
+          id: listingImages.id,
+          url: listingImages.url,
+          is_featured: listingImages.isFeatured,
+          position: listingImages.position,
+        })
+        .from(listingImages)
+        .where(inArray(listingImages.listingId, listingIds.slice(i, i + 90)))
+        .orderBy(asc(listingImages.position))),
+    );
+  }
 
   for (const { listingId, ...image } of rows) {
     const list = byListing.get(listingId) ?? [];
@@ -251,7 +261,7 @@ export async function getListings(
   const where = buildListingsWhere(filter);
 
   const [{ count: totalCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
+    .select({ count: sql<number>`count(*)`.mapWith(Number) })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
     .where(where);

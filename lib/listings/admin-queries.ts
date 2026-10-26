@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { ilike } from "@/lib/db/sql";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings, user } from "@/lib/db/schema";
 import { isStaff } from "@/lib/auth/roles";

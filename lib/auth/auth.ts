@@ -4,12 +4,21 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { Resend } from "resend";
 import { db } from "@/lib/db/client";
+import * as schema from "@/lib/db/schema";
 import { renderAuthEmail } from "./email-template";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Created on first use, not when this file loads: the build imports this file
+// without the site's secret settings, and Resend refuses an empty key.
+let resendClient: Resend | undefined;
+const resend = {
+  get emails() {
+    resendClient ??= new Resend(process.env.RESEND_API_KEY);
+    return resendClient.emails;
+  },
+};
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, { provider: "pg" }),
+  database: drizzleAdapter(db, { provider: "sqlite", schema }),
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
   emailAndPassword: {

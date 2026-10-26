@@ -126,9 +126,8 @@ function isOwnListingUrl(url: string, slug: string): boolean {
   return OWN_HOSTS.has(parsed.hostname) && parsed.pathname.replace(/\/+$/, "") === `/listings/${slug}`;
 }
 
-// postgres.js throws a PostgresError whose `code` is the Postgres SQLSTATE —
-// 23505 (unique_violation) / 23503 (foreign_key_violation) — surfaced as-is,
-// not wrapped, so this narrow check is enough to distinguish them.
+// pgErrorCode (lib/db/errors.ts) gives 23505 for "already exists" (unique)
+// and 23503 for "points at something missing" (foreign key).
 
 /** Creates a listing (no `id` field in formData) or updates one (with `id`). */
 export async function saveListing(
@@ -283,7 +282,7 @@ export async function saveListing(
     ...(publishedDateChanged && publishedAt
       ? { publishedAt, publishedDateLocked: true }
       : status === "published"
-        ? { publishedAt: id ? sql`coalesce(${listings.publishedAt}, now())` : new Date() }
+        ? { publishedAt: id ? sql`coalesce(${listings.publishedAt}, ${Date.now()})` : new Date() }
         : {}),
     // Homepage featuring isn't set here any more: it's managed only on the
     // Featured listings page (featured-actions.ts), so saving a listing
@@ -430,7 +429,7 @@ export async function publishListing(formData: FormData) {
     await db
       .update(listings)
       // First publish stamps the published date; a re-publish keeps it.
-      .set({ status: "published", publishedAt: sql`coalesce(${listings.publishedAt}, now())` })
+      .set({ status: "published", publishedAt: sql`coalesce(${listings.publishedAt}, ${Date.now()})` })
       .where(eq(listings.id, id));
   } catch (e) {
     redirect(editUrl(id, e instanceof Error ? e.message : "Could not publish listing."));
