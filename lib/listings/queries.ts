@@ -37,7 +37,9 @@ export async function getShowCounts(): Promise<Record<ShowFilter, number>> {
 // Same rule as isVerifiedBusiness (lib/business/verify-listing.ts), in SQL
 // for the listing grids: the saved UEN is the one checked against ACRA, and
 // ACRA lists the business as live ("Live", "Live Company", "Registered").
-const verifiedBusinessSql = sql<boolean>`coalesce(${listings.companyUen} = ${listings.uenVerifiedUen} and (lower(${listings.uenVerifiedStatus}) like 'live%' or lower(${listings.uenVerifiedStatus}) = 'registered'), false)`;
+const verifiedBusinessSql = sql<boolean>`coalesce(${listings.companyUen} = ${listings.uenVerifiedUen} and (lower(${listings.uenVerifiedStatus}) like 'live%' or lower(${listings.uenVerifiedStatus}) = 'registered'), false)`.mapWith((v) => Boolean(Number(v)));
+// (D1 returns 0/1 for SQL true/false; mapWith turns it back into a boolean so
+// `{verified && <Badge/>}` never renders a stray "0".)
 
 export type ListingCategory = { id: string; name: string; slug: string };
 
