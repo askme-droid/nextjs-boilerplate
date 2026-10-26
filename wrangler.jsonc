@@ -17,6 +17,8 @@
   "observability": {
     "enabled": true
   },
+  // The live address. Cloudflare creates its DNS record on deploy.
+  "routes": [{ "pattern": "directories.fd.sg", "custom_domain": true }],
   // The database: Cloudflare D1 (SQLite). Code: lib/db/client.ts.
   "d1_databases": [
     {
@@ -35,6 +37,7 @@
     // Settings not repeated here (keep_vars, assets, observability) are
     // inherited from the top level; bindings such as d1_databases are not.
     "staging": {
+      "routes": [],
       "d1_databases": [
         {
           "binding": "DB",
