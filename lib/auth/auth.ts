@@ -7,7 +7,15 @@ import { db } from "@/lib/db/client";
 import * as schema from "@/lib/db/schema";
 import { renderAuthEmail } from "./email-template";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Created on first use, not when this file loads: the build imports this file
+// without the site's secret settings, and Resend refuses an empty key.
+let resendClient: Resend | undefined;
+const resend = {
+  get emails() {
+    resendClient ??= new Resend(process.env.RESEND_API_KEY);
+    return resendClient.emails;
+  },
+};
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "sqlite", schema }),
