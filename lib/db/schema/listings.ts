@@ -1,54 +1,43 @@
-import {
-  boolean,
-  date,
-  integer,
-  jsonb,
-  numeric,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-  uuid,
-  vector,
-} from "drizzle-orm/pg-core";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { user } from "./auth";
+import { boolean, createdAt, date, id, json, timestamp, uuidRef } from "./types";
 
 // Target status model (draft/pending/published/rejected), already confirmed
 // with the user — see the Railway/Drizzle/Better-Auth migration plan.
 export const LISTING_STATUSES = ["draft", "pending", "published", "rejected"] as const;
 
-export const categories = pgTable("categories", {
-  id: uuid("id").primaryKey().defaultRandom(),
+export const categories = sqliteTable("categories", {
+  id: id(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(), // confirmed UNIQUE by live testing (categories_slug_key)
   description: text("description"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 });
 
-export const experienceTags = pgTable("experience_tags", {
-  id: uuid("id").primaryKey().defaultRandom(),
+export const experienceTags = sqliteTable("experience_tags", {
+  id: id(),
   name: text("name").notNull(),
   // Not explicitly confirmed unique via testing this session (only
   // categories.slug and listings.slug were tested) — add .unique() here if
   // Phase 4's data migration finds duplicate slugs would violate it; if none
   // exist, adding the constraint is harmless and matches categories' pattern.
   slug: text("slug").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 });
 
-export const listings = pgTable("listings", {
-  id: uuid("id").primaryKey().defaultRandom(),
+export const listings = sqliteTable("listings", {
+  id: id(),
   title: text("title").notNull(),
   slug: text("slug").notNull().unique(), // confirmed UNIQUE by live testing (listings_slug_key)
   description: text("description"),
-  categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }), // ON DELETE SET NULL confirmed by live testing
+  categoryId: uuidRef("category_id").references(() => categories.id, { onDelete: "set null" }), // ON DELETE SET NULL confirmed by live testing
   location: text("location"),
   companyName: text("company_name"),
   companyUen: text("company_uen"),
-  socialLinks: text("social_links").array(),
+  socialLinks: json<string[]>("social_links"),
   ctaLabel: text("cta_label"),
   ctaUrl: text("cta_url"),
-  keywords: text("keywords").array(),
+  keywords: json<string[]>("keywords"),
   status: text("status", { enum: LISTING_STATUSES }).notNull().default("draft"),
   featuredImageUrl: text("featured_image_url"),
   // Staff-curated pick for the homepage "Featured listings" section (see
@@ -97,15 +86,16 @@ export const listings = pgTable("listings", {
   // the page; faqs are question/answer pairs shown on the page and marked up
   // as schema.org FAQPage; the offer fields feed the page and the Offer markup.
   quickAnswer: text("quick_answer"),
-  faqs: jsonb("faqs").$type<{ q: string; a: string }[]>(),
-  offerPrice: numeric("offer_price", { precision: 10, scale: 2 }),
+  faqs: json<{ q: string; a: string }[]>("faqs"),
+  // "25.90" as text (was numeric(10,2) in Postgres).
+  offerPrice: text("offer_price"),
   offerDiscount: text("offer_discount"),
   redemptionInfo: text("redemption_info"),
   // "Who is this for" (one line, e.g. "Parents of P1–Sec 4 students in Bukit
   // Batok") and up to 8 short "key points" bullets — both shown on the page
   // and read by answer engines.
   audience: text("audience"),
-  keyPoints: jsonb("key_points").$type<string[]>(),
+  keyPoints: json<string[]>("key_points"),
   // Was uuid FK -> profiles.id under Supabase; Better-Auth's user.id is text,
   // so this column's type changed too (see migration plan). ON DELETE
   // behavior is an assumption (SET NULL — a user's historical listings
@@ -128,52 +118,52 @@ export const listings = pgTable("listings", {
   uenVerifiedUen: text("uen_verified_uen"),
   uenVerifiedName: text("uen_verified_name"),
   uenVerifiedStatus: text("uen_verified_status"),
-  uenVerifiedAt: timestamp("uen_verified_at", { withTimezone: true }),
+  uenVerifiedAt: timestamp("uen_verified_at"),
   // published_at is the date visitors see ("Posted 2 days ago", newest first,
   // the New badge). Set when the listing is first published; staff can edit
   // it. For synced listings it's fd.sg's posting date. Null = never published
   // (code falls back to created_at). created_at stays the moment the entry
   // was made and never changes.
-  publishedAt: timestamp("published_at", { withTimezone: true }),
+  publishedAt: timestamp("published_at"),
   // Set when staff edit the published date, so "Refresh from fd.sg" stops
   // copying fd.sg's date over it.
   publishedDateLocked: boolean("published_date_locked").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
+  updatedAt: createdAt("updated_at"),
   // search_vector intentionally dropped: confirmed via exploration that no
   // query in this app ever reads it (search uses ilike on title/description
   // directly) — it was write-only dead weight under Supabase. Add back as a
   // generated tsvector column + GIN index if full-text search is wanted later.
 });
 
-export const listingImages = pgTable("listing_images", {
-  id: uuid("id").primaryKey().defaultRandom(),
+export const listingImages = sqliteTable("listing_images", {
+  id: id(),
   // ON DELETE CASCADE is an assumption (standard for a detail/child table),
   // not confirmed against the original constraint.
-  listingId: uuid("listing_id")
+  listingId: uuidRef("listing_id")
     .notNull()
     .references(() => listings.id, { onDelete: "cascade" }),
   url: text("url").notNull(),
   altText: text("alt_text"),
   position: integer("position").notNull().default(0),
   isFeatured: boolean("is_featured").notNull().default(false),
-  // CLIP ViT-B/32 image embedding (see lib/listings/embeddings.ts), used for
-  // "search by image" nearest-neighbor lookups via pgvector's cosine
-  // distance. Null until backfilled/generated — every read path has to
+  // CLIP ViT-B/32 image embedding (see lib/listings/embeddings.ts) for
+  // "search by image" (turned off on Cloudflare). Null until backfilled/generated — every read path has to
   // tolerate that, not just newly-added images.
-  embedding: vector("embedding", { dimensions: 512 }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Stored as a JSON array of 512 numbers (pgvector before the move to D1).
+  embedding: json<number[]>("embedding"),
+  createdAt: createdAt(),
 });
 
-export const listingExperienceTags = pgTable(
+export const listingExperienceTags = sqliteTable(
   "listing_experience_tags",
   {
     // ON DELETE CASCADE on both sides is an assumption for this junction
     // table, not confirmed against the original constraints.
-    listingId: uuid("listing_id")
+    listingId: uuidRef("listing_id")
       .notNull()
       .references(() => listings.id, { onDelete: "cascade" }),
-    tagId: uuid("tag_id")
+    tagId: uuidRef("tag_id")
       .notNull()
       .references(() => experienceTags.id, { onDelete: "cascade" }),
   },

@@ -55,3 +55,6 @@ next-env.d.ts
 /.open-next/
 /.wrangler/
 .dev.vars
+
+# Data export for D1 (contains user accounts)
+d1-import.sql

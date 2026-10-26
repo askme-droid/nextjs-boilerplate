@@ -92,14 +92,14 @@ export function ImageSearchButton() {
 
     try {
       const res = await fetch("/api/search-by-image", { method: "POST", body: formData });
-      const data = await res.json();
+      const data = (await res.json()) as { error?: string; ids?: string[] };
       if (!res.ok) {
         setError(data.error ?? "Could not search by image.");
         return;
       }
       requestScrollToResults();
       startTransition(() => {
-        router.push(`/?imageMatch=${(data.ids as string[]).join(",")}`, { scroll: false });
+        router.push(`/?imageMatch=${(data.ids ?? []).join(",")}`, { scroll: false });
       });
     } catch {
       setError("Could not search by image. Try again.");

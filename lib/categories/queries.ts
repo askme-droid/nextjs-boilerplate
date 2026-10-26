@@ -65,7 +65,7 @@ export async function getCategoriesWithCounts(): Promise<CategoryWithCounts[]> {
       slug: categories.slug,
       listingCount: count(listings.id),
       // Published and not expired (lib/listings/expiry.ts) — what visitors see.
-      publishedCount: sql<number>`count(${listings.id}) filter (where ${listings.status} = 'published' and ${notExpired})`,
+      publishedCount: sql<number>`count(${listings.id}) filter (where ${listings.status} = 'published' and ${notExpired})`.mapWith(Number),
     })
     .from(categories)
     .leftJoin(listings, eq(listings.categoryId, categories.id))

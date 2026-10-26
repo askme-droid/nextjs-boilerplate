@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { listings } from "@/lib/db/schema";
+import { sgToday } from "@/lib/db/sql";
 
 export { isExpired, singaporeDatePlusDays, todayInSingapore } from "./expiry-dates";
 
@@ -14,4 +15,4 @@ export { isExpired, singaporeDatePlusDays, todayInSingapore } from "./expiry-dat
  */
 
 /** SQL condition: the listing hasn't expired (no date, or today or later in Singapore). */
-export const notExpired = sql`(${listings.expiresAt} is null or ${listings.expiresAt} >= (now() at time zone 'Asia/Singapore')::date)`;
+export const notExpired = sql`(${listings.expiresAt} is null or ${listings.expiresAt} >= ${sgToday()})`;
