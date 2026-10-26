@@ -40,7 +40,7 @@
           "binding": "DB",
           "database_name": "fdsg-directory-staging",
           // Workers & Pages -> D1 -> fdsg-directory-staging -> Database ID
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "cbad6373-a3a0-4706-8449-c280d9a48d37",
           "migrations_dir": "migrations"
         }
       ]
