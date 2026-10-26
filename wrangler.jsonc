@@ -17,6 +17,9 @@
   "observability": {
     "enabled": true
   },
+  // Keep the *.workers.dev test addresses on (wrangler turns them off by
+  // default once "routes" is set).
+  "workers_dev": true,
   // The live address. Cloudflare creates its DNS record on deploy.
   "routes": [{ "pattern": "directories.fd.sg", "custom_domain": true }],
   // The database: Cloudflare D1 (SQLite). Code: lib/db/client.ts.
