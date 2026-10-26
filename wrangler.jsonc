@@ -16,6 +16,15 @@
   "keep_vars": true,
   "observability": {
     "enabled": true
+  },
+  // Staging copy for testing before live: `npm run deploy:staging`, or
+  // Cloudflare Workers Builds on push to the `staging` branch with the deploy
+  // command `npx opennextjs-cloudflare deploy --env staging`. Deploys as the
+  // Worker "fdsg-directory-staging", with its own settings in the dashboard.
+  "env": {
+    // Settings not repeated here (keep_vars, assets, observability) are
+    // inherited from the top level.
+    "staging": {}
   }
   // Hyperdrive (connection pooling to Postgres, recommended). Create one in
   // the dashboard (Storage & databases -> Hyperdrive) pointing at the
