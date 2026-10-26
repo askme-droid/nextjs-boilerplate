@@ -23,7 +23,7 @@
       "binding": "DB",
       "database_name": "fdsg-directory",
       // Workers & Pages -> D1 -> fdsg-directory -> Database ID
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "b505f1e0-f978-48ec-b0c3-ad53fe2fc71c",
       "migrations_dir": "migrations"
     }
   ],
