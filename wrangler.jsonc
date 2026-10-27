@@ -15,7 +15,10 @@
   // keep them there instead of letting a deploy wipe dashboard-only vars.
   "keep_vars": true,
   "observability": {
-    "enabled": true
+    "enabled": true,
+    // Per-request traces (each D1 query / fetch with its timing), in the
+    // dashboard under Observability -> Traces.
+    "traces": { "enabled": true }
   },
   // Keep the *.workers.dev test addresses on (wrangler turns them off by
   // default once "routes" is set).
