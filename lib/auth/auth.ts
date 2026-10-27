@@ -117,4 +117,11 @@ export const auth = betterAuth({
   // and auth.api.* doesn't reach for that on its own. Must be last in the
   // plugins array per Better-Auth's own convention.
   plugins: [nextCookies()],
+  // Better Auth checks the database tables once per server copy and makes
+  // every later auth call (getSession runs on every page) wait for that one
+  // shared check. On Cloudflare Workers a promise started by one request can
+  // never finish once that request ends or is cancelled, so later requests
+  // waited forever (pages hung until the next deploy). The tables are created
+  // by our own migrations (migrations/), so the check isn't needed.
+  advanced: { database: { validateSchema: false } },
 });

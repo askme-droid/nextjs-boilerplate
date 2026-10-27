@@ -29,7 +29,14 @@ const socialLinkClass = "text-white/90 transition-colors hover:text-white";
  * its actual pixels, it fades into a near-black dark-mode background otherwise.
  */
 export async function SiteNav() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  // Never let the header hold up the whole page: if the sign-in lookup is
+  // slow (it once hung on Cloudflare, see lib/auth/auth.ts), show the
+  // signed-out header after 5 seconds instead of waiting forever.
+  const requestHeaders = await headers();
+  const session = await Promise.race([
+    auth.api.getSession({ headers: requestHeaders }).catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+  ]);
 
   return (
     <div>
