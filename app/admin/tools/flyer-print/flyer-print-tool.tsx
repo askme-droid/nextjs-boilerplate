@@ -143,9 +143,9 @@ export function FlyerPrintTool() {
   // Print settings: the front's, and the back's when it has its own.
   const [frontSettings, setFrontSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [backSettings, setBackSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  // Which side step 2 changes: both at once (the back copies the front), or
-  // just the front or just the back once they have their own settings.
-  const [scope, setScope] = useState<"both" | SideName>("both");
+  // While linked, the back simply uses the front's settings. Changing a
+  // setting on the Back tab gives the back its own (unlinks it).
+  const [backLinked, setBackLinked] = useState(true);
   // One CMYK choice for both: the CMYK PDF holds both pages.
   const [cmyk, setCmyk] = useState(true);
   const [showProof, setShowProof] = useState(false);
@@ -192,8 +192,9 @@ export function FlyerPrintTool() {
 
   // Step 2 edits the back's own settings only while the Back tab is open and
   // "same settings" is off; otherwise it edits the front's (used by both).
-  const separate = scope !== "both" && !!back.source;
-  const editingBack = separate && scope === "back";
+  const separate = !backLinked && !!back.source;
+  // Step 2 always shows the side chosen with the Front / Back tabs.
+  const editingBack = tab === "back" && !!back.source;
   const settingsFor = (name: SideName): Derived =>
     name === "back" && separate
       ? derive(backSettings, back.source?.bitmap)
@@ -201,8 +202,17 @@ export function FlyerPrintTool() {
         // so both pages come out the same way round.
         derive(frontSettings, front.source?.bitmap);
   const editing = settingsFor(editingBack ? "back" : "front");
-  const update = (patch: Partial<Settings>) =>
-    (editingBack ? setBackSettings : setFrontSettings)((s) => ({ ...s, ...patch }));
+  const update = (patch: Partial<Settings>) => {
+    if (!editingBack) {
+      setFrontSettings((s) => ({ ...s, ...patch }));
+    } else if (backLinked) {
+      // First change on the back: start from the front's settings.
+      setBackSettings({ ...frontSettings, ...patch });
+      setBackLinked(false);
+    } else {
+      setBackSettings((s) => ({ ...s, ...patch }));
+    }
+  };
   const { paper, customWidth, customHeight, orientationChoice, fit, addBleed, bleedInput, bleedMode, bleedColorInput, marks } =
     editing;
   const { bleedColor, colorProblem, sizeProblem } = editing;
@@ -399,7 +409,7 @@ export function FlyerPrintTool() {
           <p className={hintClass}>
             {tab === "front"
               ? "Add a back as well to get one PDF with the front on page 1 and the back on page 2."
-              : "The back is printed with the same paper size and settings as the front, as page 2 of the same PDF."}
+              : "The back is page 2 of the same PDF. It uses the front's print settings until you change them on this tab."}
           </p>
 
           <label
@@ -614,35 +624,40 @@ export function FlyerPrintTool() {
 
           {back.source && (
             <div className="flex flex-col gap-2 rounded-lg border border-brand-teal/40 bg-brand-teal/5 p-3">
-              <p className="text-sm font-medium">These settings apply to</p>
-              <div role="radiogroup" aria-label="Settings apply to" className="grid grid-cols-3 gap-1 rounded-lg bg-white p-1 text-sm dark:bg-zinc-900">
-                {(["both", "front", "back"] as const).map((value) => (
+              <div role="tablist" aria-label="Print settings for" className="grid grid-cols-2 gap-1 rounded-lg bg-white p-1 text-sm dark:bg-zinc-900">
+                {(["front", "back"] as const).map((name) => (
                   <button
-                    key={value}
+                    key={name}
                     type="button"
-                    role="radio"
-                    aria-checked={scope === value}
-                    onClick={() => {
-                      // The first time the sides are split, the back starts
-                      // as a copy of the front's settings.
-                      if (scope === "both" && value !== "both") setBackSettings(frontSettings);
-                      setScope(value);
-                    }}
+                    role="tab"
+                    aria-selected={tab === name}
+                    onClick={() => setTab(name)}
                     className={`rounded-md px-2 py-1.5 font-medium transition-colors ${
-                      scope === value
-                        ? "bg-brand-teal text-white shadow-sm"
-                        : "text-zinc-600 hover:text-foreground dark:text-zinc-400"
+                      tab === name ? "bg-brand-teal text-white shadow-sm" : "text-zinc-600 hover:text-foreground dark:text-zinc-400"
                     }`}
                   >
-                    {value === "both" ? "Both sides" : value === "front" ? "Front only" : "Back only"}
+                    {sideLabel[name]} settings
                   </button>
                 ))}
               </div>
               <p className={hintClass}>
-                {scope === "both"
-                  ? "Front and back use the same settings. Choose Front only or Back only to set them separately."
-                  : `Changes below apply to the ${scope} only. Switch between Front only and Back only to set each side; Both sides makes the back copy the front again.`}
+                {tab === "front"
+                  ? backLinked
+                    ? "Changes here apply to the front, and to the back while it uses the front's settings."
+                    : "Changes here apply to the front only. The back has its own settings."
+                  : backLinked
+                    ? "The back uses the front's settings. Change anything below to give the back its own."
+                    : "Changes here apply to the back only."}
               </p>
+              {tab === "back" && !backLinked && (
+                <button
+                  type="button"
+                  onClick={() => setBackLinked(true)}
+                  className="self-start text-sm font-medium text-brand-teal underline-offset-4 hover:underline"
+                >
+                  Use the front&apos;s settings again
+                </button>
+              )}
               {sizesDiffer && (
                 <p role="alert" className="text-xs text-amber-700 dark:text-amber-400">
                   The front ({frontPlan.plan.trimWmm} × {frontPlan.plan.trimHmm} mm) and back ({backPlan.plan.trimWmm} ×{" "}
