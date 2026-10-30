@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { enhanceBitmap, type EnhanceProgress, type EnhanceResult } from "@/lib/flyer-print/enhance";
+import { enhanceBitmap, type EnhanceProgress, type EnhanceResult, type EnhanceScale } from "@/lib/flyer-print/enhance";
 import type { PrintSource } from "@/lib/flyer-print/render";
 import { detectWhiteBorder, hasBorder, type Border } from "@/lib/flyer-print/borders";
 import {
@@ -107,7 +107,7 @@ export function useFlyerSide({
     setEnhancing(null);
   }
 
-  async function enhance() {
+  async function enhance(scale: EnhanceScale) {
     if (!source) return;
     setError(null);
     const controller = new AbortController();
@@ -120,6 +120,7 @@ export function useFlyerSide({
       // sees it), and that drawing is what the AI works from.
       if (source.pdf) drawing = await renderPdfForEnhance(source.pdf.page);
       const made = await enhanceBitmap(drawing ?? source.bitmap, {
+        scale,
         signal: controller.signal,
         onProgress: setEnhancing,
       });

@@ -20,7 +20,7 @@ import {
   type Orientation,
   type PaperKey,
 } from "@/lib/flyer-print/geometry";
-import { ENHANCE_SCALE, canEnhance, webGpuAvailable } from "@/lib/flyer-print/enhance";
+import { ENHANCE_SCALES, canEnhance, webGpuAvailable } from "@/lib/flyer-print/enhance";
 import {
   combinePdfs,
   normalizeHexColor,
@@ -516,8 +516,8 @@ export function FlyerPrintTool() {
               <div>
                 <h3 className="text-sm font-semibold">Low resolution? Enhance with AI</h3>
                 <p className={hintClass}>
-                  Rebuilds sharper edges and text, with about {ENHANCE_SCALE}× more pixels. It runs on
-                  this computer, so the flyer is never uploaded.
+                  Rebuilds sharper edges and text, with about 2× or 4× more pixels. It runs on this
+                  computer, so the flyer is never uploaded.
                 </p>
                 {side.source.pdf && (
                   <p className={hintClass}>
@@ -527,7 +527,7 @@ export function FlyerPrintTool() {
                 )}
               </div>
 
-              {!canEnhance(side.source.bitmap.width, side.source.bitmap.height) ? (
+              {!canEnhance(side.source.bitmap.width, side.source.bitmap.height, 2) ? (
                 <p className={hintClass}>
                   This image already has plenty of pixels, so there is nothing to gain here.
                 </p>
@@ -565,23 +565,42 @@ export function FlyerPrintTool() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={side.enhance}
-                      disabled={working !== null}
-                      className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                    >
-                      {side.enhanced ? "Enhance again" : "Enhance with AI"}
-                    </button>
-                    {gpu !== null && !side.enhanced && (
-                      <span className={hintClass}>
-                        {gpu
-                          ? "Uses your graphics card — usually a few seconds."
-                          : "No graphics card access here, so it runs on the processor — it can take a minute or two."}
-                      </span>
-                    )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {ENHANCE_SCALES.map((scale) => {
+                      const fits = !!side.source && canEnhance(side.source.bitmap.width, side.source.bitmap.height, scale);
+                      return (
+                        <button
+                          key={scale}
+                          type="button"
+                          onClick={() => void side.enhance(scale)}
+                          disabled={working !== null || !fits}
+                          className={`flex flex-col items-start rounded-md border px-3 py-2 text-left text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-800 ${
+                            side.enhanced?.scale === scale
+                              ? "border-brand-teal ring-1 ring-brand-teal"
+                              : "border-zinc-300 dark:border-zinc-700"
+                          }`}
+                        >
+                          <span className="font-medium">
+                            {side.enhanced?.scale === scale ? "Again" : "Enhance"} {scale}×
+                          </span>
+                          <span className={hintClass}>
+                            {!fits
+                              ? "Too large for 4× — use 2×"
+                              : scale === 2
+                                ? "About 2× more pixels. Faster, smaller files — enough for most flyers."
+                                : "About 4× more pixels. For very small or blurry images."}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
+                  {gpu !== null && !side.enhanced && (
+                    <span className={hintClass}>
+                      {gpu
+                        ? "Uses your graphics card — usually a few seconds."
+                        : "No graphics card access here, so it runs on the processor — it can take a minute or two."}
+                    </span>
+                  )}
                   {!side.enhanced && (
                     <p className={hintClass}>
                       The first time, it downloads about 30 MB, which your browser then keeps.
@@ -593,7 +612,7 @@ export function FlyerPrintTool() {
               {side.enhanced && !side.enhancing && (
                 <div className="flex flex-col gap-3">
                   <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                    Enhanced in {(side.enhanced.ms / 1000).toFixed(1)} s on the{" "}
+                    Enhanced {side.enhanced.scale}× in {(side.enhanced.ms / 1000).toFixed(1)} s on the{" "}
                     {side.enhanced.backend === "webgpu" ? "graphics card" : "processor"}.
                   </p>
                   <label className="flex items-center gap-2 text-sm">
