@@ -410,6 +410,34 @@ async function buildCmykPdf(
   return new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
 }
 
+// --- Front and back in one file ------------------------------------------
+
+/**
+ * Joins print PDFs into one, a page each in the order given (front, back).
+ * Each page keeps its own trim and bleed boxes. The CMYK files' colour
+ * profile ("output intent") belongs to the whole document rather than a page,
+ * so it is carried over from the first file that has one.
+ */
+export async function combinePdfs(parts: Blob[], title: string): Promise<Blob> {
+  const { PDFDocument, PDFName, PDFObjectCopier } = await import("pdf-lib");
+  const combined = await PDFDocument.create();
+  combined.setTitle(title);
+  let hasIntent = false;
+  for (const part of parts) {
+    const doc = await PDFDocument.load(await part.arrayBuffer());
+    const pages = await combined.copyPages(doc, doc.getPageIndices());
+    for (const page of pages) combined.addPage(page);
+    const intents = doc.catalog.get(PDFName.of("OutputIntents"));
+    if (intents && !hasIntent) {
+      const copier = PDFObjectCopier.for(doc.context, combined.context);
+      combined.catalog.set(PDFName.of("OutputIntents"), copier.copy(intents));
+      hasIntent = true;
+    }
+  }
+  const bytes = await combined.save();
+  return new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
+}
+
 // --- Entry point -----------------------------------------------------------
 
 export async function renderPrintFiles(
