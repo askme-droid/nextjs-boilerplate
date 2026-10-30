@@ -143,7 +143,9 @@ export function FlyerPrintTool() {
   // Print settings: the front's, and the back's when it has its own.
   const [frontSettings, setFrontSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [backSettings, setBackSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [sameSettings, setSameSettings] = useState(true);
+  // Which side step 2 changes: both at once (the back copies the front), or
+  // just the front or just the back once they have their own settings.
+  const [scope, setScope] = useState<"both" | SideName>("both");
   // One CMYK choice for both: the CMYK PDF holds both pages.
   const [cmyk, setCmyk] = useState(true);
   const [showProof, setShowProof] = useState(false);
@@ -190,8 +192,8 @@ export function FlyerPrintTool() {
 
   // Step 2 edits the back's own settings only while the Back tab is open and
   // "same settings" is off; otherwise it edits the front's (used by both).
-  const separate = !sameSettings && !!back.source;
-  const editingBack = separate && tab === "back";
+  const separate = scope !== "both" && !!back.source;
+  const editingBack = separate && scope === "back";
   const settingsFor = (name: SideName): Derived =>
     name === "back" && separate
       ? derive(backSettings, back.source?.bitmap)
@@ -611,43 +613,36 @@ export function FlyerPrintTool() {
           <h2 className="text-lg font-semibold">2. Print settings</h2>
 
           {back.source && (
-            <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={sameSettings}
-                  onChange={(e) => {
-                    // The back starts from the front's settings when split.
-                    if (!e.target.checked) setBackSettings(frontSettings);
-                    setSameSettings(e.target.checked);
-                  }}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-medium">Same settings for the back</span>
-                  <span className={`${hintClass} block`}>
-                    Untick to give the back its own paper size, orientation, fit, bleed and crop marks.
-                  </span>
-                </span>
-              </label>
-              {separate && (
-                <div role="tablist" aria-label="Settings for" className="grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1 text-sm dark:bg-zinc-900">
-                  {(["front", "back"] as const).map((name) => (
-                    <button
-                      key={name}
-                      type="button"
-                      role="tab"
-                      aria-selected={tab === name}
-                      onClick={() => setTab(name)}
-                      className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
-                        tab === name ? "bg-white shadow-sm dark:bg-zinc-800" : "text-zinc-600 hover:text-foreground dark:text-zinc-400"
-                      }`}
-                    >
-                      {sideLabel[name]} settings
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div className="flex flex-col gap-2 rounded-lg border border-brand-teal/40 bg-brand-teal/5 p-3">
+              <p className="text-sm font-medium">These settings apply to</p>
+              <div role="radiogroup" aria-label="Settings apply to" className="grid grid-cols-3 gap-1 rounded-lg bg-white p-1 text-sm dark:bg-zinc-900">
+                {(["both", "front", "back"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={scope === value}
+                    onClick={() => {
+                      // The first time the sides are split, the back starts
+                      // as a copy of the front's settings.
+                      if (scope === "both" && value !== "both") setBackSettings(frontSettings);
+                      setScope(value);
+                    }}
+                    className={`rounded-md px-2 py-1.5 font-medium transition-colors ${
+                      scope === value
+                        ? "bg-brand-teal text-white shadow-sm"
+                        : "text-zinc-600 hover:text-foreground dark:text-zinc-400"
+                    }`}
+                  >
+                    {value === "both" ? "Both sides" : value === "front" ? "Front only" : "Back only"}
+                  </button>
+                ))}
+              </div>
+              <p className={hintClass}>
+                {scope === "both"
+                  ? "Front and back use the same settings. Choose Front only or Back only to set them separately."
+                  : `Changes below apply to the ${scope} only. Switch between Front only and Back only to set each side; Both sides makes the back copy the front again.`}
+              </p>
               {sizesDiffer && (
                 <p role="alert" className="text-xs text-amber-700 dark:text-amber-400">
                   The front ({frontPlan.plan.trimWmm} × {frontPlan.plan.trimHmm} mm) and back ({backPlan.plan.trimWmm} ×{" "}
