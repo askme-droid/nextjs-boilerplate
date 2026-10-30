@@ -73,17 +73,78 @@ const verdictClass = {
   low: "text-red-600 dark:text-red-400",
 } as const;
 
+/** The print settings one side is made with. */
+type Settings = {
+  paper: PaperKey | "custom";
+  customWidth: string;
+  customHeight: string;
+  orientationChoice: "auto" | Orientation;
+  fit: FitMode;
+  addBleed: boolean;
+  bleedInput: string;
+  bleedMode: BleedMode;
+  bleedColorInput: string;
+  marks: boolean;
+};
+
+const DEFAULT_SETTINGS: Settings = {
+  paper: "A4",
+  customWidth: "200",
+  customHeight: "300",
+  orientationChoice: "auto",
+  fit: "fill",
+  addBleed: true,
+  bleedInput: String(DEFAULT_BLEED_MM),
+  bleedMode: "mirror",
+  bleedColorInput: "#ffffff",
+  marks: true,
+};
+
+/** Turns one side's settings (and its picture, for automatic orientation)
+ *  into the page plan, plus anything that stops the files being made. */
+function derive(settings: Settings, picture: ImageBitmap | null | undefined) {
+  const { paper, customWidth, customHeight, orientationChoice, addBleed, bleedInput, bleedMode, bleedColorInput, marks } =
+    settings;
+  const orientationFromChoice: Orientation =
+    orientationChoice === "auto"
+      ? picture
+        ? autoOrientation(picture.width, picture.height)
+        : "portrait"
+      : orientationChoice;
+  const bleedMm = addBleed ? Math.min(MAX_BLEED_MM, Math.max(0, Number.parseFloat(bleedInput) || 0)) : 0;
+  // A custom size is the finished width and height as typed, so it also sets
+  // the orientation. Until the boxes hold usable numbers the page is planned
+  // as A4 and creating is switched off.
+  const custom = paper === "custom" ? checkCustomPaper(customWidth, customHeight) : null;
+  const customPaper = custom?.paper ?? null;
+  const orientation: Orientation = customPaper
+    ? customPaper.widthMm > customPaper.heightMm
+      ? "landscape"
+      : "portrait"
+    : orientationFromChoice;
+  const plan = planPrint({ paper: paper === "custom" ? (customPaper ?? "A4") : paper, orientation, bleedMm, marks });
+  // A solid-colour bleed needs a valid HEX code before anything is created.
+  const bleedColor = normalizeHexColor(bleedColorInput);
+  const colorProblem =
+    bleedMm > 0 && bleedMode === "color" && !bleedColor ? "Enter the bleed colour as a HEX code, e.g. #1A9FB0." : null;
+  const sizeProblem =
+    custom?.problem ??
+    (plan.pageW * plan.pageH > MAX_PAGE_PIXELS
+      ? "That page is too large for the browser to build (about A2 with bleed is the limit). Try a smaller size or less bleed."
+      : null);
+  const paperLabel = paper === "custom" ? "Custom" : PAPER_SIZES[paper].label;
+  const paperFileLabel = paper === "custom" ? `custom-${plan.trimWmm}x${plan.trimHmm}mm` : paper;
+  return { ...settings, plan, orientation, bleedMm, bleedColor, colorProblem, sizeProblem, paperLabel, paperFileLabel };
+}
+
+type Derived = ReturnType<typeof derive>;
+
 export function FlyerPrintTool() {
-  const [paper, setPaper] = useState<PaperKey | "custom">("A4");
-  const [customWidth, setCustomWidth] = useState("200");
-  const [customHeight, setCustomHeight] = useState("300");
-  const [orientationChoice, setOrientationChoice] = useState<"auto" | Orientation>("auto");
-  const [fit, setFit] = useState<FitMode>("fill");
-  const [addBleed, setAddBleed] = useState(true);
-  const [bleedInput, setBleedInput] = useState(String(DEFAULT_BLEED_MM));
-  const [bleedMode, setBleedMode] = useState<BleedMode>("mirror");
-  const [bleedColorInput, setBleedColorInput] = useState("#ffffff");
-  const [marks, setMarks] = useState(true);
+  // Print settings: the front's, and the back's when it has its own.
+  const [frontSettings, setFrontSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [backSettings, setBackSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [sameSettings, setSameSettings] = useState(true);
+  // One CMYK choice for both: the CMYK PDF holds both pages.
   const [cmyk, setCmyk] = useState(true);
   const [showProof, setShowProof] = useState(false);
   // Preview "as cut" (the finished piece) by default: the full page also shows
@@ -127,38 +188,44 @@ export function FlyerPrintTool() {
     };
   }, []);
 
-  const orientationFromChoice: Orientation =
-    orientationChoice === "auto"
-      ? source
-        ? autoOrientation(source.bitmap.width, source.bitmap.height)
-        : "portrait"
-      : orientationChoice;
-  const bleedMm = addBleed ? Math.min(MAX_BLEED_MM, Math.max(0, Number.parseFloat(bleedInput) || 0)) : 0;
-  // A custom size is the finished width and height as typed, so it also sets
-  // the orientation. Until the boxes hold usable numbers the page is planned
-  // as A4 and creating is switched off.
-  const custom = paper === "custom" ? checkCustomPaper(customWidth, customHeight) : null;
-  const customPaper = custom?.paper ?? null;
-  const orientation: Orientation = customPaper
-    ? customPaper.widthMm > customPaper.heightMm
-      ? "landscape"
-      : "portrait"
-    : orientationFromChoice;
-  const plan = planPrint({ paper: paper === "custom" ? (customPaper ?? "A4") : paper, orientation, bleedMm, marks });
-  // A solid-colour bleed needs a valid HEX code before anything is created.
-  const bleedColor = normalizeHexColor(bleedColorInput);
-  const colorProblem =
-    bleedMm > 0 && bleedMode === "color" && !bleedColor ? "Enter the bleed colour as a HEX code, e.g. #1A9FB0." : null;
-  const sizeProblem =
-    custom?.problem ??
-    (plan.pageW * plan.pageH > MAX_PAGE_PIXELS
-      ? "That page is too large for the browser to build (about A2 with bleed is the limit). Try a smaller size or less bleed."
-      : null);
-  const paperLabel = paper === "custom" ? "Custom" : PAPER_SIZES[paper].label;
-  const paperFileLabel = paper === "custom" ? `custom-${plan.trimWmm}x${plan.trimHmm}mm` : paper;
+  // Step 2 edits the back's own settings only while the Back tab is open and
+  // "same settings" is off; otherwise it edits the front's (used by both).
+  const separate = !sameSettings && !!back.source;
+  const editingBack = separate && tab === "back";
+  const settingsFor = (name: SideName): Derived =>
+    name === "back" && separate
+      ? derive(backSettings, back.source?.bitmap)
+      : // With shared settings the back follows the front's orientation too,
+        // so both pages come out the same way round.
+        derive(frontSettings, front.source?.bitmap);
+  const editing = settingsFor(editingBack ? "back" : "front");
+  const update = (patch: Partial<Settings>) =>
+    (editingBack ? setBackSettings : setFrontSettings)((s) => ({ ...s, ...patch }));
+  const { paper, customWidth, customHeight, orientationChoice, fit, addBleed, bleedInput, bleedMode, bleedColorInput, marks } =
+    editing;
+  const { bleedColor, colorProblem, sizeProblem } = editing;
+  const setPaper = (v: PaperKey | "custom") => update({ paper: v });
+  const setCustomWidth = (v: string) => update({ customWidth: v });
+  const setCustomHeight = (v: string) => update({ customHeight: v });
+  const setOrientationChoice = (v: "auto" | Orientation) => update({ orientationChoice: v });
+  const setFit = (v: FitMode) => update({ fit: v });
+  const setAddBleed = (v: boolean) => update({ addBleed: v });
+  const setBleedInput = (v: string) => update({ bleedInput: v });
+  const setBleedMode = (v: BleedMode) => update({ bleedMode: v });
+  const setBleedColorInput = (v: string) => update({ bleedColorInput: v });
+  const setMarks = (v: boolean) => update({ marks: v });
+  const frontPlan = settingsFor("front");
+  const backPlan = settingsFor("back");
+  const blocking = loadedSides.some(([name]) => {
+    const d = settingsFor(name);
+    return d.sizeProblem !== null || d.colorProblem !== null;
+  });
+  const sizesDiffer =
+    separate && (frontPlan.plan.trimWmm !== backPlan.plan.trimWmm || frontPlan.plan.trimHmm !== backPlan.plan.trimHmm);
 
   // Resolution and cropping notes for one side.
-  const sideNotes = (s: FlyerSide) => {
+  const sideNotes = (s: FlyerSide, d: Derived) => {
+    const { plan, fit } = d;
     const dpi = s.source && !s.source.pdf ? effectiveDpi(s.srcW, s.srcH, plan, fit) : null;
     return {
       dpi,
@@ -170,7 +237,8 @@ export function FlyerPrintTool() {
     };
   };
   const reference = side.enhanced?.reference ?? side.source?.bitmap ?? null;
-  const printScale = reference ? placement(reference.width, reference.height, plan, fit).scale : 1;
+  const tabPlan = settingsFor(tab);
+  const printScale = reference ? placement(reference.width, reference.height, tabPlan.plan, tabPlan.fit).scale : 1;
 
   // The downloads belong to the settings they were made with.
   const sideKey = (s: FlyerSide) => [
@@ -184,20 +252,16 @@ export function FlyerPrintTool() {
   const settingsKey = JSON.stringify([
     sideKey(front),
     sideKey(back),
-    paper,
-    plan.trimWmm,
-    plan.trimHmm,
-    orientation,
-    fit,
-    bleedMm,
-    bleedMode,
-    bleedMode === "color" ? bleedColor : "",
-    marks,
+    ...(["front", "back"] as const).map((name) => {
+      const d = settingsFor(name);
+      return [d.paper, d.plan.trimWmm, d.plan.trimHmm, d.orientation, d.fit, d.bleedMm, d.bleedMode, d.bleedMode === "color" ? d.bleedColor : "", d.marks];
+    }),
     cmyk,
   ]);
   const current = result && result.key === settingsKey ? result : null;
   // The side shown in the preview (the front when there's no back).
   const shown = current ? (current.sides.find((r) => r.side === previewSide) ?? current.sides[0]) : null;
+  const sp = shown ? settingsFor(shown.side).plan : null;
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
@@ -211,6 +275,7 @@ export function FlyerPrintTool() {
     const src = s.source;
     const active = s.activeSource;
     if (!src || !active) throw new Error("Choose the flyer first.");
+    const d = settingsFor(name);
     const stage = (message: string | null) =>
       setWorking(message && both ? `${sideLabel[name]}: ${message}` : message);
     // A PDF page is drawn straight onto the print-sized canvas, so vector
@@ -219,7 +284,7 @@ export function FlyerPrintTool() {
     let trim: HTMLCanvasElement | undefined;
     if (src.pdf && !s.enhancedInUse) {
       stage("Drawing the PDF page…");
-      trim = await renderPdfToTrim(src.pdf.page, plan, fit);
+      trim = await renderPdfToTrim(src.pdf.page, d.plan, d.fit);
     }
     // Cut off a white margin first, so the artwork (not the margin) reaches
     // the trim line and the bleed. The enhanced copy is 4x the original.
@@ -233,7 +298,7 @@ export function FlyerPrintTool() {
     try {
       return await renderPrintFiles(
         printSource,
-        { plan, fit, bleedMode, bleedColor: bleedColor ?? undefined, title, trim, cmyk },
+        { plan: d.plan, fit: d.fit, bleedMode: d.bleedMode, bleedColor: d.bleedColor ?? undefined, title, trim, cmyk },
         stage,
       );
     } finally {
@@ -252,7 +317,8 @@ export function FlyerPrintTool() {
     const baseName =
       (source.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "-") || "flyer") +
       (both ? "-front-back" : source.pdf && source.pdf.pageCount > 1 ? `-page${source.pdf.pageNumber}` : "");
-    const title = `${baseName} — ${paper === "custom" ? `${plan.trimWmm} × ${plan.trimHmm} mm` : paper} print file`;
+    const fp = frontPlan;
+    const title = `${baseName} — ${fp.paper === "custom" ? `${fp.plan.trimWmm} × ${fp.plan.trimHmm} mm` : fp.paper} print file`;
     try {
       const made = [];
       for (const [name, s] of loadedSides) {
@@ -298,7 +364,8 @@ export function FlyerPrintTool() {
   }
 
   const anyEnhanced = front.enhancedInUse || back.enhancedInUse;
-  const suffix = `${paperFileLabel}-300dpi${anyEnhanced ? "-ai" : ""}${plan.bleedMm > 0 ? `-bleed${plan.bleedMm}mm` : ""}${plan.marks ? "-marks" : ""}`;
+  const fpp = frontPlan.plan;
+  const suffix = `${frontPlan.paperFileLabel}${sizesDiffer ? `-back-${backPlan.paperFileLabel}` : ""}-300dpi${anyEnhanced ? "-ai" : ""}${fpp.bleedMm > 0 ? `-bleed${fpp.bleedMm}mm` : ""}${fpp.marks ? "-marks" : ""}`;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
@@ -543,6 +610,54 @@ export function FlyerPrintTool() {
         <section className="flex flex-col gap-4">
           <h2 className="text-lg font-semibold">2. Print settings</h2>
 
+          {back.source && (
+            <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={sameSettings}
+                  onChange={(e) => {
+                    // The back starts from the front's settings when split.
+                    if (!e.target.checked) setBackSettings(frontSettings);
+                    setSameSettings(e.target.checked);
+                  }}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium">Same settings for the back</span>
+                  <span className={`${hintClass} block`}>
+                    Untick to give the back its own paper size, orientation, fit, bleed and crop marks.
+                  </span>
+                </span>
+              </label>
+              {separate && (
+                <div role="tablist" aria-label="Settings for" className="grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1 text-sm dark:bg-zinc-900">
+                  {(["front", "back"] as const).map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === name}
+                      onClick={() => setTab(name)}
+                      className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+                        tab === name ? "bg-white shadow-sm dark:bg-zinc-800" : "text-zinc-600 hover:text-foreground dark:text-zinc-400"
+                      }`}
+                    >
+                      {sideLabel[name]} settings
+                    </button>
+                  ))}
+                </div>
+              )}
+              {sizesDiffer && (
+                <p role="alert" className="text-xs text-amber-700 dark:text-amber-400">
+                  The front ({frontPlan.plan.trimWmm} × {frontPlan.plan.trimHmm} mm) and back ({backPlan.plan.trimWmm} ×{" "}
+                  {backPlan.plan.trimHmm} mm) are different sizes. That&apos;s fine for separate pieces, but double-sided
+                  printing needs both sides the same size.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <label className={labelClass}>
               Paper size
@@ -773,30 +888,46 @@ export function FlyerPrintTool() {
           <h2 className="text-lg font-semibold">3. Check and create</h2>
 
           <dl className="grid gap-x-6 gap-y-2 rounded-lg border border-zinc-200 p-4 text-sm sm:grid-cols-[auto_1fr] dark:border-zinc-800">
-            <dt className="text-zinc-500 dark:text-zinc-400">Finished size</dt>
-            <dd>
-              {paperLabel} {orientation} — {plan.trimWmm} × {plan.trimHmm} mm
-              <span className="text-zinc-500 dark:text-zinc-400">
-                {" "}
-                ({plan.trimW} × {plan.trimH} px at {DPI} dpi)
-              </span>
-            </dd>
-
-            {(plan.bleedMm > 0 || plan.marks) && (
-              <>
-                <dt className="text-zinc-500 dark:text-zinc-400">Page with bleed{plan.marks ? " and marks" : ""}</dt>
-                <dd>
-                  {Number(plan.pageWmm.toFixed(1))} × {Number(plan.pageHmm.toFixed(1))} mm
-                  <span className="text-zinc-500 dark:text-zinc-400">
-                    {" "}
-                    ({plan.pageW} × {plan.pageH} px)
-                  </span>
-                </dd>
-              </>
-            )}
+            {(separate ? (["front", "back"] as const) : (["front"] as const)).map((name) => {
+              const d = settingsFor(name);
+              const label = separate ? `${sideLabel[name]} size` : "Finished size";
+              return (
+                <div key={name} className="contents">
+                  <dt className="text-zinc-500 dark:text-zinc-400">{label}</dt>
+                  <dd>
+                    {d.paperLabel} {d.orientation} — {d.plan.trimWmm} × {d.plan.trimHmm} mm
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      {" "}
+                      ({d.plan.trimW} × {d.plan.trimH} px at {DPI} dpi)
+                    </span>
+                  </dd>
+                  {(d.plan.bleedMm > 0 || d.plan.marks) && (
+                    <>
+                      <dt className="text-zinc-500 dark:text-zinc-400">
+                        {separate ? `${sideLabel[name]} page` : `Page with bleed${d.plan.marks ? " and marks" : ""}`}
+                      </dt>
+                      <dd>
+                        {Number(d.plan.pageWmm.toFixed(1))} × {Number(d.plan.pageHmm.toFixed(1))} mm
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          {" "}
+                          ({d.plan.pageW} × {d.plan.pageH} px)
+                        </span>
+                        {separate && (
+                          <span className="text-zinc-500 dark:text-zinc-400">
+                            {" "}
+                            · {d.plan.bleedMm > 0 ? `${d.plan.bleedMm} mm bleed` : "no bleed"}
+                            {d.plan.marks ? ", crop marks" : ""}
+                          </span>
+                        )}
+                      </dd>
+                    </>
+                  )}
+                </div>
+              );
+            })}
 
             {loadedSides.map(([name, s]) => {
-              const notes = sideNotes(s);
+              const notes = sideNotes(s, settingsFor(name));
               const label = back.source ? sideLabel[name] : "Your flyer is";
               return (
                 <div key={name} className="contents">
@@ -846,7 +977,7 @@ export function FlyerPrintTool() {
             <button
               type="button"
               onClick={create}
-              disabled={!source || working !== null || sizeProblem !== null || colorProblem !== null}
+              disabled={!source || working !== null || blocking}
               className={`${downloadClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {working
@@ -876,8 +1007,9 @@ export function FlyerPrintTool() {
           </p>
         )}
 
-        {current && shown && (
+        {current && shown && sp && (
           <section className="flex flex-col gap-4">
+            {/* Bleed, marks and page size of the side being previewed. */}
             <h2 className="text-lg font-semibold">Your print files</h2>
             <div className="flex flex-wrap gap-3">
               <a href={current.pdfUrl} download={`${current.baseName}-${suffix}.pdf`} className={downloadClass}>
@@ -942,7 +1074,7 @@ export function FlyerPrintTool() {
               </div>
             )}
 
-            {(plan.bleed > 0 || plan.marks) && (
+            {(sp.bleed > 0 || sp.marks) && (
               <div role="group" aria-label="Preview area" className="flex flex-wrap items-center gap-2 text-sm">
                 <button
                   type="button"
@@ -975,8 +1107,8 @@ export function FlyerPrintTool() {
                   showProof && shown.proofUrl
                     ? "Preview of the finished print page as it would look printed in CMYK"
                     : "Preview of the finished print page, with crop marks if selected";
-                const offX = (plan.pageW - plan.trimW) / 2;
-                const offY = (plan.pageH - plan.trimH) / 2;
+                const offX = (sp.pageW - sp.trimW) / 2;
+                const offY = (sp.pageH - sp.trimH) / 2;
                 if (!showFullPage && (offX > 0 || offY > 0)) {
                   // The trim area only: the page image, enlarged and shifted
                   // so the cut lines meet the frame's edges.
@@ -986,8 +1118,8 @@ export function FlyerPrintTool() {
                       // Width-led so the frame keeps the trim's shape at any screen
                       // width, never taller than 36rem.
                       style={{
-                        aspectRatio: `${plan.trimW} / ${plan.trimH}`,
-                        width: `min(100%, ${(36 * plan.trimW) / plan.trimH}rem)`,
+                        aspectRatio: `${sp.trimW} / ${sp.trimH}`,
+                        width: `min(100%, ${(36 * sp.trimW) / sp.trimH}rem)`,
                       }}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element -- a local blob: preview */}
@@ -996,10 +1128,10 @@ export function FlyerPrintTool() {
                         alt={alt}
                         className="absolute max-w-none"
                         style={{
-                          width: `${(plan.pageW / plan.trimW) * 100}%`,
-                          height: `${(plan.pageH / plan.trimH) * 100}%`,
-                          left: `${(-offX / plan.trimW) * 100}%`,
-                          top: `${(-offY / plan.trimH) * 100}%`,
+                          width: `${(sp.pageW / sp.trimW) * 100}%`,
+                          height: `${(sp.pageH / sp.trimH) * 100}%`,
+                          left: `${(-offX / sp.trimW) * 100}%`,
+                          top: `${(-offY / sp.trimH) * 100}%`,
                         }}
                       />
                     </div>
@@ -1014,10 +1146,10 @@ export function FlyerPrintTool() {
                         aria-hidden
                         className="pointer-events-none absolute border border-dashed border-red-500"
                         style={{
-                          left: `${(offX / plan.pageW) * 100}%`,
-                          right: `${(offX / plan.pageW) * 100}%`,
-                          top: `${(offY / plan.pageH) * 100}%`,
-                          bottom: `${(offY / plan.pageH) * 100}%`,
+                          left: `${(offX / sp.pageW) * 100}%`,
+                          right: `${(offX / sp.pageW) * 100}%`,
+                          top: `${(offY / sp.pageH) * 100}%`,
+                          bottom: `${(offY / sp.pageH) * 100}%`,
                         }}
                       />
                     )}
@@ -1028,11 +1160,11 @@ export function FlyerPrintTool() {
 
             <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-400">
               <li>
-                The PDF has the finished size{plan.bleedMm > 0 ? " and the bleed" : ""} built in
-                {plan.marks ? ", with sharp vector crop marks" : ""}. The PNG is the same page as
+                The PDF has the finished size{sp.bleedMm > 0 ? " and the bleed" : ""} built in
+                {sp.marks ? ", with sharp vector crop marks" : ""}. The PNG is the same page as
                 one picture, tagged {DPI} dpi.
               </li>
-              {plan.bleedMm > 0 && (
+              {sp.bleedMm > 0 && (
                 <li>
                   Bleed is made from the picture itself, so keep text and logos about 5 mm inside
                   the edge.
