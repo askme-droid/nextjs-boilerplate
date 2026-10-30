@@ -8,6 +8,9 @@
 //
 // The flyer is cut into overlapping 128 px tiles (the size the exported model
 // accepts), each is enlarged 4x, and the results are stitched into one canvas.
+// For 2x the model still enlarges 4x and each tile is then halved (as
+// Real-ESRGAN's own "outscale" option does): same sharpness, a quarter of the
+// pixels, so larger flyers fit in memory.
 // Real-ESRGAN brightens flat areas a little and leaves a faint glow around
 // dark text on JPEG-compressed art, so every tile is nudged back toward the
 // original's broad colours (see `lowFrequencyCorrection`).
@@ -35,12 +38,14 @@ export const MAX_ENHANCED_PIXELS = 40_000_000;
 
 export type EnhanceBackend = "webgpu" | "wasm";
 export type EnhanceProgress = { phase: "loading" | "enhancing"; done: number; total: number };
-export type EnhanceResult = { canvas: HTMLCanvasElement; backend: EnhanceBackend; ms: number };
+/** How much wider and taller the enhanced copy is. */
+export type EnhanceScale = 2 | 4;
+export type EnhanceResult = { canvas: HTMLCanvasElement; backend: EnhanceBackend; ms: number; scale: EnhanceScale };
 
-export const ENHANCE_SCALE = SCALE;
+export const ENHANCE_SCALES: EnhanceScale[] = [2, 4];
 
-export function canEnhance(width: number, height: number) {
-  return width * height * SCALE * SCALE <= MAX_ENHANCED_PIXELS;
+export function canEnhance(width: number, height: number, scale: EnhanceScale = 2) {
+  return width * height * scale * scale <= MAX_ENHANCED_PIXELS;
 }
 
 // The WebGPU build's .wasm is ~26.8 MB, over Cloudflare Workers' 25 MiB
@@ -163,12 +168,13 @@ function sampleMap(map: Float32Array, ox: number, oy: number) {
 
 export async function enhanceBitmap(
   source: ImageBitmap | HTMLCanvasElement,
-  options: { signal?: AbortSignal; onProgress?: (progress: EnhanceProgress) => void } = {},
+  options: { signal?: AbortSignal; onProgress?: (progress: EnhanceProgress) => void; scale?: EnhanceScale } = {},
 ): Promise<EnhanceResult> {
   const { signal, onProgress } = options;
+  const scale: EnhanceScale = options.scale ?? 4;
   const width = source.width;
   const height = source.height;
-  if (!canEnhance(width, height)) {
+  if (!canEnhance(width, height, scale)) {
     throw new Error("This image is too large to enhance — it already has plenty of pixels.");
   }
   const started = performance.now();
@@ -207,10 +213,13 @@ export async function enhanceBitmap(
   sourceCanvas.height = 0;
 
   const out = document.createElement("canvas");
-  out.width = width * SCALE;
-  out.height = height * SCALE;
+  out.width = width * scale;
+  out.height = height * scale;
   const octx = out.getContext("2d");
   if (!octx) throw new Error("Your browser could not create a drawing surface.");
+  octx.imageSmoothingQuality = "high";
+  // For 2x, each enlarged tile goes through this canvas to be halved.
+  const tileCanvas = scale === SCALE ? null : document.createElement("canvas");
 
   const columns = Math.ceil(width / CORE);
   const rows = Math.ceil(height / CORE);
@@ -273,7 +282,14 @@ export async function enhanceBitmap(
             image.data[q + 3] = 255;
           }
         }
-        octx.putImageData(image, cx * SCALE, cy * SCALE);
+        if (tileCanvas) {
+          tileCanvas.width = w;
+          tileCanvas.height = h;
+          tileCanvas.getContext("2d")?.putImageData(image, 0, 0);
+          octx.drawImage(tileCanvas, cx * scale, cy * scale, (w * scale) / SCALE, (h * scale) / SCALE);
+        } else {
+          octx.putImageData(image, cx * SCALE, cy * SCALE);
+        }
 
         done += 1;
         onProgress?.({ phase: "enhancing", done, total });
@@ -286,8 +302,9 @@ export async function enhanceBitmap(
     out.height = 0;
     throw error;
   } finally {
+    if (tileCanvas) tileCanvas.width = 0;
     await session.release();
   }
 
-  return { canvas: out, backend, ms: Math.round(performance.now() - started) };
+  return { canvas: out, backend, ms: Math.round(performance.now() - started), scale };
 }

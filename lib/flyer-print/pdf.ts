@@ -11,7 +11,7 @@
 // were when the PDF was made.
 
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import { ENHANCE_SCALE, MAX_ENHANCED_PIXELS } from "./enhance";
+import { MAX_ENHANCED_PIXELS } from "./enhance";
 import { placement, type FitMode, type PrintPlan } from "./geometry";
 
 type PdfJs = typeof import("pdfjs-dist");
@@ -132,7 +132,8 @@ export async function renderPdfPreview(page: PDFPageProxy, longSide = 1200): Pro
 export async function renderPdfForEnhance(page: PDFPageProxy, longSide = 1600): Promise<ImageBitmap> {
   const { width, height } = pageSize(page);
   let scale = longSide / Math.max(width, height);
-  const maxInputPixels = (MAX_ENHANCED_PIXELS / (ENHANCE_SCALE * ENHANCE_SCALE)) * 0.9;
+  // Sized so even the 4x enhancement fits (2x then fits easily).
+  const maxInputPixels = (MAX_ENHANCED_PIXELS / (4 * 4)) * 0.9;
   if (width * height * scale * scale > maxInputPixels) {
     scale = Math.sqrt(maxInputPixels / (width * height));
   }
