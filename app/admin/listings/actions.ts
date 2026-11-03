@@ -1,7 +1,8 @@
 "use server";
 
 import { dbErrorMessage, pgErrorCode } from "@/lib/db/errors";
-import { deleteUnusedFiles, listingFileUrls, rememberDeletedSource } from "@/lib/listings/cleanup";
+import { deleteUnusedFiles } from "@/lib/listings/cleanup";
+import { trashListing } from "@/lib/listings/trash";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
@@ -453,34 +454,20 @@ export async function publishListing(formData: FormData) {
   );
 }
 
+/** "Delete" moves the listing to the Trash (lib/listings/trash.ts): off the
+ *  site at once, restorable for 30 days, then deleted for good. */
 export async function deleteListing(formData: FormData) {
-  await requireStaff();
+  const { user } = await requireStaff();
 
   const id = String(formData.get("id") ?? "");
-
-  // Looked up before deleting (not after — there'd be nothing left to find)
-  // so a published listing's public page gets revalidated too.
+  // Looked up first so a published listing's public page gets revalidated.
   const slug = await getListingSlug(id);
-  // What to tidy up afterwards: its files in R2, and (for a listing synced
-  // from fd.sg) a note so the sync doesn't import it again.
-  const files = await listingFileUrls(id);
-  const [source] = await db
-    .select({ externalUrl: listings.externalUrl, title: listings.title })
-    .from(listings)
-    .where(eq(listings.id, id));
 
   try {
-    // No RESTRICT to worry about: listing_images.listing_id and
-    // listing_experience_tags.listing_id are both ON DELETE CASCADE (see
-    // lib/db/schema/listings.ts), so this also removes the listing's own
-    // images and tag links — it doesn't touch any other listing.
-    await db.delete(listings).where(eq(listings.id, id));
+    await trashListing(id, user.id);
   } catch (e) {
     redirect(editUrl(id, e instanceof Error ? e.message : "Could not delete listing."));
   }
-
-  await deleteUnusedFiles(files);
-  if (source?.externalUrl) await rememberDeletedSource(source.externalUrl, source.title);
 
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);

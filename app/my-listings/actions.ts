@@ -1,7 +1,8 @@
 "use server";
 
 import { dbErrorMessage, pgErrorCode } from "@/lib/db/errors";
-import { deleteUnusedFiles, listingFileUrls } from "@/lib/listings/cleanup";
+import { deleteUnusedFiles } from "@/lib/listings/cleanup";
+import { trashListing } from "@/lib/listings/trash";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -202,15 +203,15 @@ export async function deleteMyListing(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const existing = await getMyListingById(id, user.id);
   if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
-  const files = await listingFileUrls(id);
 
+  // To the Trash: staff can restore it for 30 days if it was a mistake.
   try {
-    await db.delete(listings).where(eq(listings.id, id));
+    await trashListing(id, user.id);
   } catch (e) {
     redirect(`/my-listings?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not delete listing.")}`);
   }
-  await deleteUnusedFiles(files);
-
+  revalidatePath("/");
+  if (existing.slug) revalidatePath(`/listings/${existing.slug}`);
   revalidatePath("/my-listings");
   redirect("/my-listings?deleted=1");
 }

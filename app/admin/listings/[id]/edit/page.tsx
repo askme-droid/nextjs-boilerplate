@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { todayInSingapore } from "@/lib/listings/expiry-dates";
 import { isVerifiedBusiness } from "@/lib/business/verify-listing";
@@ -30,6 +30,8 @@ export default async function EditListingPage({
   ]);
 
   if (!listing) notFound();
+  // A listing in the Trash isn't edited; it's restored first.
+  if (listing.status === "trashed") redirect("/admin/listings/trash");
 
   return (
     <div className="flex flex-col gap-8">
@@ -116,13 +118,13 @@ export default async function EditListingPage({
               <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete listing</h2>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 {listing.status === "published"
-                  ? "This listing is live — deleting it removes it from the site immediately, along with its images and tags. This cannot be undone."
-                  : "Deleting removes this listing, its images, and its tags. This cannot be undone."}
+                  ? "This listing is live — deleting it takes it off the site immediately and moves it to the Trash, where it can be restored for 30 days."
+                  : "Deleting moves this listing to the Trash, where it can be restored for 30 days."}
               </p>
               <form action={deleteListing}>
                 <input type="hidden" name="id" value={listing.id} />
                 <ConfirmSubmit
-                  message={`Delete “${listing.title || "Untitled listing"}”? This can't be undone.`}
+                  message={`Move “${listing.title || "Untitled listing"}” to the Trash? It comes off the site now and can be restored for 30 days.`}
                   className="w-fit rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
                 >
                   Delete listing

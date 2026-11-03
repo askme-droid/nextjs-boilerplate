@@ -15,6 +15,13 @@
       "when": 1793671203742,
       "tag": "0001_deleted_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793673236660,
+      "tag": "0002_trashed_listings",
+      "breakpoints": true
     }
   ]
 }

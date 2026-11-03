@@ -99,7 +99,7 @@ export default async function MyListingsPage({
                 <form action={deleteMyListing}>
                   <input type="hidden" name="id" value={listing.id} />
                   <ConfirmSubmit
-                    message={`Delete “${listing.title || "Untitled listing"}”? This can't be undone.`}
+                    message={`Delete “${listing.title || "Untitled listing"}”? It comes off the site now. Contact us within 30 days if you need it back.`}
                     className="text-sm text-red-600 hover:underline dark:text-red-400"
                   >
                     Delete

@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { notTrashed } from "./trash";
 import { ilike } from "@/lib/db/sql";
 import { db } from "@/lib/db/client";
 import { categories, experienceTags, listingExperienceTags, listingImages, listings, user } from "@/lib/db/schema";
@@ -110,7 +111,7 @@ async function selectAdminListings(extra: ReturnType<typeof isNull> | ReturnType
  *  here only changes how their card looks, not their actual content. */
 export async function getAdminListings(role: string | null | undefined): Promise<AdminListingRow[]> {
   requireStaffRole(role);
-  return selectAdminListings(isNull(listings.externalUrl));
+  return selectAdminListings(and(isNull(listings.externalUrl), notTrashed)!);
 }
 
 /** Every listing synced from an external source (fd.sg etc.) — shown here
@@ -119,7 +120,7 @@ export async function getAdminListings(role: string | null | undefined): Promise
  *  never a local page. */
 export async function getSyndicatedListings(role: string | null | undefined): Promise<AdminListingRow[]> {
   requireStaffRole(role);
-  return selectAdminListings(isNotNull(listings.externalUrl));
+  return selectAdminListings(and(isNotNull(listings.externalUrl), notTrashed)!);
 }
 
 export type AdminListingDetail = AdminListingRow & {
@@ -365,7 +366,7 @@ export async function getFeaturedAdminListings(
     .select(featuredAdminSelect)
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
-    .where(eq(listings.homepageFeatured, true))
+    .where(and(eq(listings.homepageFeatured, true), notTrashed))
     .orderBy(asc(listings.homepageFeaturedOrder), desc(listings.createdAt));
   return rows.map(toFeaturedAdminRow);
 }
