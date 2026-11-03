@@ -42,6 +42,11 @@ export default async function AdminPage() {
           Move files to Cloudflare R2
         </Link>
       )}
+      {role === "admin" && (
+        <Link href="/admin/tools/storage-cleanup" className={linkClass}>
+          Clean up unused files
+        </Link>
+      )}
     </main>
   );
 }
