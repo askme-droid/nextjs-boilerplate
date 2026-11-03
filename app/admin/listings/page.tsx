@@ -3,6 +3,7 @@ import { requireStaff } from "@/lib/auth/require-staff";
 import { parseSort, sortListings } from "./sort";
 import { ListingsTable } from "./listings-table";
 import { getAdminListings } from "@/lib/listings/admin-queries";
+import { countTrash } from "@/lib/listings/trash";
 import { createListing } from "./actions";
 
 
@@ -16,6 +17,7 @@ export default async function AdminListingsPage({
   const { sort: sortParam, dir } = await searchParams;
   const sort = parseSort(sortParam, dir);
   const listings = sortListings(await getAdminListings(role), sort);
+  const trashCount = await countTrash();
 
   return (
     <div className="flex flex-col gap-6">
@@ -33,6 +35,12 @@ export default async function AdminListingsPage({
             className="whitespace-nowrap text-sm font-medium underline-offset-4 hover:underline"
           >
             Synced listings →
+          </Link>
+          <Link
+            href="/admin/listings/trash"
+            className="whitespace-nowrap text-sm font-medium underline-offset-4 hover:underline"
+          >
+            Trash{trashCount > 0 ? ` (${trashCount})` : ""} →
           </Link>
           <form action={createListing}>
             <button
@@ -52,7 +60,10 @@ export default async function AdminListingsPage({
       )}
       {deleted && (
         <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-          Listing deleted.
+          Moved to the Trash.{" "}
+          <Link href="/admin/listings/trash" className="font-medium underline underline-offset-4">
+            Undo in the Trash
+          </Link>
         </p>
       )}
       {error && (

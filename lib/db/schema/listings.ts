@@ -5,6 +5,9 @@ import { boolean, createdAt, date, id, json, timestamp, uuidRef } from "./types"
 // Target status model (draft/pending/published/rejected), already confirmed
 // with the user — see the Railway/Drizzle/Better-Auth migration plan.
 export const LISTING_STATUSES = ["draft", "pending", "published", "rejected"] as const;
+// "trashed" = in the admin Trash (lib/listings/trash.ts): hidden everywhere,
+// restorable for 30 days. Never chosen in a form, so it isn't in the list above.
+export const TRASHED = "trashed" as const;
 
 export const categories = sqliteTable("categories", {
   id: id(),
@@ -38,7 +41,7 @@ export const listings = sqliteTable("listings", {
   ctaLabel: text("cta_label"),
   ctaUrl: text("cta_url"),
   keywords: json<string[]>("keywords"),
-  status: text("status", { enum: LISTING_STATUSES }).notNull().default("draft"),
+  status: text("status", { enum: [...LISTING_STATUSES, TRASHED] }).notNull().default("draft"),
   featuredImageUrl: text("featured_image_url"),
   // Staff-curated pick for the homepage "Featured listings" section (see
   // getFeaturedVideos in lib/listings/queries.ts). Not to be confused with
@@ -177,4 +180,13 @@ export const deletedSources = sqliteTable("deleted_sources", {
   sourceUrl: text("source_url").primaryKey(),
   title: text("title"),
   deletedAt: createdAt("deleted_at"),
+});
+
+// One row per listing in the Trash (lib/listings/trash.ts): the status to
+// restore and when it was deleted (deleted for good after 30 days).
+export const trashedListings = sqliteTable("trashed_listings", {
+  listingId: text("listing_id").primaryKey(),
+  previousStatus: text("previous_status").notNull(),
+  trashedAt: timestamp("trashed_at").notNull(),
+  trashedBy: text("trashed_by"),
 });

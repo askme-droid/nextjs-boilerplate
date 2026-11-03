@@ -55,6 +55,12 @@ export default async function SyncedListingsPage({
             </button>
           </form>
           <Link
+            href="/admin/listings/trash"
+            className="whitespace-nowrap text-sm font-medium underline-offset-4 hover:underline"
+          >
+            Trash →
+          </Link>
+          <Link
             href="/admin/listings"
             className="whitespace-nowrap text-sm font-medium underline-offset-4 hover:underline"
           >
@@ -75,7 +81,10 @@ export default async function SyncedListingsPage({
       )}
       {deleted && (
         <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-          Listing deleted.
+          Moved to the Trash.{" "}
+          <Link href="/admin/listings/trash" className="font-medium underline underline-offset-4">
+            Undo in the Trash
+          </Link>
         </p>
       )}
       {error && (

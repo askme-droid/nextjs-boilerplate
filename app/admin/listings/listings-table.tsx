@@ -187,9 +187,7 @@ export function ListingsTable({
                       {returnTo === "synced" && <input type="hidden" name="returnTo" value="synced" />}
                       <input type="hidden" name="back" value={back} />
                       <ConfirmSubmit
-                        message={`Delete “${listing.title || "Untitled listing"}”? This can't be undone.${
-                          listing.external_url ? " It won't be imported from fd.sg again." : ""
-                        }`}
+                        message={`Move “${listing.title || "Untitled listing"}” to the Trash? It comes off the site now and can be restored for 30 days.`}
                         className="text-red-600 hover:underline dark:text-red-400"
                       >
                         Delete

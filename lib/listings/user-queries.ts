@@ -1,4 +1,5 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { notTrashed } from "./trash";
 import { db } from "@/lib/db/client";
 import { categories, listingImages, listings } from "@/lib/db/schema";
 import type { ListingCategory } from "./queries";
@@ -52,7 +53,7 @@ export async function getMyListings(userId: string): Promise<MyListingRow[]> {
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
-    .where(eq(listings.createdBy, userId))
+    .where(and(eq(listings.createdBy, userId), notTrashed))
     .orderBy(desc(listings.updatedAt));
 
   return rows.map((r) => ({
@@ -109,7 +110,7 @@ export async function getMyListingById(
     .limit(1);
 
   const row = rows[0];
-  if (!row || row.createdBy !== userId) return null;
+  if (!row || row.createdBy !== userId || row.status === "trashed") return null;
 
   return {
     id: row.id,
