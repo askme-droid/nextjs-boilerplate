@@ -169,3 +169,12 @@ export const listingExperienceTags = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.listingId, table.tagId] })],
 );
+
+// fd.sg listings that staff deleted here, so the automatic fd.sg sync doesn't
+// import them again (lib/listings/fdsg-sync.ts). Keyed by the fd.sg address,
+// normalised the same way the sync compares addresses.
+export const deletedSources = sqliteTable("deleted_sources", {
+  sourceUrl: text("source_url").primaryKey(),
+  title: text("title"),
+  deletedAt: createdAt("deleted_at"),
+});

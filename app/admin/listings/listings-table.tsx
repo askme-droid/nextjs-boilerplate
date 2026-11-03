@@ -3,6 +3,7 @@ import type { AdminListingRow } from "@/lib/listings/admin-queries";
 import { formatListingDate } from "@/lib/listings/dates";
 import { isExpired } from "@/lib/listings/expiry-dates";
 import { formatRelativeTime } from "@/lib/format-relative-time";
+import { ConfirmSubmit } from "@/app/components/confirm-submit";
 import { deleteListing, publishListing } from "./actions";
 import type { Sort, SortKey } from "./sort";
 
@@ -185,9 +186,14 @@ export function ListingsTable({
                       <input type="hidden" name="id" value={listing.id} />
                       {returnTo === "synced" && <input type="hidden" name="returnTo" value="synced" />}
                       <input type="hidden" name="back" value={back} />
-                      <button type="submit" className="text-red-600 hover:underline dark:text-red-400">
+                      <ConfirmSubmit
+                        message={`Delete “${listing.title || "Untitled listing"}”? This can't be undone.${
+                          listing.external_url ? " It won't be imported from fd.sg again." : ""
+                        }`}
+                        className="text-red-600 hover:underline dark:text-red-400"
+                      >
                         Delete
-                      </button>
+                      </ConfirmSubmit>
                     </form>
                   </div>
                 </td>

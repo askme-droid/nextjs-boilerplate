@@ -4,6 +4,10 @@ import { db } from "@/lib/db/client";
 import { categories, listingImages, listings } from "@/lib/db/schema";
 import { embedImageUrl } from "./embeddings";
 import { slugify } from "./slug";
+import { normalizeSourceUrl } from "./source-url";
+import { deletedSourceUrls } from "./cleanup";
+
+export { normalizeSourceUrl };
 
 /**
  * On-demand sync from the real www.fd.sg's public listing archive (its own
@@ -78,17 +82,6 @@ export type SyncResult = {
   /** Synced listings whose wrongly imported fd.sg logo/banner images were removed. */
   imagesFixed: number;
 };
-
-/** Normalised form of an fd.sg listing URL for matching (scheme, www,
- *  case and trailing slash ignored). */
-export function normalizeSourceUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    return `${u.hostname.replace(/^www\./, "").toLowerCase()}${decodeURIComponent(u.pathname).replace(/\/+$/, "").toLowerCase()}`;
-  } catch {
-    return url.trim().replace(/\/+$/, "").toLowerCase();
-  }
-}
 
 const FEED_BASE = "https://www.fd.sg/feed/?post_type=acadp_listings";
 const MAX_FEED_PAGES = 50;
@@ -366,7 +359,9 @@ export async function syncFdsgListings(): Promise<SyncResult> {
     .where(isNotNull(listings.externalUrl));
   const existingUrls = new Set(existingExternal.map((r) => r.externalUrl).filter((u): u is string => !!u));
 
-  const allNewUrls = urls.filter((u) => !existingUrls.has(u));
+  // Listings deleted here stay deleted: the sync doesn't bring them back.
+  const deleted = await deletedSourceUrls();
+  const allNewUrls = urls.filter((u) => !existingUrls.has(u) && !deleted.has(normalizeSourceUrl(u)));
   if (allNewUrls.length === 0) {
     return { added: 0, skipped: urls.length, total: urls.length, remaining: 0, datesUpdated, viewsUpdated, imagesFixed };
   }

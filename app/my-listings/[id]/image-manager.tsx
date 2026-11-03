@@ -1,4 +1,5 @@
 import type { MyListingImage } from "@/lib/listings/user-queries";
+import { ConfirmSubmit } from "@/app/components/confirm-submit";
 import {
   addMyListingImage,
   deleteMyListingImage,
@@ -90,12 +91,12 @@ export function MyImageManager({
                 <form action={deleteMyListingImage}>
                   <input type="hidden" name="listingId" value={listingId} />
                   <input type="hidden" name="imageId" value={image.id} />
-                  <button
-                    type="submit"
+                  <ConfirmSubmit
+                    message="Delete this photo? This can't be undone."
                     className={`${buttonClass} text-red-600 dark:text-red-400`}
                   >
                     Delete
-                  </button>
+                  </ConfirmSubmit>
                 </form>
               </div>
 

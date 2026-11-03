@@ -9,6 +9,7 @@ import {
 import { getCategories } from "@/lib/listings/queries";
 import { EditListingClient } from "../edit-listing-client";
 import { ImageManager } from "../image-manager";
+import { ConfirmSubmit } from "@/app/components/confirm-submit";
 import { deleteListing } from "../../actions";
 
 export default async function EditListingPage({
@@ -120,12 +121,12 @@ export default async function EditListingPage({
               </p>
               <form action={deleteListing}>
                 <input type="hidden" name="id" value={listing.id} />
-                <button
-                  type="submit"
+                <ConfirmSubmit
+                  message={`Delete “${listing.title || "Untitled listing"}”? This can't be undone.`}
                   className="w-fit rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
                 >
                   Delete listing
-                </button>
+                </ConfirmSubmit>
               </form>
             </section>
         }
