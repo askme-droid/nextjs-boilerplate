@@ -9,6 +9,7 @@ import {
 import { FEATURED_SLOTS } from "@/lib/listings/constants";
 import { addFeatured, moveFeatured, removeFeatured } from "../featured-actions";
 import { MediaUpload } from "./media-upload";
+import { ConfirmSubmit } from "@/app/components/confirm-submit";
 
 const buttonClass =
   "rounded-md border border-zinc-300 px-2.5 py-1 text-sm font-medium hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent dark:border-zinc-700 dark:hover:bg-zinc-800";
@@ -169,12 +170,18 @@ export default async function FeaturedListingsAdminPage({
                     </form>
                     <form action={removeFeatured}>
                       <input type="hidden" name="id" value={row.id} />
-                      <button
-                        type="submit"
+                      <ConfirmSubmit
+                        message={`Remove “${row.title}” from the homepage slider?${
+                          row.videoUrl
+                            ? " Its slider video is deleted, so featuring it again means uploading the video again."
+                            : row.slideImageUrl
+                              ? " Its slider image is deleted, so featuring it again means uploading the image again."
+                              : ""
+                        } The listing itself stays on the site.`}
                         className="text-sm text-red-600 hover:underline dark:text-red-400"
                       >
                         Remove
-                      </button>
+                      </ConfirmSubmit>
                     </form>
                   </div>
                 </li>
