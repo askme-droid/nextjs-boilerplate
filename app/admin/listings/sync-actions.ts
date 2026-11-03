@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { syncFdsgListings } from "@/lib/listings/fdsg-sync";
+import { forgetDeletedSources } from "@/lib/listings/cleanup";
 
 /** Re-checks requireStaff() itself — a Server Action is its own reachable
  *  endpoint, same reasoning as every other action in this app. */
@@ -58,5 +59,24 @@ export async function refreshSyncedListings() {
     datesMessage +
     viewsMessage +
     imagesMessage;
+  redirect(`/admin/listings/synced?refreshed=${encodeURIComponent(message)}`);
+}
+
+/** Takes deleted fd.sg listings off the sync's skip list, so the next sync
+ *  (or "Refresh from fd.sg") imports them again. */
+export async function allowReimport(formData: FormData) {
+  await requireStaff();
+  const urls = formData.getAll("sourceUrl").map(String).filter(Boolean);
+  let message: string;
+  try {
+    await forgetDeletedSources(urls);
+    message =
+      urls.length === 1
+        ? "It will be imported again at the next sync — or click Refresh from fd.sg now."
+        : `${urls.length} listings will be imported again at the next sync — or click Refresh from fd.sg now.`;
+  } catch (e) {
+    message = e instanceof Error ? e.message : "Couldn't update the list.";
+  }
+  revalidatePath("/admin/listings/synced");
   redirect(`/admin/listings/synced?refreshed=${encodeURIComponent(message)}`);
 }

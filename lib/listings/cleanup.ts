@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, inArray, or, sql } from "drizzle-orm";
+import { desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { deletedSources, heroSlides, listingImages, listings } from "@/lib/db/schema";
 import { deleteFileByUrl, isStoredFileUrl } from "@/lib/storage/r2";
@@ -99,6 +99,21 @@ export async function deletedSourceUrls(): Promise<Set<string>> {
     return new Set(rows.map((r) => r.sourceUrl));
   } catch {
     return new Set();
+  }
+}
+
+export type DeletedSource = { sourceUrl: string; title: string | null; deletedAt: Date };
+
+/** The fd.sg listings the sync is skipping, newest deletion first. */
+export async function listDeletedSources(): Promise<DeletedSource[]> {
+  try {
+    await ensureDeletedSourcesTable();
+    return await db
+      .select({ sourceUrl: deletedSources.sourceUrl, title: deletedSources.title, deletedAt: deletedSources.deletedAt })
+      .from(deletedSources)
+      .orderBy(desc(deletedSources.deletedAt));
+  } catch {
+    return [];
   }
 }
 

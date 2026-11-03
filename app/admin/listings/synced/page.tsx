@@ -3,7 +3,8 @@ import { requireStaff } from "@/lib/auth/require-staff";
 import { parseSort, sortListings } from "../sort";
 import { ListingsTable } from "../listings-table";
 import { getSyndicatedListings } from "@/lib/listings/admin-queries";
-import { refreshSyncedListings } from "../sync-actions";
+import { allowReimport, refreshSyncedListings } from "../sync-actions";
+import { listDeletedSources } from "@/lib/listings/cleanup";
 
 // "Refresh from fd.sg" (below) now embeds every image it scrapes (CLIP
 // inference per image, not just HTTP fetches) before this page's default
@@ -32,6 +33,7 @@ export default async function SyncedListingsPage({
   const { sort: sortParam, dir } = await searchParams;
   const sort = parseSort(sortParam, dir);
   const listings = sortListings(await getSyndicatedListings(role), sort);
+  const deletedSources = await listDeletedSources();
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,6 +88,52 @@ export default async function SyncedListingsPage({
         <p className="text-zinc-500 dark:text-zinc-400">No synced listings.</p>
       ) : (
         <ListingsTable listings={listings} returnTo="synced" synced sort={sort} />
+      )}
+
+      {deletedSources.length > 0 && (
+        <section className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold">Deleted fd.sg listings ({deletedSources.length})</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                These were deleted here, so the sync doesn&apos;t import them again. Allow one to bring it back at the
+                next sync.
+              </p>
+            </div>
+            {deletedSources.length > 1 && (
+              <form action={allowReimport}>
+                {deletedSources.map((d) => (
+                  <input key={d.sourceUrl} type="hidden" name="sourceUrl" value={d.sourceUrl} />
+                ))}
+                <button
+                  type="submit"
+                  className="whitespace-nowrap rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                >
+                  Allow all again
+                </button>
+              </form>
+            )}
+          </div>
+          <ul className="divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
+            {deletedSources.map((d) => (
+              <li key={d.sourceUrl} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <div className="min-w-0">
+                  <p className="font-medium">{d.title || "Untitled listing"}</p>
+                  <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                    {d.sourceUrl} · deleted{" "}
+                    {d.deletedAt.toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                <form action={allowReimport}>
+                  <input type="hidden" name="sourceUrl" value={d.sourceUrl} />
+                  <button type="submit" className="text-sm font-medium text-brand-teal hover:underline">
+                    Allow import again
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );

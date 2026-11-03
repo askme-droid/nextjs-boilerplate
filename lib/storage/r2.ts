@@ -186,3 +186,44 @@ export async function deleteFileByUrl(value: string | null | undefined): Promise
     // An orphaned file isn't worth failing a staff action over.
   }
 }
+
+export type StoredFile = { key: string; size: number; lastModified: Date };
+
+const xmlDecode = (s: string) =>
+  s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+
+/** Every file in the bucket under `prefix` (S3 ListObjectsV2, 1000 a page). */
+export async function listFiles(prefix: string): Promise<StoredFile[]> {
+  const { endpoint, bucket } = config();
+  const files: StoredFile[] = [];
+  let token: string | null = null;
+  for (let page = 0; page < 100; page++) {
+    const url = new URL(`${endpoint}/${bucket}`);
+    url.searchParams.set("list-type", "2");
+    url.searchParams.set("prefix", prefix);
+    url.searchParams.set("max-keys", "1000");
+    if (token) url.searchParams.set("continuation-token", token);
+    const res = await r2Fetch(url.toString(), { method: "GET" });
+    if (!res.ok) throw new Error(`Couldn't list the stored files (${res.status}).`);
+    const xml = await res.text();
+    for (const [, body] of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const key = /<Key>([\s\S]*?)<\/Key>/.exec(body)?.[1];
+      if (!key) continue;
+      files.push({
+        key: xmlDecode(key),
+        size: Number(/<Size>(\d+)<\/Size>/.exec(body)?.[1] ?? 0),
+        lastModified: new Date(/<LastModified>([^<]+)<\/LastModified>/.exec(body)?.[1] ?? 0),
+      });
+    }
+    if (!/<IsTruncated>true<\/IsTruncated>/.test(xml)) break;
+    token = xmlDecode(/<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/.exec(xml)?.[1] ?? "");
+    if (!token) break;
+  }
+  return files;
+}
+
+/** Deletes one file by its storage key. Throws if R2 refuses. */
+export async function deleteFileByKey(key: string): Promise<void> {
+  const res = await r2Fetch(objectUrl(key), { method: "DELETE" });
+  if (!res.ok && res.status !== 404) throw new Error(`Couldn't delete ${key} (${res.status}).`);
+}
