@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/require-user";
 import { getMyListings } from "@/lib/listings/user-queries";
+import { ConfirmSubmit } from "@/app/components/confirm-submit";
 import { createMyListing, deleteMyListing } from "./actions";
 import { isExpired } from "@/lib/listings/expiry-dates";
 import { formatViews } from "@/lib/listings/views";
@@ -97,12 +98,12 @@ export default async function MyListingsPage({
                 )}
                 <form action={deleteMyListing}>
                   <input type="hidden" name="id" value={listing.id} />
-                  <button
-                    type="submit"
+                  <ConfirmSubmit
+                    message={`Delete “${listing.title || "Untitled listing"}”? This can't be undone.`}
                     className="text-sm text-red-600 hover:underline dark:text-red-400"
                   >
                     Delete
-                  </button>
+                  </ConfirmSubmit>
                 </form>
               </div>
             </li>

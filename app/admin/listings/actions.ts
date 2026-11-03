@@ -1,6 +1,7 @@
 "use server";
 
 import { dbErrorMessage, pgErrorCode } from "@/lib/db/errors";
+import { deleteUnusedFiles, listingFileUrls, rememberDeletedSource } from "@/lib/listings/cleanup";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
@@ -460,6 +461,13 @@ export async function deleteListing(formData: FormData) {
   // Looked up before deleting (not after — there'd be nothing left to find)
   // so a published listing's public page gets revalidated too.
   const slug = await getListingSlug(id);
+  // What to tidy up afterwards: its files in R2, and (for a listing synced
+  // from fd.sg) a note so the sync doesn't import it again.
+  const files = await listingFileUrls(id);
+  const [source] = await db
+    .select({ externalUrl: listings.externalUrl, title: listings.title })
+    .from(listings)
+    .where(eq(listings.id, id));
 
   try {
     // No RESTRICT to worry about: listing_images.listing_id and
@@ -470,6 +478,9 @@ export async function deleteListing(formData: FormData) {
   } catch (e) {
     redirect(editUrl(id, e instanceof Error ? e.message : "Could not delete listing."));
   }
+
+  await deleteUnusedFiles(files);
+  if (source?.externalUrl) await rememberDeletedSource(source.externalUrl, source.title);
 
   revalidatePath("/");
   if (slug) revalidatePath(`/listings/${slug}`);
@@ -597,11 +608,16 @@ export async function deleteImage(formData: FormData): Promise<ImageActionResult
   const listingId = String(formData.get("listingId") ?? "");
   const imageId = String(formData.get("imageId") ?? "");
 
+  let removed: { url: string }[] = [];
   try {
-    await db.delete(listingImages).where(eq(listingImages.id, imageId));
+    removed = await db
+      .delete(listingImages)
+      .where(and(eq(listingImages.id, imageId), eq(listingImages.listingId, listingId)))
+      .returning({ url: listingImages.url });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not delete image." };
   }
+  await deleteUnusedFiles(removed.map((r) => r.url));
 
   const slug = await getListingSlug(listingId);
   revalidatePath("/");

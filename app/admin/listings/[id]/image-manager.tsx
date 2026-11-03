@@ -1,5 +1,6 @@
 "use client";
 
+import { ConfirmSubmit } from "@/app/components/confirm-submit";
 import { useState, useTransition } from "react";
 import type { ListingImage } from "@/lib/listings/queries";
 import {
@@ -126,12 +127,12 @@ export function ImageManager({
                 <form action={run(deleteImage)}>
                   <input type="hidden" name="listingId" value={listingId} />
                   <input type="hidden" name="imageId" value={image.id} />
-                  <button
-                    type="submit"
+                  <ConfirmSubmit
+                    message="Delete this photo? This can't be undone."
                     className={`${buttonClass} text-red-600 dark:text-red-400`}
                   >
                     Delete
-                  </button>
+                  </ConfirmSubmit>
                 </form>
               </div>
 

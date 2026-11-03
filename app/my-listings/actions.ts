@@ -1,12 +1,13 @@
 "use server";
 
 import { dbErrorMessage, pgErrorCode } from "@/lib/db/errors";
+import { deleteUnusedFiles, listingFileUrls } from "@/lib/listings/cleanup";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { verifyListingBusinessIfChanged } from "@/lib/business/verify-listing";
 import { makeKey, putFile } from "@/lib/storage/r2";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { listingImages, listings } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/require-user";
@@ -201,12 +202,14 @@ export async function deleteMyListing(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const existing = await getMyListingById(id, user.id);
   if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
+  const files = await listingFileUrls(id);
 
   try {
     await db.delete(listings).where(eq(listings.id, id));
   } catch (e) {
     redirect(`/my-listings?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not delete listing.")}`);
   }
+  await deleteUnusedFiles(files);
 
   revalidatePath("/my-listings");
   redirect("/my-listings?deleted=1");
@@ -300,11 +303,17 @@ export async function deleteMyListingImage(formData: FormData) {
   const existing = await getMyListingById(listingId, user.id);
   if (!existing) redirect("/my-listings?error=Listing%20not%20found.");
 
+  // Only a photo of this (the user's own) listing.
+  let removed: { url: string }[] = [];
   try {
-    await db.delete(listingImages).where(eq(listingImages.id, imageId));
+    removed = await db
+      .delete(listingImages)
+      .where(and(eq(listingImages.id, imageId), eq(listingImages.listingId, listingId)))
+      .returning({ url: listingImages.url });
   } catch (e) {
     redirect(editImagesUrl(listingId, e instanceof Error ? e.message : "Could not delete image."));
   }
+  await deleteUnusedFiles(removed.map((r) => r.url));
 
   await revalidateMyListing(listingId, user.id);
   redirect(editImagesUrl(listingId));
